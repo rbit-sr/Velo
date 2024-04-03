@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -38,6 +37,11 @@ namespace Velo
                 AddString("Name", Name).
                 AddDecimalIf("ID", Id, !valueOnly);
         }
+
+        public virtual void FromJson(JsonElement elem)
+        {
+            
+        }
     }
 
     public class Category : Setting
@@ -58,9 +62,8 @@ namespace Velo
         public override JsonElement ToJson(bool valueOnly = false)
         {
             return ((JsonObject)base.ToJson(valueOnly)).
-                AddString("Name", Name).
                 AddDecimalIf("Type", 14, !valueOnly).
-                AddArray("Value", Children.Select((child) => child.ToJson(valueOnly)).ToList());
+                AddArray("Value", Children.Select(child => child.ToJson(valueOnly)).ToList());
         }
     }
 
@@ -115,6 +118,13 @@ namespace Velo
                 AddDecimalIf("Max", Max, !valueOnly).
                 AddDecimal("Value", Value);
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToInt());
+        }
     }
 
     public class FloatSetting : Setting<float>
@@ -138,6 +148,13 @@ namespace Velo
                 AddDecimalIf("Max", Max, !valueOnly).
                 AddDecimal("Value", Value);
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToFloat());
+        }
     }
 
     public class BoolSetting : Setting<bool>
@@ -152,6 +169,13 @@ namespace Velo
                 AddDecimalIf("Type", 2, !valueOnly).
                 AddBooleanIf("Default", DefaultValue, !valueOnly).
                 AddBoolean("Value", Value);
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToBool());
         }
     }
 
@@ -168,6 +192,13 @@ namespace Velo
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
                 AddElement("Value", Value.ToJson());
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToToggle());
+        }
     }
 
     public class HotkeySetting : Setting<ushort>
@@ -182,6 +213,13 @@ namespace Velo
                 AddDecimalIf("Type", 4, !valueOnly).
                 AddDecimalIf("Default", DefaultValue, !valueOnly).
                 AddDecimal("Value", Value);
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = (ushort)value.ToInt());
         }
     }
 
@@ -206,6 +244,13 @@ namespace Velo
                 AddElementIf("Max", Max.ToJson(), !valueOnly).
                 AddElement("Value", Value.ToJson());
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToVector2());
+        }
     }
 
     public class StringSetting : Setting<string>
@@ -221,6 +266,13 @@ namespace Velo
                 AddStringIf("Default", DefaultValue, !valueOnly).
                 AddString("Value", Value);
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = FromJsonExt.ToString(value));
+        }
     }
 
     public class RoundingMultiplierSetting : Setting<RoundingMultiplier>
@@ -235,6 +287,13 @@ namespace Velo
                 AddDecimalIf("Type", 7, !valueOnly).
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
                 AddElement("Value", Value.ToJson());
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToRoundingMultiplier());
         }
     }
 
@@ -272,6 +331,13 @@ namespace Velo
                     }, !valueOnly).
                 AddElement("Value", Value.ToJson());
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToBoolArr());
+        }
     }
 
     public class StringListSetting : Setting<string[]>
@@ -286,6 +352,13 @@ namespace Velo
                 AddDecimalIf("Type", 9, !valueOnly).
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
                 AddElement("Value", Value.ToJson());
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToStringArr());
         }
     }
 
@@ -315,6 +388,13 @@ namespace Velo
                     }, !valueOnly).
                 AddDecimal("Value", (int)Value);
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = (EOrientation)value.ToInt());
+        }
     }
 
     public class LineStyleSetting : Setting<ELineStyle>
@@ -336,6 +416,13 @@ namespace Velo
                     }, !valueOnly).
                 AddDecimal("Value", (int)Value);
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = (ELineStyle)value.ToInt());
+        }
     }
 
     public class ColorSetting : Setting<Color>
@@ -355,6 +442,13 @@ namespace Velo
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
                 AddBooleanIf("EnableAlpha", EnableAlpha, !valueOnly).
                 AddElement("Value", Value.ToJson());
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToColor());
         }
     }
 
@@ -376,6 +470,13 @@ namespace Velo
                 AddBooleanIf("EnableAlpha", EnableAlpha, !valueOnly).
                 AddElement("Value", Value.ToJson());
         }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToColorTransition());
+        }
     }
 
     public class InputBoxSetting : Setting<InputBox>
@@ -390,6 +491,13 @@ namespace Velo
                 AddDecimalIf("Type", 13, !valueOnly).
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
                 AddElement("Value", Value.ToJson());
+        }
+
+        public override void FromJson(JsonElement elem)
+        {
+            base.FromJson(elem);
+
+            ((JsonObject)elem).DoWithValue("Value", value => Value = value.ToInputBox());
         }
     }
 }

@@ -3,6 +3,7 @@ using System;
 using Microsoft.Xna.Framework.Graphics;
 using System.Reflection.Emit;
 using System.Windows.Forms;
+using System.Text;
 
 namespace Velo
 {
@@ -27,6 +28,12 @@ namespace Velo
             if (!initialized)
             {
                 InitImGui();
+                string json = ModuleManager.Instance.ToJson(false).ToString(0);
+                unsafe
+                {
+                    //fixed (byte* bytes = Encoding.ASCII.GetBytes(json))
+                        //LoadProgram((IntPtr)bytes, json.Length);
+                }
                 initialized = true;
             }
 
@@ -42,23 +49,23 @@ namespace Velo
             il.DeclareLocal(typeof(object), true);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc_0);
-            il.Emit(OpCodes.Ldloc_0);
+            il.Emit(OpCodes.Ldloc_0); // load GraphicsDevice
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ldc_I4, 0x7C);
             il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4);
+            il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::GLDevice : FNA3D_Device*
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ldc_I4, 0x128);
             il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4);
+            il.Emit(OpCodes.Ldind_I4); // load FNA3D_Device::driverData : FNA3D_Renderer* (D3D11Renderer*)
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ldc_I4, 0x24);
             il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4);
+            il.Emit(OpCodes.Ldind_I4); // load D3D11Renderer::swapchainDatas : D3D11SwapChainData**
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ldind_I4);
             il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldind_I4);
+            il.Emit(OpCodes.Ldind_I4); // load D3D11SwapChainData::swapchain : IDXGISwapChain*
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ret);
             GetPtrFromObjDel GetSwapChainPtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
@@ -75,7 +82,10 @@ namespace Velo
         [DllImport("DirectX11IMGUI.dll", EntryPoint = "RenderImGui")]
         private static extern void RenderImGui();
 
-        [DllImport("DirectX11IMGUI.dll")]
+        [DllImport("DirectX11IMGUI.dll", EntryPoint = "ShutdownImGui")]
         private static extern void ShutdownImGui();
+
+        [DllImport("DirectX11IMGUI.dll", EntryPoint = "LoadProgram")]
+        private static extern void LoadProgram(IntPtr str, int strSize);
     }
 }

@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
 
 namespace Velo
 {
@@ -9,7 +9,7 @@ namespace Velo
 
         private static void SkipSpaces(string value, ref int offset)
         {
-            while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n'))
+            while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n' || value[offset] == '\r'))
                 offset++;
         }
 
@@ -467,6 +467,18 @@ namespace Velo
             if (condition)
                 this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonObject(value)));
             return this;
+        }
+
+        public JsonElement Get(string key)
+        {
+            return value.Find((elem) => elem.Key == key).Value;
+        }
+
+        public void DoWithValue(string key, Action<JsonElement> action)
+        {
+            JsonElement value = Get(key);
+            if (value != null)
+                action(value);
         }
 
         public override string ToString(int depth = 0)

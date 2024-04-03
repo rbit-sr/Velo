@@ -20,8 +20,26 @@ namespace Velo
         public JsonElement ToJson(bool valueOnly = false)
         {
             return new JsonObject(2).
-                AddDecimal("Count", Modules.Sum((module) => module.SettingsCount())).
-                AddArray("Modules", Modules.Where((module) => module.Settings.Count > 0).Select((module) => module.ToJson(valueOnly)).ToList());
+                AddDecimal("Count", Modules.Sum(module => module.SettingsCount())).
+                AddArray("Modules", Modules.Where(module => module.Settings.Count > 0).Select(module => module.ToJson(valueOnly)).ToList());
+        }
+
+        public void CommitChanges(JsonElement elem)
+        {
+            var changes = ((JsonArray)((JsonObject)elem).Get("Changes")).value;
+            if (changes == null)
+                return;
+            foreach (JsonElement item in changes)
+            {
+                JsonElement jsonId = ((JsonObject)item).Get("ID");
+                if (jsonId == null)
+                    continue;
+                int id = jsonId.ToInt();
+                if (Setting.IdToSetting.ContainsKey(id))
+                {
+                    Setting.IdToSetting[id].FromJson(item);
+                }
+            }
         }
     }
 
@@ -146,7 +164,7 @@ namespace Velo
         {
             return new JsonObject(2).
                 AddString("Name", Name).
-                AddArray("Settings", Settings.Select((setting) => setting.ToJson(valueOnly)).ToList());
+                AddArray("Settings", Settings.Select(setting => setting.ToJson(valueOnly)).ToList());
         }
 
         public virtual void Init() { }

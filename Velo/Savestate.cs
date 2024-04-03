@@ -8,14 +8,12 @@ using CEngine.World.Actor;
 using CEngine.World.Collision;
 using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics.PackedVector;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Windows.Forms;
 using XNATweener;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.ProgressBar;
 
 namespace Velo
 {

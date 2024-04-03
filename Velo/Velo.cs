@@ -93,6 +93,8 @@ namespace Velo
             {
                 string json = ModuleManager.Instance.ToJson(false).ToString(0);
                 File.WriteAllText("test.txt", json);
+                json = File.ReadAllText("test2.txt");
+                ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
             }
 
             if (!Util.IsFocused()) // we don't want inputs to be detected when game is unfocused
