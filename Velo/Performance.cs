@@ -54,12 +54,10 @@ namespace Velo
                         pollers.Clear();
                     }
                 }
-                uint num;
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, channel))
+                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, channel))
                 {
                     NetIncomingMessage msg = pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
-                    Steamworks.CSteamID identifier;
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, channel);
+                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, channel);
                     msg.LengthBits = (int)(num * 8u);
                     return new Velo.Message(msg, identifier);
                 }
@@ -119,16 +117,14 @@ namespace Velo
                 PollNetworkPacketsInSeparateThread.Value
                 )
             {
-                uint num;
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, poller.channel))
+                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, poller.channel))
                 {
                     NetIncomingMessage msg;
                     lock (poller.pools)
                     {
                         msg = poller.pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
                     }
-                    Steamworks.CSteamID identifier;
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, poller.channel);
+                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, poller.channel);
                     msg.LengthBits = (int)(num * 8u);
                     lock (poller.messages)
                     {

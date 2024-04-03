@@ -35,9 +35,9 @@ namespace Velo
             if (Keyboard.Pressed[FreezeKey.Value])
             {
                 if (!frozen)
-                    freeze();
+                    Freeze();
                 else
-                    unfreeze();
+                    Unfreeze();
             }
 
             if (Keyboard.Pressed[Step1Key.Value])
@@ -69,18 +69,18 @@ namespace Velo
             {
                 stepCount--;
                 if (stepCount == 0)
-                    freeze();
+                    Freeze();
             }
         }
 
-        public void freeze()
+        public void Freeze()
         {
             frozen = true;
             delta = 0;
             dtFixed = true;
         }
 
-        public void unfreeze()
+        public void Unfreeze()
         {
             frozen = false;
             delta = DeltaTime.Value;

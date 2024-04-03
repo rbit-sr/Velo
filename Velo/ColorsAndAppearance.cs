@@ -3,6 +3,7 @@ using CEngine.World.Actor;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
 
 namespace Velo
@@ -47,14 +48,14 @@ namespace Velo
         public ColorTransitionSetting UIYellowColor;
         public ColorTransitionSetting[] UIBlueColors;
 
-        private ConditionalWeakTable<object, ColorTransitionSetting> chatColors = new ConditionalWeakTable<object, ColorTransitionSetting>();
+        private readonly ConditionalWeakTable<object, ColorTransitionSetting> chatColors = new ConditionalWeakTable<object, ColorTransitionSetting>();
         
-        private Dictionary<uint, ColorTransitionSetting> colorReplLookup;
+        private readonly Dictionary<uint, ColorTransitionSetting> colorReplLookup;
 
-        private static ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
-        private static ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextShadowRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
-        private static ConditionalWeakTable<CImageDrawComponent, ColorReplacement> uiImageRepls = new ConditionalWeakTable<CImageDrawComponent, ColorReplacement>();
-        private static ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement> uiSpriteRepls = new ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement>();
+        private readonly ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
+        private readonly ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextShadowRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
+        private readonly ConditionalWeakTable<CImageDrawComponent, ColorReplacement> uiImageRepls = new ConditionalWeakTable<CImageDrawComponent, ColorReplacement>();
+        private readonly ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement> uiSpriteRepls = new ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement>();
 
         private ColorsAndAppearance() : base("Colors and Appearance")
         {
@@ -317,8 +318,7 @@ namespace Velo
 
         public void UpdateChatColor(object obj)
         {
-            ColorTransitionSetting color;
-            if (!chatColors.TryGetValue(obj, out color) || color == null)
+            if (!chatColors.TryGetValue(obj, out ColorTransitionSetting color) || color == null)
                 return;
 
             if (obj is CEngine.Util.UI.Widget.CTextWidget text)
@@ -380,8 +380,7 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
-            if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
+            if (uiImageRepls.TryGetValue(image, out ColorReplacement colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)image.color.A / (float)colorReplacement.originalColor.A);
 
@@ -416,8 +415,7 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
-            if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
+            if (uiSpriteRepls.TryGetValue(sprite, out ColorReplacement colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)sprite.color.A / (float)colorReplacement.originalColor.A);
 
@@ -452,8 +450,7 @@ namespace Velo
             if (!text.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
-            if (uiTextRepls.TryGetValue(text, out colorReplacement) && colorReplacement != null)
+            if (uiTextRepls.TryGetValue(text, out ColorReplacement colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 text.color = PreserveAlpha(newColor * colorReplacement.multiplier, text.color);
@@ -473,8 +470,7 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
-            if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
+            if (uiImageRepls.TryGetValue(image, out ColorReplacement colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 image.color = PreserveAlpha(newColor * colorReplacement.multiplier, image.color);
@@ -487,8 +483,7 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
-            if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
+            if (uiSpriteRepls.TryGetValue(sprite, out ColorReplacement colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 sprite.color = PreserveAlpha(newColor * colorReplacement.multiplier, sprite.color);

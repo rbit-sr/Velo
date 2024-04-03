@@ -139,7 +139,7 @@ namespace Velo
 
         public int SettingsCount()
         {
-            return Settings.Sum((setting) => setting is Category ? ((Category)setting).Children.Count : 1);
+            return Settings.Sum((setting) => setting is Category category ? category.Children.Count : 1);
         }
 
         public JsonElement ToJson(bool valueOnly = false)
@@ -198,7 +198,7 @@ namespace Velo
             base.PreRender();
 
             if (!FixedPos())
-                update();
+                Update();
         }
 
         public override void PostRender()
@@ -206,10 +206,10 @@ namespace Velo
             base.PostRender();
 
             if (FixedPos())
-                update();
+                Update();
         }
 
-        private void update()
+        private void Update()
         {
             bool enabled = Enabled.Value.Enabled;
 
@@ -258,7 +258,7 @@ namespace Velo
 
         protected bool added = false;
 
-        private List<ICDrawComponent> components = new List<ICDrawComponent>();
+        private readonly List<ICDrawComponent> components = new List<ICDrawComponent>();
             
         public MultiDisplayModule(string name, bool ingameOnly) : base(name)
         {
@@ -273,7 +273,7 @@ namespace Velo
             base.PreRender();
 
             if (!FixedPos())
-                update();
+                Update();
         }
 
         public override void PostRender()
@@ -281,7 +281,7 @@ namespace Velo
             base.PostRender();
 
             if (FixedPos())
-                update();
+                Update();
         }
 
         public void AddComponent(ICDrawComponent component)
@@ -298,7 +298,7 @@ namespace Velo
                 CEngine.CEngine.Instance.LayerManager.RemoveDrawer(component);
         }
 
-        private void update()
+        private void Update()
         {
             bool enabled = Enabled.Value.Enabled;
 

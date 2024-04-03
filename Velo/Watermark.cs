@@ -27,10 +27,12 @@ namespace Velo
                 Velo.ContentManager.Load(font_watermark, false);
             }
 
-            CTextDrawComponent watermark = new CTextDrawComponent("", font_watermark, new Vector2(32, 32));
-            watermark.color_replace = false;
-            watermark.Color = Color.Red;
-            watermark.IsVisible = false;
+            CTextDrawComponent watermark = new CTextDrawComponent("", font_watermark, new Vector2(32, 32))
+            {
+                color_replace = false,
+                Color = Color.Red,
+                IsVisible = false
+            };
 
             string text = "";
 

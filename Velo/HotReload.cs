@@ -23,7 +23,7 @@ namespace Velo
             base.PreUpdate();
 
             if (Keyboard.Pressed[ReloadKey.Value])
-                reloadContents();
+                ReloadContents();
         }
 
         public override void PostRender()
@@ -33,17 +33,17 @@ namespace Velo
             contentsReloaded = false;
         }
 
-        private void reloadContents()
+        private void ReloadContents()
         {
             contentsReloaded = true;
             
             foreach (string content in Contents.Value)
             {
-                reloadContent(content);
+                ReloadContent(content);
             }
         }
 
-        private void reloadContent(string id)
+        private void ReloadContent(string id)
         {
             if (id.ToLower().EndsWith(".xnb"))
                 id = id.Replace(".xnb", "");
@@ -52,7 +52,7 @@ namespace Velo
 
             if (!Directory.Exists("Content\\" + id) && !File.Exists("Content\\" + id + ".xnb"))
             {
-                reloadContent("Content\\Characters\\" + id);
+                ReloadContent("Content\\Characters\\" + id);
                 return;
             }
 
@@ -60,10 +60,10 @@ namespace Velo
             {
                 string[] contents = Directory.GetFiles("Content\\" + id);
                 foreach (string content in contents)
-                    reloadContent(content);
+                    ReloadContent(content);
                 contents = Directory.GetDirectories("Content\\" + id);
                 foreach (string content in contents)
-                    reloadContent(content);
+                    ReloadContent(content);
                 return;
             }
 

@@ -152,7 +152,7 @@ namespace Velo
         public BoolSetting SlopeAntiAliasing;
 
         private Texture2D pixel;
-        private Texture2D[] tiles = new Texture2D[16];
+        private readonly Texture2D[] tiles = new Texture2D[16];
         private Texture2D slopeCeilRightOutline;
         private Texture2D slopeCeilLeftOutline;
         private Texture2D slopeFloorRightOutline;
@@ -230,52 +230,32 @@ namespace Velo
 
             if (!texturesSetUp)
             {
-                setUpTextures();
+                SetUpTextures();
                 ((CBufferedTileMapLayer)layer).refresh();
             }
         }
 
-        private void setUpTextures()
+        private void SetUpTextures()
         {
-            if (pixel != null)
-                pixel.Dispose();
+            pixel?.Dispose();
             for (int i = 1; i < 16; i++)
-            {
-                if (tiles[i] != null)
-                    tiles[i].Dispose();
-            }
-            if (slopeCeilRightOutline != null)
-                slopeCeilRightOutline.Dispose();
-            if (slopeCeilLeftOutline != null)
-                slopeCeilLeftOutline.Dispose();
-            if (slopeFloorRightOutline != null)
-                slopeFloorRightOutline.Dispose();
-            if (slopeFloorLeftOutline != null)
-                slopeFloorLeftOutline.Dispose();
-            if (slopeCeilRightOutlineCornerBoth != null)
-                slopeCeilRightOutlineCornerBoth.Dispose();
-            if (slopeCeilRightOutlineCornerBelow != null)
-                slopeCeilRightOutlineCornerBelow.Dispose();
-            if (slopeCeilRightOutlineCornerRight != null)
-                slopeCeilRightOutlineCornerRight.Dispose();
-            if (slopeCeilLeftOutlineCornerBoth != null)
-                slopeCeilLeftOutlineCornerBoth.Dispose();
-            if (slopeCeilLeftOutlineCornerBelow != null)
-                slopeCeilLeftOutlineCornerBelow.Dispose();
-            if (slopeCeilLeftOutlineCornerLeft != null)
-                slopeCeilLeftOutlineCornerLeft.Dispose();
-            if (slopeFloorRightOutlineCornerBoth != null)
-                slopeFloorRightOutlineCornerBoth.Dispose();
-            if (slopeFloorRightOutlineCornerAbove != null)
-                slopeFloorRightOutlineCornerAbove.Dispose();
-            if (slopeFloorRightOutlineCornerRight != null)
-                slopeFloorRightOutlineCornerRight.Dispose();
-            if (slopeFloorLeftOutlineCornerBoth != null)
-                slopeFloorLeftOutlineCornerBoth.Dispose();
-            if (slopeFloorLeftOutlineCornerAbove != null)
-                slopeFloorLeftOutlineCornerAbove.Dispose();
-            if (slopeFloorLeftOutlineCornerLeft != null)
-                slopeFloorLeftOutlineCornerLeft.Dispose();
+                tiles[i]?.Dispose();
+            slopeCeilRightOutline?.Dispose();
+            slopeCeilLeftOutline?.Dispose();
+            slopeFloorRightOutline?.Dispose();
+            slopeFloorLeftOutline?.Dispose();
+            slopeCeilRightOutlineCornerBoth?.Dispose();
+            slopeCeilRightOutlineCornerBelow?.Dispose();
+            slopeCeilRightOutlineCornerRight?.Dispose();
+            slopeCeilLeftOutlineCornerBoth?.Dispose();
+            slopeCeilLeftOutlineCornerBelow?.Dispose();
+            slopeCeilLeftOutlineCornerLeft?.Dispose();
+            slopeFloorRightOutlineCornerBoth?.Dispose();
+            slopeFloorRightOutlineCornerAbove?.Dispose();
+            slopeFloorRightOutlineCornerRight?.Dispose();
+            slopeFloorLeftOutlineCornerBoth?.Dispose();
+            slopeFloorLeftOutlineCornerAbove?.Dispose();
+            slopeFloorLeftOutlineCornerLeft?.Dispose();
 
             int outline_width = OutlineWidth.Value;
             int slopeOutline_width = (int)(outline_width * Math.Sqrt(2.0) + 0.5f);

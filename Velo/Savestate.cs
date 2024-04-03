@@ -57,7 +57,7 @@ namespace Velo
             index = 0;
         }
 
-        private void ensure(int size)
+        private void Ensure(int size)
         {
             if (data.Length < size)
                 Array.Resize(ref data, data.Length * 2);
@@ -67,7 +67,7 @@ namespace Velo
 
         public unsafe void Write(object src, int off, int data_size)
         {
-            ensure(index + data_size);
+            Ensure(index + data_size);
             void* data_src = (byte*)MemUtil.GetPtr(src) + off;
             fixed(byte* data_dst = data)
             {
@@ -88,7 +88,7 @@ namespace Velo
 
         public unsafe void WriteInt(int value)
         {
-            ensure(index + 4);
+            Ensure(index + 4);
             fixed (byte* data_dst = data)
             {
                 *(int*)(data_dst + index) = value;
@@ -109,7 +109,7 @@ namespace Velo
 
         public unsafe void WriteBytes(byte* bytes, int size)
         {
-            ensure(index + size);
+            Ensure(index + size);
 
             fixed (byte* data_dst = data)
             {
@@ -127,7 +127,7 @@ namespace Velo
             index += size;
         }
 
-        public unsafe void WriteArr<T>(T[] arr)
+        public unsafe void WriteArr<T>(T[] arr) where T : struct
         {
             if (arr == null)
             {
@@ -136,23 +136,27 @@ namespace Velo
             }
 
             WriteInt(arr.Length);
+#pragma warning disable CS8500
             fixed (T* bytes = arr)
             {
                 WriteBytes((byte*)bytes, arr.Length * sizeof(T));
             }
+#pragma warning restore CS8500
         }
 
-        public unsafe T[] ReadArr<T>()
+        public unsafe T[] ReadArr<T>() where T : struct
         {
             int size = ReadInt();
             if (size == -1)
                 return null;
             T[] bytes = new T[size];
 
+#pragma warning disable CS8500
             fixed (T* data_dst = bytes)
             {
                 ReadBytes((byte*)data_dst, size * sizeof(T));
             }
+#pragma warning restore CS8500
             return bytes;
         }
 
@@ -173,57 +177,57 @@ namespace Velo
 
     public class Savestate
     {
-        private unsafe void write(CAABB obj)
+        private unsafe void Write(CAABB obj)
         {
             chunk.Write(obj, 0x4, 0x18);
         }
 
-        private unsafe void read(CAABB obj)
+        private unsafe void Read(CAABB obj)
         {
             chunk.Read(obj, 0x4, 0x18);
         }
 
-        private unsafe void write(CConvexPolygon obj)
+        private unsafe void Write(CConvexPolygon obj)
         {
             chunk.Write(obj, 0xC, 0x1C);
             chunk.WriteArr(obj.localVertices);
             chunk.WriteArr(obj.vertices);
         }
 
-        private unsafe void read(CConvexPolygon obj)
+        private unsafe void Read(CConvexPolygon obj)
         {
             chunk.Read(obj, 0xC, 0x1C);
             obj.localVertices = chunk.ReadArr<Vector2>();
             obj.vertices = chunk.ReadArr<Vector2>();
         }
 
-        private unsafe void write(CActor obj)
+        private unsafe void Write(CActor obj)
         {
             chunk.Write(obj, 0x20, 0x40);
-            write(obj.bounds);
+            Write(obj.bounds);
         }
 
-        private unsafe void read(CActor obj)
+        private unsafe void Read(CActor obj)
         {
             chunk.Read(obj, 0x20, 0x40);
-            read(obj.bounds);
+            Read(obj.bounds);
             fixedIdActors.Add(obj);
             fixedIds.Add(obj.id);
         }
 
-        private unsafe void write(CSpriteDrawComponent obj)
+        private unsafe void Write(CSpriteDrawComponent obj)
         {
             chunk.Write(obj, 0x20, 0x6C);
-            write(obj.bounds);
+            Write(obj.bounds);
         }
 
-        private unsafe void read(CSpriteDrawComponent obj)
+        private unsafe void Read(CSpriteDrawComponent obj)
         {
             chunk.Read(obj, 0x20, 0x6C);
-            read(obj.bounds);
+            Read(obj.bounds);
         }
 
-        private unsafe void write(Dictionary<string, CAnimation> obj)
+        private unsafe void Write(Dictionary<string, CAnimation> obj)
         {
             chunk.WriteInt(obj.Count);
             foreach (var pair in obj)
@@ -233,7 +237,7 @@ namespace Velo
             }
         }
 
-        private unsafe void read(NullSafeDict<int, string> obj)
+        private unsafe void Read(NullSafeDict<int, string> obj)
         {
             int count = chunk.ReadInt();
             for (int i = 0; i < count; i++)
@@ -244,65 +248,65 @@ namespace Velo
             }
         }
 
-        private unsafe void write(CAnimatedSpriteDrawComponent obj)
+        private unsafe void Write(CAnimatedSpriteDrawComponent obj)
         {
             chunk.Write(obj, 0x2C, 0x84);
-            write(obj.bounds);
+            Write(obj.bounds);
             chunk.WriteStr(obj.nextAnimation);
             chunk.WriteStr(obj.animation.id);
         }
 
-        private unsafe void read(CAnimatedSpriteDrawComponent obj)
+        private unsafe void Read(CAnimatedSpriteDrawComponent obj)
         {
             chunk.Read(obj, 0x2C, 0x84);
-            read(obj.bounds);
+            Read(obj.bounds);
             obj.nextAnimation = chunk.ReadStr();
             obj.timeSpan1 = new TimeSpan(obj.timeSpan1.Ticks + dt);
             string animationId = chunk.ReadStr();
             obj.animation = obj.animImage.GetAnimation(animationId);
         }
 
-        private unsafe void write(CImageDrawComponent obj)
+        private unsafe void Write(CImageDrawComponent obj)
         {
             chunk.Write(obj, 0x1C, 0x58);
-            write(obj.bounds);
+            Write(obj.bounds);
         }
 
-        private unsafe void read(CImageDrawComponent obj)
+        private unsafe void Read(CImageDrawComponent obj)
         {
             chunk.Read(obj, 0x1C, 0x58);
-            read(obj.bounds);
+            Read(obj.bounds);
         }
 
-        private unsafe void write(CGroupDrawComponent obj)
+        private unsafe void Write(CGroupDrawComponent obj)
         {
             chunk.Write(obj, 0x18, 0x58);
         }
 
-        private unsafe void read(CGroupDrawComponent obj)
+        private unsafe void Read(CGroupDrawComponent obj)
         {
             chunk.Read(obj, 0x18, 0x58);
         }
 
-        private unsafe void write(CLine obj)
+        private unsafe void Write(CLine obj)
         {
             chunk.Write(obj, 0x4, 0x18);
         }
 
-        private unsafe void read(CLine obj)
+        private unsafe void Read(CLine obj)
         {
             chunk.Read(obj, 0x4, 0x18);
         }
 
-        private unsafe void write(CLineDrawComponent obj)
+        private unsafe void Write(CLineDrawComponent obj)
         {
             chunk.Write(obj, 0x18, 0x4);
             chunk.WriteInt(obj.lines.Count);
             foreach (CLine line in obj.lines)
-                write(line);
+                Write(line);
         }
 
-        private unsafe void read(CLineDrawComponent obj)
+        private unsafe void Read(CLineDrawComponent obj)
         {
             chunk.Read(obj, 0x18, 0x4);
             int count = chunk.ReadInt();
@@ -310,74 +314,74 @@ namespace Velo
             for (int i = 0; i < count; i++)
             {
                 CLine line = new CLine(Vector2.Zero, Vector2.Zero, Color.Black);
-                read(line);
+                Read(line);
                 obj.lines.Add(line);
             }
         }
 
-        private unsafe void write(Tweener obj)
+        private unsafe void Write(Tweener obj)
         {
             chunk.Write(obj, 0x10, 0x1C);
         }
 
-        private unsafe void read(Tweener obj)
+        private unsafe void Read(Tweener obj)
         {
             chunk.Read(obj, 0x10, 0x1C);
         }
 
-        private unsafe void write(Slot obj)
+        private unsafe void Write(Slot obj)
         {
             chunk.Write(obj, 0x68, 0x3C);
         }
 
-        private unsafe void read(Slot obj)
+        private unsafe void Read(Slot obj)
         {
             chunk.Read(obj, 0x68, 0x3C);
         }
 
-        private unsafe void write(Random obj)
+        private unsafe void Write(Random obj)
         {
             chunk.Write(obj, 0x8, 0x8);
             chunk.Write(obj, 0x1C, 0xE0);
         }
 
-        private unsafe void read(Random obj)
+        private unsafe void Read(Random obj)
         {
             chunk.Read(obj, 0x8, 0x8);
             chunk.Read(obj, 0x1C, 0xE0);
         }
 
-        private unsafe void write(Grapple obj)
+        private unsafe void Write(Grapple obj)
         {
             chunk.Write(obj, 0x24, 0x14);
-            write(obj.actor);
-            write(obj.animSpriteDrawComp1);
-            write(obj.spriteDrawComp1);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.animSpriteDrawComp1);
+            Write(obj.spriteDrawComp1);
+            Write(obj.bounds);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
-        private unsafe void read(Grapple obj)
+        private unsafe void Read(Grapple obj)
         {
             chunk.Read(obj, 0x24, 0x14);
-            read(obj.actor);
-            read(obj.animSpriteDrawComp1);
-            read(obj.spriteDrawComp1);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.animSpriteDrawComp1);
+            Read(obj.spriteDrawComp1);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Rope obj)
+        private unsafe void Write(Rope obj)
         {
             chunk.Write(obj, 0x20, 0x24);
-            write(obj.actor);
-            write(obj.line1);
-            write(obj.line2);
-            write(obj.line3);
-            write(obj.lineDrawComp1);
+            Write(obj.actor);
+            Write(obj.line1);
+            Write(obj.line2);
+            Write(obj.line3);
+            Write(obj.lineDrawComp1);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
             if (obj.target == null)
                 chunk.WriteInt(-1);
@@ -387,14 +391,14 @@ namespace Velo
                 chunk.WriteInt(goldenHook.actor.Id);
         }
 
-        private unsafe void read(Rope obj)
+        private unsafe void Read(Rope obj)
         {
             chunk.Read(obj, 0x20, 0x24);
-            read(obj.actor);
-            read(obj.line1);
-            read(obj.line2);
-            read(obj.line3);
-            read(obj.lineDrawComp1);
+            Read(obj.actor);
+            Read(obj.line1);
+            Read(obj.line2);
+            Read(obj.line3);
+            Read(obj.lineDrawComp1);
             if (obj.lineDrawComp1.lines.Count > 0)
             {
                 obj.lineDrawComp1.lines.Clear();
@@ -409,23 +413,23 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(DroppedObstacle obj)
+        private unsafe void Write(DroppedObstacle obj)
         {
             chunk.Write(obj, 0x24, 0x24);
-            write(obj.actor);
-            write(obj.spriteDraw1);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.spriteDraw1);
+            Write(obj.bounds);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
             if (storeAiVolumes)
                 chunk.WriteInt(obj.aiVolume != null ? obj.aiVolume.actor.Id : -1);
         }
 
-        private unsafe void read(DroppedObstacle obj)
+        private unsafe void Read(DroppedObstacle obj)
         {
             chunk.Read(obj, 0x24, 0x24);
-            read(obj.actor);
-            read(obj.spriteDraw1);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.spriteDraw1);
+            Read(obj.bounds);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
@@ -438,12 +442,12 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Fireball obj)
+        private unsafe void Write(Fireball obj)
         {
             chunk.Write(obj, 0x3C, 0x3C);
-            write(obj.actor);
-            write(obj.animSpriteDraw);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.animSpriteDraw);
+            Write(obj.bounds);
             if (obj.animSpriteDraw.Sprite == null)
                 chunk.WriteInt(0);
             else if (obj.animSpriteDraw.Sprite == obj.animImage1)
@@ -454,12 +458,12 @@ namespace Velo
             chunk.WriteInt(obj.shockwave != null ? obj.shockwave.actor.Id : -1);
         }
 
-        private unsafe void read(Fireball obj)
+        private unsafe void Read(Fireball obj)
         {
             chunk.Read(obj, 0x3C, 0x3C);
-            read(obj.actor);
-            read(obj.animSpriteDraw);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.animSpriteDraw);
+            Read(obj.bounds);
             int sprite = chunk.ReadInt();
             if (sprite == 0)
                 obj.animSpriteDraw.Sprite = null;
@@ -475,23 +479,23 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Rocket obj)
+        private unsafe void Write(Rocket obj)
         {
             chunk.Write(obj, 0x38, 0x38);
-            write(obj.actor);
-            write(obj.spriteDrawComp);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.spriteDrawComp);
+            Write(obj.bounds);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
             chunk.WriteInt(obj.target != null ? obj.target.actor.Id : -1);
             chunk.WriteInt(obj.unknown != null ? obj.unknown.actor.Id : -1);
         }
 
-        private unsafe void read(Rocket obj)
+        private unsafe void Read(Rocket obj)
         {
             chunk.Read(obj, 0x38, 0x38);
-            read(obj.actor);
-            read(obj.spriteDrawComp);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.spriteDrawComp);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             int targetId = chunk.ReadInt();
@@ -502,25 +506,25 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(GoldenHook obj)
+        private unsafe void Write(GoldenHook obj)
         {
             chunk.Write(obj, 0x30, 0x1C);
-            write(obj.actor);
-            write(obj.spriteDraw);
-            write(obj.animSpriteDraw);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.spriteDraw);
+            Write(obj.animSpriteDraw);
+            Write(obj.bounds);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
             chunk.WriteInt(obj.target != null ? obj.target.actor.Id : -1);
             chunk.WriteInt(obj.unknown != null ? obj.unknown.actor.Id : -1);
         }
 
-        private unsafe void read(GoldenHook obj)
+        private unsafe void Read(GoldenHook obj)
         {
             chunk.Read(obj, 0x30, 0x1C);
-            read(obj.actor);
-            read(obj.spriteDraw);
-            read(obj.animSpriteDraw);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.spriteDraw);
+            Read(obj.animSpriteDraw);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             int targetId = chunk.ReadInt();
@@ -531,81 +535,81 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Shockwave obj)
+        private unsafe void Write(Shockwave obj)
         {
             chunk.Write(obj, 0x2C, 0x30);
-            write(obj.actor);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
-            write(obj.animSpriteDraw3);
-            write(obj.animSpriteDraw4);
-            write(obj.animSpriteDraw5);
-            write(obj.groupDraw);
+            Write(obj.actor);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
+            Write(obj.animSpriteDraw3);
+            Write(obj.animSpriteDraw4);
+            Write(obj.animSpriteDraw5);
+            Write(obj.groupDraw);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
-        private unsafe void read(Shockwave obj)
+        private unsafe void Read(Shockwave obj)
         {
             chunk.Read(obj, 0x2C, 0x30);
-            read(obj.actor);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
-            read(obj.animSpriteDraw3);
-            read(obj.animSpriteDraw4);
-            read(obj.animSpriteDraw5);
-            read(obj.groupDraw);
+            Read(obj.actor);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
+            Read(obj.animSpriteDraw3);
+            Read(obj.animSpriteDraw4);
+            Read(obj.animSpriteDraw5);
+            Read(obj.groupDraw);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(DroppedBomb obj)
+        private unsafe void Write(DroppedBomb obj)
         {
             chunk.Write(obj, 0x28, 0x18);
-            write(obj.actor);
-            write(obj.bounds);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
-            write(obj.groupDraw);
+            Write(obj.actor);
+            Write(obj.bounds);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
+            Write(obj.groupDraw);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
-        private unsafe void read(DroppedBomb obj)
+        private unsafe void Read(DroppedBomb obj)
         {
             chunk.Read(obj, 0x28, 0x18);
-            read(obj.actor);
-            read(obj.bounds);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
-            read(obj.groupDraw);
+            Read(obj.actor);
+            Read(obj.bounds);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
+            Read(obj.groupDraw);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void writeEa(EditableActor obj)
+        private unsafe void WriteEa(EditableActor obj)
         {
             chunk.Write(obj, 0x30, 0x24);
-            write(obj.actor);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.bounds);
         }
 
-        private unsafe void readEa(EditableActor obj)
+        private unsafe void ReadEa(EditableActor obj)
         {
             chunk.Read(obj, 0x30, 0x24);
-            read(obj.actor);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
         }
 
-        private unsafe void write(Obstacle obj)
+        private unsafe void Write(Obstacle obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x14, 0x20);
-            write(obj.spriteDraw);
-            write(obj.groupDraw);
+            Write(obj.spriteDraw);
+            Write(obj.groupDraw);
             if (storeAiVolumes)
             {
                 chunk.WriteInt(obj.aiVolume1 != null ? obj.aiVolume1.actor.Id : -1);
@@ -613,12 +617,12 @@ namespace Velo
             }
         }
 
-        private unsafe void read(Obstacle obj)
+        private unsafe void Read(Obstacle obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x14, 0x20);
-            read(obj.spriteDraw);
-            read(obj.groupDraw);
+            Read(obj.spriteDraw);
+            Read(obj.groupDraw);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             if (storeAiVolumes)
             {
@@ -629,88 +633,88 @@ namespace Velo
             }
         }
 
-        private unsafe void write(FreezeRay obj)
+        private unsafe void Write(FreezeRay obj)
         {
             chunk.Write(obj, 0x18, 0x18);
-            write(obj.actor);
+            Write(obj.actor);
             chunk.WriteInt(obj.animSpriteDraws.Length);
             foreach (var animSpriteDraw in obj.animSpriteDraws)
-                write(animSpriteDraw);
-            write(obj.groupDraw);
-            write(obj.bounds);
+                Write(animSpriteDraw);
+            Write(obj.groupDraw);
+            Write(obj.bounds);
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
-        private unsafe void read(FreezeRay obj)
+        private unsafe void Read(FreezeRay obj)
         {
             chunk.Read(obj, 0x18, 0x18);
-            read(obj.actor);
+            Read(obj.actor);
             int count = chunk.ReadInt();
             for (int i = 0; i < count; i++)
             {
                 if (i >= obj.animSpriteDraws.Length)
                 {
                     CAnimatedSpriteDrawComponent dummy = new CAnimatedSpriteDrawComponent();
-                    read(dummy);
+                    Read(dummy);
                     continue;
                 }
 
-                read(obj.animSpriteDraws[i]);
+                Read(obj.animSpriteDraws[i]);
             }
-            read(obj.groupDraw);
-            read(obj.bounds);
+            Read(obj.groupDraw);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Pickup obj)
+        private unsafe void Write(Pickup obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x10, 0xC);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
             chunk.WriteInt(obj.imageDraw3 != null ? 1 : 0);
             if (obj.imageDraw3 != null)
             {
-                write(obj.imageDraw3);
-                write(obj.imageDraw4);
+                Write(obj.imageDraw3);
+                Write(obj.imageDraw4);
             }
-            write(obj.groupDraw);
+            Write(obj.groupDraw);
         }
 
-        private unsafe void read(Pickup obj)
+        private unsafe void Read(Pickup obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x10, 0xC);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
             int notNull = chunk.ReadInt();
             if (notNull != 0)
             {
-                read(obj.imageDraw3);
-                read(obj.imageDraw4);
+                Read(obj.imageDraw3);
+                Read(obj.imageDraw4);
             }
-            read(obj.groupDraw);
+            Read(obj.groupDraw);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void writeRea(ResizableEditableActor obj)
+        private unsafe void WriteRea(ResizableEditableActor obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x0, 0x14);
         }
 
-        private unsafe void readRea(ResizableEditableActor obj)
+        private unsafe void ReadRea(ResizableEditableActor obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x0, 0x14);
         }
 
-        private unsafe void write(Trigger obj)
+        private unsafe void Write(Trigger obj)
         {
-            writeRea(obj);
+            WriteRea(obj);
             chunk.Write(obj, 0x68 + 0x1C, 0x8);
             chunk.WriteInt(obj.list1.Count);
             foreach (ICActorController contr in obj.list1)
@@ -742,9 +746,9 @@ namespace Velo
             }
         }
 
-        private unsafe void read(Trigger obj)
+        private unsafe void Read(Trigger obj)
         {
-            readRea(obj);
+            ReadRea(obj);
             chunk.Read(obj, 0x68 + 0x1C, 0x8);
             int count1 = chunk.ReadInt();
             while (obj.list1.Count < count1) obj.list1.Add(null);
@@ -769,84 +773,84 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(SwitchBlock obj)
+        private unsafe void Write(SwitchBlock obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x24, 0x28);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
-            write((CConvexPolygon)obj.colShape);
-            write(obj.groupDraw);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
+            Write((CConvexPolygon)obj.colShape);
+            Write(obj.groupDraw);
         }
 
-        private unsafe void read(SwitchBlock obj)
+        private unsafe void Read(SwitchBlock obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x24, 0x28);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
-            read((CConvexPolygon)obj.colShape);
-            read(obj.groupDraw);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
+            Read((CConvexPolygon)obj.colShape);
+            Read(obj.groupDraw);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(FallTile obj)
+        private unsafe void Write(FallTile obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x4, 0x18);
-            write(obj.animSpriteDraw);
-            write(obj.groupDraw);
+            Write(obj.animSpriteDraw);
+            Write(obj.groupDraw);
         }
 
-        private unsafe void read(FallTile obj)
+        private unsafe void Read(FallTile obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x4, 0x18);
-            read(obj.animSpriteDraw);
+            Read(obj.animSpriteDraw);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
-            read(obj.groupDraw);
+            Read(obj.groupDraw);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(TriggerSaw obj)
+        private unsafe void Write(TriggerSaw obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x18, 0x28);
-            write(obj.imageDraw);
-            write(obj.convexPoly);
-            write(obj.groupDraw);
+            Write(obj.imageDraw);
+            Write(obj.convexPoly);
+            Write(obj.groupDraw);
         }
 
-        private unsafe void read(TriggerSaw obj)
+        private unsafe void Read(TriggerSaw obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x18, 0x28);
-            read(obj.imageDraw);
-            read(obj.convexPoly);
-            read(obj.groupDraw);
+            Read(obj.imageDraw);
+            Read(obj.convexPoly);
+            Read(obj.groupDraw);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(RocketLauncher obj)
+        private unsafe void Write(RocketLauncher obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x1C, 0xC);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
-            write(obj.groupDraw);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
+            Write(obj.groupDraw);
             chunk.WriteInt(obj.target != null ? obj.target.actor.Id : -1);
             chunk.WriteInt(obj.rockets.Count);
             foreach (Rocket rocket in obj.rockets)
                 chunk.WriteInt(rocket != null ? rocket.actor.Id : -1);
         }
 
-        private unsafe void read(RocketLauncher obj)
+        private unsafe void Read(RocketLauncher obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x1C, 0xC);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
-            read(obj.groupDraw);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
+            Read(obj.groupDraw);
             int targetId = chunk.ReadInt();
             applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
             int count = chunk.ReadInt();
@@ -861,37 +865,37 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(BoostaCoke obj)
+        private unsafe void Write(BoostaCoke obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x24, 0x44);
-            write(obj.animSpriteDraw1);
-            write(obj.animSpriteDraw2);
-            write(obj.animSpriteDraws[0]);
-            write(obj.animSpriteDraws[1]);
-            write(obj.animSpriteDraws[2]);
-            write(obj.animSpriteDraws[3]);
-            write(obj.tweener);
-            write(obj.random);
-            write(obj.groupDraw);
+            Write(obj.animSpriteDraw1);
+            Write(obj.animSpriteDraw2);
+            Write(obj.animSpriteDraws[0]);
+            Write(obj.animSpriteDraws[1]);
+            Write(obj.animSpriteDraws[2]);
+            Write(obj.animSpriteDraws[3]);
+            Write(obj.tweener);
+            Write(obj.random);
+            Write(obj.groupDraw);
             chunk.WriteInt(obj.player != null ? obj.player.actor.Id : -1);
             fixed (bool* bytes = obj.bools)
                 chunk.WriteBytes((byte*)bytes, 4);
         }
 
-        private unsafe void read(BoostaCoke obj)
+        private unsafe void Read(BoostaCoke obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x24, 0x44);
-            read(obj.animSpriteDraw1);
-            read(obj.animSpriteDraw2);
-            read(obj.animSpriteDraws[0]);
-            read(obj.animSpriteDraws[1]);
-            read(obj.animSpriteDraws[2]);
-            read(obj.animSpriteDraws[3]);
-            read(obj.tweener);
-            read(obj.random);
-            read(obj.groupDraw);
+            Read(obj.animSpriteDraw1);
+            Read(obj.animSpriteDraw2);
+            Read(obj.animSpriteDraws[0]);
+            Read(obj.animSpriteDraws[1]);
+            Read(obj.animSpriteDraws[2]);
+            Read(obj.animSpriteDraws[3]);
+            Read(obj.tweener);
+            Read(obj.random);
+            Read(obj.groupDraw);
             int playerId = chunk.ReadInt();
             applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]); 
             fixed (bool* bytes = obj.bools)
@@ -899,28 +903,28 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Laser obj)
+        private unsafe void Write(Laser obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x2C, 0x3C);
-            write(obj.animSpriteDraw);
-            write(obj.lineDraw);
-            write(obj.line1);
-            write(obj.line2);
-            write(obj.groupDraw);
+            Write(obj.animSpriteDraw);
+            Write(obj.lineDraw);
+            Write(obj.line1);
+            Write(obj.line2);
+            Write(obj.groupDraw);
             if (storeAiVolumes)
                 chunk.WriteInt(obj.aiVolume != null ? obj.aiVolume.actor.Id : -1);
         }
 
-        private unsafe void read(Laser obj)
+        private unsafe void Read(Laser obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x2C, 0x3C);
-            read(obj.animSpriteDraw);
-            read(obj.lineDraw);
-            read(obj.line1);
-            read(obj.line2);
-            read(obj.groupDraw);
+            Read(obj.animSpriteDraw);
+            Read(obj.lineDraw);
+            Read(obj.line1);
+            Read(obj.line2);
+            Read(obj.groupDraw);
             if (storeAiVolumes)
             {
                 int aiVolumeId = chunk.ReadInt();
@@ -932,9 +936,9 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(AIVolume obj)
+        private unsafe void Write(AIVolume obj)
         {
-            writeRea(obj);
+            WriteRea(obj);
             chunk.Write(obj, 0x68 + 0x24, 0x4);
             chunk.WriteInt(obj.type.value);
             chunk.WriteInt(obj.defaultActive.value);
@@ -944,9 +948,9 @@ namespace Velo
             chunk.WriteInt(obj.unfair.value);
         }
 
-        private unsafe void read(AIVolume obj)
+        private unsafe void Read(AIVolume obj)
         {
-            readRea(obj);
+            ReadRea(obj);
             chunk.Read(obj, 0x68 + 0x24, 0x4);
             obj.type.value = chunk.ReadInt();
             obj.defaultActive.value = chunk.ReadInt();
@@ -957,9 +961,9 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Timer obj)
+        private unsafe void Write(Timer obj)
         {
-            writeRea(obj);
+            WriteRea(obj);
             chunk.Write(obj, 0x68 + 0x10, 0x14);
             chunk.WriteInt(obj.unknown.value);
             chunk.WriteInt(obj.list1.Count);
@@ -970,9 +974,9 @@ namespace Velo
                 chunk.WriteInt(contr != null ? ((Player)contr).actor.Id : -1);
         }
 
-        private unsafe void read(Timer obj)
+        private unsafe void Read(Timer obj)
         {
-            readRea(obj);
+            ReadRea(obj);
             chunk.Read(obj, 0x68 + 0x10, 0x14);
             obj.unknown.value = chunk.ReadInt();
             int count1 = chunk.ReadInt();
@@ -996,9 +1000,9 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Checkpoint obj)
+        private unsafe void Write(Checkpoint obj)
         {
-            writeEa(obj);
+            WriteEa(obj);
             chunk.Write(obj, 0x54 + 0x3C, 0x28);
             chunk.WriteInt(obj.helpers.Count);
             foreach (Checkpoint helper in obj.helpers)
@@ -1007,9 +1011,9 @@ namespace Velo
             chunk.WriteInt(obj.checkpoint2 != null ? obj.checkpoint2.actor.Id : -1);
         }
 
-        private unsafe void read(Checkpoint obj)
+        private unsafe void Read(Checkpoint obj)
         {
-            readEa(obj);
+            ReadEa(obj);
             chunk.Read(obj, 0x54 + 0x3C, 0x28);
             int helpers = chunk.ReadInt();
             while (obj.helpers.Count < helpers) obj.helpers.Add(null);
@@ -1027,51 +1031,51 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(StraightRocket obj)
+        private unsafe void Write(StraightRocket obj)
         {
             chunk.Write(obj, 0x28, 0x18);
-            write(obj.actor);
-            write(obj.spriteDraw);
-            write(obj.bounds);
+            Write(obj.actor);
+            Write(obj.spriteDraw);
+            Write(obj.bounds);
         }
 
-        private unsafe void read(StraightRocket obj)
+        private unsafe void Read(StraightRocket obj)
         {
             chunk.Read(obj, 0x28, 0x18);
-            read(obj.actor);
-            read(obj.spriteDraw);
-            read(obj.bounds);
+            Read(obj.actor);
+            Read(obj.spriteDraw);
+            Read(obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(Player obj)
+        private unsafe void Write(Player obj)
         {
             chunk.Write(obj, 0x1D4, 0x214);
-            write(obj.actor);
-            write(obj.slot);
-            write(obj.random);
-            write(obj.groupDrawComp1);
-            write(obj.animSpriteDrawComp1);
-            write(obj.animSpriteDrawComp2);
-            write(obj.animSpriteDrawComp3);
-            write(obj.animSpriteDrawComp4);
-            write(obj.animSpriteDrawComp5);
-            write(obj.animSpriteDrawComp6);
-            write(obj.spriteDrawComp1);
-            write(obj.spriteDrawComp2);
-            write(obj.spriteDrawComp3);
-            write(obj.spriteDrawComp4);
-            write(obj.spriteDrawComp5);
-            write(obj.imageDrawComp1);
-            write(obj.imageDrawComp2);
-            write(obj.imageDrawComp3);
-            write(obj.imageDrawComp4);
-            write(obj.tweener1);
-            write(obj.tweener2);
-            write(obj.tweener3);
-            write(obj.hitboxStanding);
-            write(obj.hitboxSliding);
+            Write(obj.actor);
+            Write(obj.slot);
+            Write(obj.random);
+            Write(obj.groupDrawComp1);
+            Write(obj.animSpriteDrawComp1);
+            Write(obj.animSpriteDrawComp2);
+            Write(obj.animSpriteDrawComp3);
+            Write(obj.animSpriteDrawComp4);
+            Write(obj.animSpriteDrawComp5);
+            Write(obj.animSpriteDrawComp6);
+            Write(obj.spriteDrawComp1);
+            Write(obj.spriteDrawComp2);
+            Write(obj.spriteDrawComp3);
+            Write(obj.spriteDrawComp4);
+            Write(obj.spriteDrawComp5);
+            Write(obj.imageDrawComp1);
+            Write(obj.imageDrawComp2);
+            Write(obj.imageDrawComp3);
+            Write(obj.imageDrawComp4);
+            Write(obj.tweener1);
+            Write(obj.tweener2);
+            Write(obj.tweener3);
+            Write(obj.hitboxStanding);
+            Write(obj.hitboxSliding);
             chunk.WriteInt(obj.grapple != null ? obj.grapple.actor.Id : -1);
             chunk.WriteInt(obj.rope != null ? obj.rope.actor.Id : -1);
             chunk.WriteInt(obj.goldenHook != null ? obj.goldenHook.actor.Id : -1);
@@ -1098,33 +1102,33 @@ namespace Velo
                 chunk.WriteInt(boostaCoke != null ? boostaCoke.actor.Id : -1);
         }
 
-        private unsafe void read(Player obj)
+        private unsafe void Read(Player obj)
         {
             chunk.Read(obj, 0x1D4, 0x214);
-            read(obj.actor);
-            read(obj.slot);
-            read(obj.random);
-            read(obj.groupDrawComp1);
-            read(obj.animSpriteDrawComp1);
-            read(obj.animSpriteDrawComp2);
-            read(obj.animSpriteDrawComp3);
-            read(obj.animSpriteDrawComp4);
-            read(obj.animSpriteDrawComp5);
-            read(obj.animSpriteDrawComp6);
-            read(obj.spriteDrawComp1);
-            read(obj.spriteDrawComp2);
-            read(obj.spriteDrawComp3);
-            read(obj.spriteDrawComp4);
-            read(obj.spriteDrawComp5);
-            read(obj.imageDrawComp1);
-            read(obj.imageDrawComp2);
-            read(obj.imageDrawComp3);
-            read(obj.imageDrawComp4);
-            read(obj.tweener1);
-            read(obj.tweener2);
-            read(obj.tweener3);
-            read(obj.hitboxStanding);
-            read(obj.hitboxSliding);
+            Read(obj.actor);
+            Read(obj.slot);
+            Read(obj.random);
+            Read(obj.groupDrawComp1);
+            Read(obj.animSpriteDrawComp1);
+            Read(obj.animSpriteDrawComp2);
+            Read(obj.animSpriteDrawComp3);
+            Read(obj.animSpriteDrawComp4);
+            Read(obj.animSpriteDrawComp5);
+            Read(obj.animSpriteDrawComp6);
+            Read(obj.spriteDrawComp1);
+            Read(obj.spriteDrawComp2);
+            Read(obj.spriteDrawComp3);
+            Read(obj.spriteDrawComp4);
+            Read(obj.spriteDrawComp5);
+            Read(obj.imageDrawComp1);
+            Read(obj.imageDrawComp2);
+            Read(obj.imageDrawComp3);
+            Read(obj.imageDrawComp4);
+            Read(obj.tweener1);
+            Read(obj.tweener2);
+            Read(obj.tweener3);
+            Read(obj.hitboxStanding);
+            Read(obj.hitboxSliding);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             obj.timespan2 = new TimeSpan(obj.timespan2.Ticks + dt);
             obj.timespan3 = new TimeSpan(obj.timespan3.Ticks + dt);
@@ -1202,138 +1206,138 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
-        private unsafe void write(PlayerBot obj)
+        private unsafe void Write(PlayerBot obj)
         {
-            write((Player)obj);
+            Write((Player)obj);
             chunk.Write(obj, 0x1D4 + 0x214 + 0x4, 0x48);
             chunk.WriteInt(obj.goldenHookBot != null ? obj.goldenHookBot.actor.Id : -1);
         }
 
-        private unsafe void read(PlayerBot obj)
+        private unsafe void Read(PlayerBot obj)
         {
-            read((Player)obj);
+            Read((Player)obj);
             chunk.Read(obj, 0x1D4 + 0x214 + 0x4, 0x48);
             int hookId = chunk.ReadInt();
             applyPtr.Add(() => obj.goldenHookBot = (GoldenHook)contrLookup[hookId]);
             obj.timespanBot = new TimeSpan(obj.timespanBot.Ticks + dt);
         }
 
-        private unsafe void write(ShakeCameraModifier obj)
+        private unsafe void Write(ShakeCameraModifier obj)
         {
             chunk.Write(obj, 0x14, 0x34);
-            write(obj.random);
+            Write(obj.random);
         }
 
-        private unsafe void read(ShakeCameraModifier obj)
+        private unsafe void Read(ShakeCameraModifier obj)
         {
             chunk.Read(obj, 0x14, 0x34);
-            read(obj.random);
+            Read(obj.random);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             obj.timespan2 = new TimeSpan(obj.timespan2.Ticks + dt);
         }
 
-        private unsafe void write(ClampCameraModifier obj)
+        private unsafe void Write(ClampCameraModifier obj)
         {
             chunk.Write(obj, 0x8, 0x30);
         }
 
-        private unsafe void read(ClampCameraModifier obj)
+        private unsafe void Read(ClampCameraModifier obj)
         {
             chunk.Read(obj, 0x8, 0x30);
         }
 
-        private unsafe void write(Camera obj)
+        private unsafe void Write(Camera obj)
         {
             chunk.Write(obj, 0x10, 0x3C);
         }
 
-        private unsafe void read(Camera obj)
+        private unsafe void Read(Camera obj)
         {
             chunk.Read(obj, 0x10, 0x3C);
         }
 
-        private unsafe void write(CameraMP obj)
+        private unsafe void Write(CameraMP obj)
         {
             chunk.Write(obj, 0x14, 0x34);
         }
 
-        private unsafe void read(CameraMP obj)
+        private unsafe void Read(CameraMP obj)
         {
             chunk.Read(obj, 0x14, 0x34);
         }
 
-        private unsafe void write(CCamera obj)
+        private unsafe void Write(CCamera obj)
         {
             chunk.Write(obj, 0x1C, 0xA8);
-            write(obj.shakeMod);
-            write(obj.clampMod);
+            Write(obj.shakeMod);
+            Write(obj.clampMod);
             if (obj.mods[0] is Camera camera)
-                write(camera);
+                Write(camera);
             else if (obj.mods[0] is CameraMP cameraMP)
-                write(cameraMP);
+                Write(cameraMP);
         }
 
-        private unsafe void read(CCamera obj)
+        private unsafe void Read(CCamera obj)
         {
             chunk.Read(obj, 0x1C, 0xA8);
-            read(obj.shakeMod);
-            read(obj.clampMod);
+            Read(obj.shakeMod);
+            Read(obj.clampMod);
             if (obj.mods[0] is Camera camera)
-                read(camera);
+                Read(camera);
             else if (obj.mods[0] is CameraMP cameraMP)
-                read(cameraMP);
+                Read(cameraMP);
         }
 
-        private unsafe void write(ModuleSolo obj)
+        private unsafe void Write(ModuleSolo obj)
         {
             chunk.Write(obj, 0x74, 0x4C);
-            write(obj.random);
-            write(obj.camera);
+            Write(obj.random);
+            Write(obj.camera);
         }
 
-        private unsafe void read(ModuleSolo obj)
+        private unsafe void Read(ModuleSolo obj)
         {
             chunk.Read(obj, 0x74, 0x4C);
-            read(obj.random);
-            read(obj.camera);
+            Read(obj.random);
+            Read(obj.camera);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
         }
 
-        private unsafe void write(ModuleMP obj)
+        private unsafe void Write(ModuleMP obj)
         {
             chunk.Write(obj, 0xA8, 0xB8);
-            write(obj.random);
-            write(obj.camera);
+            Write(obj.random);
+            Write(obj.camera);
         }
 
-        private unsafe void read(ModuleMP obj)
+        private unsafe void Read(ModuleMP obj)
         {
             chunk.Read(obj, 0xA8, 0xB8);
-            read(obj.random);
-            read(obj.camera);
+            Read(obj.random);
+            Read(obj.camera);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             obj.timespan4 = new TimeSpan(obj.timespan4.Ticks + dt);
         }
 
-        bool empty = true;
-        CCollisionEngine collisionEngine;
-        CWorld world;
-        Stack stack;
-        Chunk chunk;
-        long time;
-        long dt;
-        bool storeAiVolumes;
-        NullSafeDict<int, ICActorController> contrLookup = new NullSafeDict<int, ICActorController>();
-        List<Action> applyPtr = new List<Action>();
-        HashSet<CActor> fixedIdActors = new HashSet<CActor>();
-        HashSet<int> fixedIds = new HashSet<int>();
+        private bool empty = true;
+        private CCollisionEngine collisionEngine;
+        private CWorld world;
+        private Stack stack;
+        private readonly Chunk chunk;
+        private long time;
+        private long dt;
+        private bool storeAiVolumes;
+        private readonly NullSafeDict<int, ICActorController> contrLookup = new NullSafeDict<int, ICActorController>();
+        private readonly List<Action> applyPtr = new List<Action>();
+        private readonly HashSet<CActor> fixedIdActors = new HashSet<CActor>();
+        private readonly HashSet<int> fixedIds = new HashSet<int>();
 
         public Savestate()
         {
             chunk = new Chunk();
         }
 
-        public void save(bool storeAiVolumes)
+        public void Save(bool storeAiVolumes)
         {
             if (!Velo.Ingame || Velo.Online)
                 return;
@@ -1360,125 +1364,125 @@ namespace Velo
                     {
                         chunk.WriteInt(-1);
                         chunk.WriteInt(playerBot.slot.Index);
-                        write(playerBot);
+                        Write(playerBot);
                         continue;
                     }
                     
                     chunk.WriteInt(0);
                     chunk.WriteInt(player.slot.Index);
-                    write(player);
+                    Write(player);
                 }
                 else if (controller is Grapple grapple)
                 {
                     chunk.WriteInt(1);
-                    write(grapple);
+                    Write(grapple);
                 }
                 else if (controller is Rope rope)
                 {
                     chunk.WriteInt(2);
-                    write(rope);
+                    Write(rope);
                 }
                 else if (controller is Fireball fireball)
                 {
                     chunk.WriteInt(3);
-                    write(fireball);
+                    Write(fireball);
                 }
                 else if (controller is DroppedObstacle droppedObstacle)
                 {
                     chunk.WriteInt(4);
-                    write(droppedObstacle);
+                    Write(droppedObstacle);
                 }
                 else if (controller is Rocket rocket)
                 {
                     chunk.WriteInt(5);
-                    write(rocket);
+                    Write(rocket);
                 }
                 else if (controller is GoldenHook goldenHook)
                 {
                     chunk.WriteInt(6);
-                    write(goldenHook);
+                    Write(goldenHook);
                 }
                 else if (controller is Shockwave shockwave)
                 {
                     chunk.WriteInt(7);
-                    write(shockwave);
+                    Write(shockwave);
                 }
                 else if (controller is DroppedBomb droppedBomb)
                 {
                     chunk.WriteInt(8);
-                    write(droppedBomb);
+                    Write(droppedBomb);
                 }
                 else if (controller is Obstacle obstacle)
                 {
                     chunk.WriteInt(9);
-                    write(obstacle);
+                    Write(obstacle);
                 }
                 else if (controller is FreezeRay freezeRay)
                 {
                     chunk.WriteInt(10);
-                    write(freezeRay);
+                    Write(freezeRay);
                 }
                 else if (controller is Pickup pickup)
                 {
                     chunk.WriteInt(11);
-                    write(pickup);
+                    Write(pickup);
                 }
                 else if (controller is Trigger trigger)
                 {
                     chunk.WriteInt(12);
-                    write(trigger);
+                    Write(trigger);
                 }
                 else if (controller is SwitchBlock switchBlock)
                 {
                     chunk.WriteInt(13);
-                    write(switchBlock);
+                    Write(switchBlock);
                 }
                 else if (controller is FallTile fallTile)
                 {
                     chunk.WriteInt(14);
-                    write(fallTile);
+                    Write(fallTile);
                 }
                 else if (controller is TriggerSaw triggerSaw)
                 {
                     chunk.WriteInt(15);
-                    write(triggerSaw);
+                    Write(triggerSaw);
                 }
                 else if (controller is RocketLauncher rocketLauncher)
                 {
                     chunk.WriteInt(16);
-                    write(rocketLauncher);
+                    Write(rocketLauncher);
                 }
                 else if (controller is BoostaCoke boostaCoke)
                 {
                     chunk.WriteInt(17);
-                    write(boostaCoke);
+                    Write(boostaCoke);
                 }
                 else if (controller is Laser laser)
                 {
                     chunk.WriteInt(18);
-                    write(laser);
+                    Write(laser);
                 }
                 else if (controller is AIVolume aiVolume)
                 {
                     if (!storeAiVolumes)
                         continue;
                     chunk.WriteInt(19);
-                    write(aiVolume);
+                    Write(aiVolume);
                 }
                 else if (controller is Timer timer)
                 {
                     chunk.WriteInt(20);
-                    write(timer);
+                    Write(timer);
                 }
                 else if (controller is Checkpoint checkpoint)
                 {
                     chunk.WriteInt(21);
-                    write(checkpoint);
+                    Write(checkpoint);
                 }
                 else if (controller is StraightRocket straightRocket)
                 {
                     chunk.WriteInt(22);
-                    write(straightRocket);
+                    Write(straightRocket);
                 }
             }
 
@@ -1486,14 +1490,14 @@ namespace Velo
 
             foreach (var module in stack.modules)
             {
-                if (module is ModuleSolo)
+                if (module is ModuleSolo moduleSolo)
                 {
-                    write((ModuleSolo)module);
+                    Write(moduleSolo);
                     break;
                 }
-                else if (module is ModuleMP)
+                else if (module is ModuleMP moduleMP)
                 {
-                    write((ModuleMP)module);
+                    Write(moduleMP);
                     break;
                 }
             }
@@ -1501,7 +1505,7 @@ namespace Velo
             time = CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks;
         }
 
-        private T getOfType<T>(int n, Func<T, bool> func = null) where T : ICActorController
+        private T GetOfType<T>(int n, Func<T, bool> func = null) where T : ICActorController
         {
             int c = 0;
 
@@ -1509,10 +1513,10 @@ namespace Velo
             {
                 CActor actor = collisionEngine.GetActor(i);
                 ICActorController controller = actor.controller;
-                if (controller is T && !actor.ghostOwnedItem && (func == null || func((T)controller)))
+                if (controller is T t && !actor.ghostOwnedItem && (func == null || func(t)))
                 {
                     if (c == n)
-                        return (T)controller;
+                        return t;
                     else
                         c++;
                 }
@@ -1521,7 +1525,7 @@ namespace Velo
             return default;
         }
 
-        public void destroyAllAfter<T>(int n)
+        public void DestroyAllAfter<T>(int n)
         {
             int c = 0;
 
@@ -1538,6 +1542,7 @@ namespace Velo
             }
         }
 
+#pragma warning disable IDE1006
         public static void actor_update(CActor actor)
         {
             ICActorController controller = actor.controller;
@@ -1587,8 +1592,9 @@ namespace Velo
                     actor.ghostOwnedItem = true;
             }
         }
+#pragma warning restore IDE1006
 
-        public bool load()
+        public bool Load()
         {
             if (empty || !Velo.Ingame || Velo.Online)
                 return false;
@@ -1612,180 +1618,158 @@ namespace Velo
                 if (type == -1)
                 {
                     int index = chunk.ReadInt();
-                    Player player = getOfType<Player>(0, (check) => check.slot.Index == index);
-                    read((PlayerBot)player);
+                    Player player = GetOfType<Player>(0, (check) => check.slot.Index == index);
+                    Read((PlayerBot)player);
                     fixedIdActors.Add(player.actor);
                 }
                 else if (type == 0)
                 {
                     int index = chunk.ReadInt();
-                    Player player = getOfType<Player>(0, (check) => check.slot.Index == index);
-                    read(player);
+                    Player player = GetOfType<Player>(0, (check) => check.slot.Index == index);
+                    Read(player);
                     fixedIdActors.Add(player.actor);
                 }
                 else if (type == 1)
                 {
-                    Grapple grapple = getOfType<Grapple>(counts[1]++);
-                    if (grapple == null)
-                        grapple = (Grapple)world.SpawnActor(new GrappleDef(0, null));
-                    read(grapple);
+                    Grapple grapple = GetOfType<Grapple>(counts[1]++) ?? (Grapple)world.SpawnActor(new GrappleDef(0, null));
+                    Read(grapple);
                     fixedIdActors.Add(grapple.actor);
                 }
                 else if (type == 2)
                 {
-                    Rope rope = getOfType<Rope>(counts[2]++);
-                    if (rope == null)
-                        rope = (Rope)world.SpawnActor(new RopeDef());
-                    read(rope);
+                    Rope rope = GetOfType<Rope>(counts[2]++) ?? (Rope)world.SpawnActor(new RopeDef());
+                    Read(rope);
                     fixedIdActors.Add(rope.actor);
                 }
                 else if (type == 3)
                 {
-                    Fireball fireball = getOfType<Fireball>(counts[3]++);
-                    if (fireball == null)
-                        fireball = (Fireball)world.SpawnActor(new FireballDef(Vector2.Zero));
-                    read(fireball);
+                    Fireball fireball = GetOfType<Fireball>(counts[3]++) ?? (Fireball)world.SpawnActor(new FireballDef(Vector2.Zero));
+                    Read(fireball);
                     fixedIdActors.Add(fireball.actor);
                 }
                 else if (type == 4)
                 {
-                    DroppedObstacle droppedObstacle = getOfType<DroppedObstacle>(counts[4]++);
-                    if (droppedObstacle == null)
-                        droppedObstacle = (DroppedObstacle)world.SpawnActor(new DroppedObstacleDef(null, false));
-                    read(droppedObstacle);
+                    DroppedObstacle droppedObstacle = GetOfType<DroppedObstacle>(counts[4]++) ?? (DroppedObstacle)world.SpawnActor(new DroppedObstacleDef(null, false));
+                    Read(droppedObstacle);
                     fixedIdActors.Add(droppedObstacle.actor);
                 }
                 else if (type == 5)
                 {
-                    Rocket rocket = getOfType<Rocket>(counts[5]++);
-                    if (rocket == null)
-                        rocket = (Rocket)world.SpawnActor(new RocketDef(null, stack.gameInfo));
-                    read(rocket);
+                    Rocket rocket = GetOfType<Rocket>(counts[5]++) ?? (Rocket)world.SpawnActor(new RocketDef(null, stack.gameInfo));
+                    Read(rocket);
                     fixedIdActors.Add(rocket.actor);
                 }
                 else if (type == 6)
                 {
-                    GoldenHook goldenHook = getOfType<GoldenHook>(counts[6]++);
-                    if (goldenHook == null)
-                        goldenHook = (GoldenHook)world.SpawnActor(new GoldenHookDef(0, null));
-                    read(goldenHook);
+                    GoldenHook goldenHook = GetOfType<GoldenHook>(counts[6]++) ?? (GoldenHook)world.SpawnActor(new GoldenHookDef(0, null));
+                    Read(goldenHook);
                     fixedIdActors.Add(goldenHook.actor);
                 }
                 else if (type == 7)
                 {
-                    Shockwave shockwave = getOfType<Shockwave>(counts[7]++);
-                    if (shockwave == null)
-                        shockwave = (Shockwave)world.SpawnActor(new ShockwaveDef(null));
-                    read(shockwave);
+                    Shockwave shockwave = GetOfType<Shockwave>(counts[7]++) ?? (Shockwave)world.SpawnActor(new ShockwaveDef(null));
+                    Read(shockwave);
                     fixedIdActors.Add(shockwave.actor);
                 }
                 else if (type == 8)
                 {
-                    DroppedBomb droppedBomb = getOfType<DroppedBomb>(counts[8]++);
-                    if (droppedBomb == null)
-                        droppedBomb = (DroppedBomb)world.SpawnActor(new DroppedBombDef(Color.Black, null));
-                    read(droppedBomb);
+                    DroppedBomb droppedBomb = GetOfType<DroppedBomb>(counts[8]++) ?? (DroppedBomb)world.SpawnActor(new DroppedBombDef(Color.Black, null));
+                    Read(droppedBomb);
                     fixedIdActors.Add(droppedBomb.actor);
                 }
                 else if (type == 9)
                 {
-                    Obstacle obstacle = getOfType<Obstacle>(counts[9]++);
+                    Obstacle obstacle = GetOfType<Obstacle>(counts[9]++);
                     if (obstacle != null)
-                        read(obstacle);
+                        Read(obstacle);
                     fixedIdActors.Add(obstacle.actor);
                 }
                 else if (type == 10)
                 {
-                    FreezeRay freezeRay = getOfType<FreezeRay>(counts[10]++);
-                    if (freezeRay == null)
-                        freezeRay = (FreezeRay)world.SpawnActor(new FreezeRayDef(Vector2.Zero, null));
-                    read(freezeRay);
+                    FreezeRay freezeRay = GetOfType<FreezeRay>(counts[10]++) ?? (FreezeRay)world.SpawnActor(new FreezeRayDef(Vector2.Zero, null));
+                    Read(freezeRay);
                     fixedIdActors.Add(freezeRay.actor);
                 }
                 else if (type == 11)
                 {
-                    Pickup pickup = getOfType<Pickup>(counts[11]++);
+                    Pickup pickup = GetOfType<Pickup>(counts[11]++);
                     if (pickup != null)
-                        read(pickup);
+                        Read(pickup);
                     fixedIdActors.Add(pickup.actor);
                 }
                 else if (type == 12)
                 {
-                    Trigger trigger = getOfType<Trigger>(counts[12]++);
+                    Trigger trigger = GetOfType<Trigger>(counts[12]++);
                     if (trigger != null)
-                        read(trigger);
+                        Read(trigger);
                     fixedIdActors.Add(trigger.actor);
                 }
                 else if (type == 13)
                 {
-                    SwitchBlock switchBlock = getOfType<SwitchBlock>(counts[13]++);
+                    SwitchBlock switchBlock = GetOfType<SwitchBlock>(counts[13]++);
                     if (switchBlock != null)
-                        read(switchBlock);
+                        Read(switchBlock);
                     fixedIdActors.Add(switchBlock.actor);
                 }
                 else if (type == 14)
                 {
-                    FallTile fallTile = getOfType<FallTile>(counts[14]++);
+                    FallTile fallTile = GetOfType<FallTile>(counts[14]++);
                     if (fallTile != null)
-                        read(fallTile);
+                        Read(fallTile);
                     fixedIdActors.Add(fallTile.actor);
                 }
                 else if (type == 15)
                 {
-                    TriggerSaw triggerSaw = getOfType<TriggerSaw>(counts[15]++);
+                    TriggerSaw triggerSaw = GetOfType<TriggerSaw>(counts[15]++);
                     if (triggerSaw != null)
-                        read(triggerSaw);
+                        Read(triggerSaw);
                     fixedIdActors.Add(triggerSaw.actor);
                 }
                 else if (type == 16)
                 {
-                    RocketLauncher rocketLauncher = getOfType<RocketLauncher>(counts[16]++);
+                    RocketLauncher rocketLauncher = GetOfType<RocketLauncher>(counts[16]++);
                     if (rocketLauncher != null)
-                        read(rocketLauncher);
+                        Read(rocketLauncher);
                     fixedIdActors.Add(rocketLauncher.actor);
                 }
                 else if (type == 17)
                 {
-                    BoostaCoke boostaCoke = getOfType<BoostaCoke>(counts[17]++);
+                    BoostaCoke boostaCoke = GetOfType<BoostaCoke>(counts[17]++);
                     if (boostaCoke != null)
-                        read(boostaCoke);
+                        Read(boostaCoke);
                     fixedIdActors.Add(boostaCoke.actor);
                 }
                 else if (type == 18)
                 {
-                    Laser laser = getOfType<Laser>(counts[18]++);
+                    Laser laser = GetOfType<Laser>(counts[18]++);
                     if (laser != null)
-                        read(laser);
+                        Read(laser);
                     fixedIdActors.Add(laser.actor);
                 }
                 else if (type == 19)
                 {
-                    AIVolume aiVolume = getOfType<AIVolume>(counts[19]++);
-                    if (aiVolume == null)
-                        aiVolume = (AIVolume)world.SpawnActor(new AIVolumeDef(Vector2.Zero, Vector2.Zero, 0));
-                    read(aiVolume);
+                    AIVolume aiVolume = GetOfType<AIVolume>(counts[19]++) ?? (AIVolume)world.SpawnActor(new AIVolumeDef(Vector2.Zero, Vector2.Zero, 0));
+                    Read(aiVolume);
                     fixedIdActors.Add(aiVolume.actor);
                 }
                 else if (type == 20)
                 {
-                    Timer timer = getOfType<Timer>(counts[20]++);
+                    Timer timer = GetOfType<Timer>(counts[20]++);
                     if (timer != null)
-                        read(timer);
+                        Read(timer);
                     fixedIdActors.Add(timer.actor);
                 }
                 else if (type == 21)
                 {
-                    Checkpoint checkpoint = getOfType<Checkpoint>(counts[21]++);
+                    Checkpoint checkpoint = GetOfType<Checkpoint>(counts[21]++);
                     if (checkpoint != null)
-                        read(checkpoint);
+                        Read(checkpoint);
                     fixedIdActors.Add(checkpoint.actor);
                 }
                 else if (type == 22)
                 {
-                    StraightRocket straightRocket = getOfType<StraightRocket>(counts[22]++);
-                    if (straightRocket == null)
-                        straightRocket = (StraightRocket)world.SpawnActor(new StraightRocketDef(stack.gameInfo));
-                    read(straightRocket);
+                    StraightRocket straightRocket = GetOfType<StraightRocket>(counts[22]++) ?? (StraightRocket)world.SpawnActor(new StraightRocketDef(stack.gameInfo));
+                    Read(straightRocket);
                     fixedIdActors.Add(straightRocket.actor);
                 }
             }
@@ -1793,29 +1777,29 @@ namespace Velo
             foreach (var actor in fixedIdActors)
                 fixedIds.Add(actor.Id);
 
-            destroyAllAfter<Grapple>(counts[1]);
-            destroyAllAfter<Rope>(counts[2]);
-            destroyAllAfter<Fireball>(counts[3]);
-            destroyAllAfter<DroppedObstacle>(counts[4]);
-            destroyAllAfter<Rocket>(counts[5]);
-            destroyAllAfter<GoldenHook>(counts[6]);
-            destroyAllAfter<Shockwave>(counts[7]);
-            destroyAllAfter<DroppedBomb>(counts[8]);
-            destroyAllAfter<FreezeRay>(counts[10]);
+            DestroyAllAfter<Grapple>(counts[1]);
+            DestroyAllAfter<Rope>(counts[2]);
+            DestroyAllAfter<Fireball>(counts[3]);
+            DestroyAllAfter<DroppedObstacle>(counts[4]);
+            DestroyAllAfter<Rocket>(counts[5]);
+            DestroyAllAfter<GoldenHook>(counts[6]);
+            DestroyAllAfter<Shockwave>(counts[7]);
+            DestroyAllAfter<DroppedBomb>(counts[8]);
+            DestroyAllAfter<FreezeRay>(counts[10]);
             if (storeAiVolumes)
-                destroyAllAfter<AIVolume>(counts[19]);
-            destroyAllAfter<StraightRocket>(counts[22]);
+                DestroyAllAfter<AIVolume>(counts[19]);
+            DestroyAllAfter<StraightRocket>(counts[22]);
 
             foreach (var module in stack.modules)
             {
-                if (module is ModuleSolo)
+                if (module is ModuleSolo moduleSolo)
                 {
-                    read((ModuleSolo)module);
+                    Read(moduleSolo);
                     break;
                 }
-                else if (module is ModuleMP)
+                else if (module is ModuleMP moduleMP)
                 {
-                    read((ModuleMP)module);
+                    Read(moduleMP);
                     break;
                 }
             }
@@ -1864,7 +1848,7 @@ namespace Velo
         public IntSetting LoadHaltDuration;
         public BoolSetting StoreAIVolumes;
 
-        private Savestate savestate;
+        private readonly Savestate savestate;
         public long savestateLoadTime = 0;
 
         private Savestates() : base("Savestates")
@@ -1884,11 +1868,11 @@ namespace Velo
             base.PreUpdate();
 
             if (Keyboard.Pressed[SaveKey.Value])
-                savestate.save(StoreAIVolumes.Value);
+                savestate.Save(StoreAIVolumes.Value);
 
             if (Keyboard.Pressed[LoadKey.Value])
             {
-                if (savestate.load())
+                if (savestate.Load())
                     savestateLoadTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             }
         }

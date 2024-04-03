@@ -5,6 +5,7 @@ namespace Velo
 {
     public class Debug
     {
+#pragma warning disable IDE1006
         public static void writeStackTrace(Exception ex)
         {
             StreamWriter writer = new StreamWriter("stacktrace.txt");

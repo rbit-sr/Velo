@@ -106,10 +106,12 @@ namespace Velo
                 boxComps = new CRectangleDrawComponent[7];
                 for (int j = 0; j < 7; j++)
                 {
-                    boxComps[j] = new CRectangleDrawComponent(0.0f, 0.0f, 0.0f, 0.0f);
-                    boxComps[j].IsVisible = true;
-                    boxComps[j].FillEnabled = true;
-                    boxComps[j].OutlineEnabled = true;
+                    boxComps[j] = new CRectangleDrawComponent(0.0f, 0.0f, 0.0f, 0.0f)
+                    {
+                        IsVisible = true,
+                        FillEnabled = true,
+                        OutlineEnabled = true
+                    };
                     AddComponent(boxComps[j]);
                 }
             }
@@ -119,9 +121,11 @@ namespace Velo
                 textComps = new CTextDrawComponent[7];
                 for (int j = 0; j < 7; j++)
                 {
-                    textComps[j] = new CTextDrawComponent("", font, Vector2.Zero);
-                    textComps[j].color_replace = false;
-                    textComps[j].IsVisible = true;
+                    textComps[j] = new CTextDrawComponent("", font, Vector2.Zero)
+                    {
+                        color_replace = false,
+                        IsVisible = true
+                    };
                     AddComponent(textComps[j]);
                 }
             }
@@ -132,7 +136,7 @@ namespace Velo
                 player.rightPressed, 
                 player.jumpPressed, 
                 player.grapplePressed, 
-                player.jumpPressed, 
+                player.slidePressed, 
                 player.boostPressed, 
                 player.itemPressed 
             };

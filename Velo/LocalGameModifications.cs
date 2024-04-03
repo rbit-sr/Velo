@@ -55,17 +55,17 @@ namespace Velo
 
         public void UpdateCamera(ICCameraModifier cameraMod)
         {
-            if (cameraMod is Camera)
-                ((Camera)cameraMod).camera.Position = Vector2.Zero;
+            if (cameraMod is Camera camera)
+                camera.camera.Position = Vector2.Zero;
 
             if (!Velo.Online && CameraZoom.Value != CameraZoom.DefaultValue)
             {
                 float zoom = CameraZoom.Value;
 
-                if (cameraMod is Camera camera)
+                if (cameraMod is Camera camera1)
                 {
-                    camera.zoom1 = zoom;
-                    camera.camera.Zoom = zoom * camera.unknown1;
+                    camera1.zoom1 = zoom;
+                    camera1.camera.Zoom = zoom * camera1.unknown1;
                 }
                 else if (cameraMod is CameraMP cameraMP)
                 {

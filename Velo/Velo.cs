@@ -29,9 +29,9 @@ namespace Velo
             {
                 CActor actor = collisionEngine.GetActor(i);
                 ICActorController controller = actor.controller;
-                if (controller is Player && ((Player)controller).actor.localPlayer)
+                if (controller is Player player && player.actor.localPlayer)
                 {
-                    return (Player)controller;
+                    return player;
                 }
             }
 
@@ -57,6 +57,8 @@ namespace Velo
             return false;
         }
 
+#pragma warning disable IDE1006
+#pragma warning disable IDE0060
         // It follows a list of interface methods that the modded game client
         // can call in order to communicate with Velo.
         // These are all written in snake_case.

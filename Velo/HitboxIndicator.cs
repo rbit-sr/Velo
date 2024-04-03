@@ -150,13 +150,17 @@ namespace Velo
 
                     if (hitbox == null)
                     {
-                        lineDraw = new CLineDrawComponent();
-                        lineDraw.IsVisible = true;
+                        lineDraw = new CLineDrawComponent
+                        {
+                            IsVisible = true
+                        };
 
                         for (int j = poly.VertexCount - 1, k = 0; k < poly.VertexCount; j = k++)
                         {
-                            CLine line = new CLine(poly.GetVertex(j), poly.GetVertex(k), color);
-                            line.thickness = 6;
+                            CLine line = new CLine(poly.GetVertex(j), poly.GetVertex(k), color)
+                            {
+                                thickness = 6
+                            };
                             lineDraw.AddLine(line);
                         }
 

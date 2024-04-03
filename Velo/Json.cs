@@ -7,13 +7,13 @@ namespace Velo
     {
         public abstract string ToString(int depth);
 
-        private static void skipSpaces(string value, ref int offset)
+        private static void SkipSpaces(string value, ref int offset)
         {
             while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n'))
                 offset++;
         }
 
-        private static string readString(string value, ref int offset)
+        private static string ReadString(string value, ref int offset)
         {
             int start = offset;
             offset++;
@@ -23,15 +23,15 @@ namespace Velo
             return value.Substring(start + 1, offset - start - 2).Replace("\\\\", "\\").Replace("\\\"", "\"");
         }
 
-        private static bool isNumberChar(char c)
+        private static bool IsNumberChar(char c)
         {
             return c >= '0' && c <= '9' || c == '-' || c == '.';
         }
 
-        private static string readNumber(string value, ref int offset)
+        private static string ReadNumber(string value, ref int offset)
         {
             int start = offset;
-            while (isNumberChar(value[offset]))
+            while (IsNumberChar(value[offset]))
                 offset++;
             return value.Substring(start, offset - start);
         }
@@ -39,18 +39,18 @@ namespace Velo
         public static JsonElement FromString(string value)
         {
             int offset = 0;
-            return fromString(value, ref offset);
+            return FromString(value, ref offset);
         }
 
-        private static JsonElement fromString(string value, ref int offset)
+        private static JsonElement FromString(string value, ref int offset)
         {
-            skipSpaces(value, ref offset);
+            SkipSpaces(value, ref offset);
 
             if (value[offset] == '{')
             {
                 JsonObject jsonObject = new JsonObject(new List<KeyValuePair<string, JsonElement>>());
                 offset++;
-                skipSpaces(value, ref offset);
+                SkipSpaces(value, ref offset);
                 if (value[offset] == '}')
                 {
                     offset++;
@@ -58,48 +58,48 @@ namespace Velo
                 }
                 while (true)
                 {
-                    string key = readString(value, ref offset);
-                    skipSpaces(value, ref offset);
+                    string key = ReadString(value, ref offset);
+                    SkipSpaces(value, ref offset);
                     offset++;
-                    skipSpaces(value, ref offset);
-                    jsonObject.AddElement(key, fromString(value, ref offset));
-                    skipSpaces(value, ref offset);
+                    SkipSpaces(value, ref offset);
+                    jsonObject.AddElement(key, FromString(value, ref offset));
+                    SkipSpaces(value, ref offset);
                     if (value[offset] == '}')
                     {
                         offset++;
                         return jsonObject;
                     }
                     offset++;
-                    skipSpaces(value, ref offset);
+                    SkipSpaces(value, ref offset);
                 }
             }
             else if (value[offset] == '[')
             {
                 JsonArray jsonArray = new JsonArray(new List<JsonElement>());
                 offset++;
-                skipSpaces(value, ref offset);
+                SkipSpaces(value, ref offset);
                 if (value[offset] == ']')
                     return jsonArray;
                 while (true)
                 {
-                    jsonArray.AddElement(fromString(value, ref offset));
-                    skipSpaces(value, ref offset);
+                    jsonArray.AddElement(FromString(value, ref offset));
+                    SkipSpaces(value, ref offset);
                     if (value[offset++] == ']')
                     {
                         offset++;
                         return jsonArray;
                     }
                     offset++;
-                    skipSpaces(value, ref offset);
+                    SkipSpaces(value, ref offset);
                 }
             }
             else if (value[offset] == '\"')
             {
-                return new JsonString(readString(value, ref offset));
+                return new JsonString(ReadString(value, ref offset));
             }
-            else if (isNumberChar(value[offset]))
+            else if (IsNumberChar(value[offset]))
             {
-                return new JsonDecimal(readNumber(value, ref offset));
+                return new JsonDecimal(ReadNumber(value, ref offset));
             }
             else if (value[offset] == 't')
             {
