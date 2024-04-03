@@ -1,0 +1,492 @@
+﻿using System.Collections.Generic;
+using System.Linq;
+
+namespace Velo
+{
+    public abstract class JsonElement
+    {
+        public abstract string ToString(int depth);
+
+        private static void skipSpaces(string value, ref int offset)
+        {
+            while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n'))
+                offset++;
+        }
+
+        private static string readString(string value, ref int offset)
+        {
+            int start = offset;
+            offset++;
+            while (offset < value.Length && (value[offset] != '\"' || value[offset - 1] == '\\'))
+                offset++;
+            offset++;
+            return value.Substring(start + 1, offset - start - 2).Replace("\\\\", "\\").Replace("\\\"", "\"");
+        }
+
+        private static bool isNumberChar(char c)
+        {
+            return c >= '0' && c <= '9' || c == '-' || c == '.';
+        }
+
+        private static string readNumber(string value, ref int offset)
+        {
+            int start = offset;
+            while (isNumberChar(value[offset]))
+                offset++;
+            return value.Substring(start, offset - start);
+        }
+
+        public static JsonElement FromString(string value)
+        {
+            int offset = 0;
+            return fromString(value, ref offset);
+        }
+
+        private static JsonElement fromString(string value, ref int offset)
+        {
+            skipSpaces(value, ref offset);
+
+            if (value[offset] == '{')
+            {
+                JsonObject jsonObject = new JsonObject(new List<KeyValuePair<string, JsonElement>>());
+                offset++;
+                skipSpaces(value, ref offset);
+                if (value[offset] == '}')
+                {
+                    offset++;
+                    return jsonObject;
+                }
+                while (true)
+                {
+                    string key = readString(value, ref offset);
+                    skipSpaces(value, ref offset);
+                    offset++;
+                    skipSpaces(value, ref offset);
+                    jsonObject.AddElement(key, fromString(value, ref offset));
+                    skipSpaces(value, ref offset);
+                    if (value[offset] == '}')
+                    {
+                        offset++;
+                        return jsonObject;
+                    }
+                    offset++;
+                    skipSpaces(value, ref offset);
+                }
+            }
+            else if (value[offset] == '[')
+            {
+                JsonArray jsonArray = new JsonArray(new List<JsonElement>());
+                offset++;
+                skipSpaces(value, ref offset);
+                if (value[offset] == ']')
+                    return jsonArray;
+                while (true)
+                {
+                    jsonArray.AddElement(fromString(value, ref offset));
+                    skipSpaces(value, ref offset);
+                    if (value[offset++] == ']')
+                    {
+                        offset++;
+                        return jsonArray;
+                    }
+                    offset++;
+                    skipSpaces(value, ref offset);
+                }
+            }
+            else if (value[offset] == '\"')
+            {
+                return new JsonString(readString(value, ref offset));
+            }
+            else if (isNumberChar(value[offset]))
+            {
+                return new JsonDecimal(readNumber(value, ref offset));
+            }
+            else if (value[offset] == 't')
+            {
+                offset += "true".Length;
+                return new JsonBoolean(true);
+            }
+            else if (value[offset] == 'f')
+            {
+                offset += "false".Length;
+                return new JsonBoolean(false);
+            }
+          
+            offset += "null".Length;
+            return new JsonNull();
+        }
+    }
+
+    public class JsonDecimal : JsonElement
+    {
+        public string value;
+
+        public JsonDecimal(string value)
+        {
+            this.value = value;
+        }
+
+        public JsonDecimal(int value)
+        {
+            this.value = value.ToString();
+        }
+
+        public JsonDecimal(float value)
+        {
+            this.value = value.ToString();
+        }
+
+        public override string ToString(int depth)
+        {
+            return value;
+        }
+    }
+
+    public class JsonBoolean : JsonElement
+    {
+        public bool value;
+
+        public JsonBoolean(bool value)
+        {
+            this.value = value;
+        }
+
+        public override string ToString(int depth)
+        {
+            return value ? "true" : "false";
+        }
+    }
+
+    public class JsonString : JsonElement
+    {
+        public string value;
+
+        public JsonString(string value)
+        {
+            this.value = value;
+        }
+
+        public override string ToString(int depth)
+        {
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        }
+    }
+
+    public class JsonNull : JsonElement
+    {
+        public JsonNull()
+        {
+
+        }
+
+        public override string ToString(int depth)
+        {
+            return "null";
+        }
+    }
+
+    public class JsonArray : JsonElement
+    {
+        public List<JsonElement> value;
+
+        public JsonArray(List<JsonElement> value)
+        {
+            this.value = value;
+        }
+
+        public JsonArray(int capacity = 0)
+        {
+            value = new List<JsonElement>(capacity);
+        }
+
+        public JsonArray AddElement(JsonElement value)
+        {
+            this.value.Add(value);
+            return this;
+        }
+
+        public JsonArray AddDecimal(string value)
+        {
+            this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddDecimal(int value)
+        {
+            this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddDecimal(float value)
+        {
+            this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddBoolean(bool value)
+        {
+            this.value.Add(new JsonBoolean(value));
+            return this;
+        }
+
+        public JsonArray AddString(string value)
+        {
+            this.value.Add(new JsonString(value));
+            return this;
+        }
+
+        public JsonArray AddNull()
+        {
+            value.Add(new JsonNull());
+            return this;
+        }
+
+        public JsonArray AddArray(List<JsonElement> value)
+        {
+            this.value.Add(new JsonArray(value));
+            return this;
+        }
+
+        public JsonArray AddObject(List<KeyValuePair<string, JsonElement>> value)
+        {
+            this.value.Add(new JsonObject(value));
+            return this;
+        }
+
+        public JsonArray AddElementIf(JsonElement value, bool condition)
+        {
+            if (condition)
+                this.value.Add(value);
+            return this;
+        }
+
+        public JsonArray AddDecimalIf(string value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddDecimalIf(int value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddDecimalIf(float value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonDecimal(value));
+            return this;
+        }
+
+        public JsonArray AddBooleanIf(bool value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonBoolean(value));
+            return this;
+        }
+
+        public JsonArray AddStringIf(string value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonString(value));
+            return this;
+        }
+
+        public JsonArray AddNullIf(bool condition)
+        {
+            if (condition)
+                value.Add(new JsonNull());
+            return this;
+        }
+
+        public JsonArray AddArrayIf(List<JsonElement> value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonArray(value));
+            return this;
+        }
+
+        public JsonArray AddObjectIf(List<KeyValuePair<string, JsonElement>> value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new JsonObject(value));
+            return this;
+        }
+
+        public override string ToString(int depth)
+        {
+            if (value.Count == 0)
+                return "{ }";
+
+            string space = "";
+            for (int i = 0; i < depth; i++)
+                space += "    ";
+
+            string valStr = "[\n";
+            for (int i = 0; i < value.Count; i++)
+            {
+                if (value[i] == null)
+                    continue;
+                valStr += space + "    " + value[i].ToString(depth + 1) + ",\n";
+            }
+            valStr = valStr.Remove(valStr.Length - 2, 2);
+            valStr += "\n" + space + "]";
+            return valStr;
+        }
+    }
+
+    public class JsonObject : JsonElement
+    {
+        public List<KeyValuePair<string, JsonElement>> value;
+
+        public JsonObject(List<KeyValuePair<string, JsonElement>> value)
+        {
+            this.value = value;
+        }
+
+        public JsonObject(int capacity = 0)
+        {
+            value = new List<KeyValuePair<string, JsonElement>>(capacity);
+        }
+
+        public JsonObject AddElement(string key, JsonElement value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, value));
+            return this;
+        }
+
+        public JsonObject AddDecimal(string key, string value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddDecimal(string key, int value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddDecimal(string key, float value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddBoolean(string key, bool value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonBoolean(value)));
+            return this;
+        }
+
+        public JsonObject AddString(string key, string value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonString(value)));
+            return this;
+        }
+
+        public JsonObject AddNull(string key)
+        {
+            value.Add(new KeyValuePair<string, JsonElement>(key, new JsonNull()));
+            return this;
+        }
+
+        public JsonObject AddArray(string key, List<JsonElement> value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonArray(value)));
+            return this;
+        }
+
+        public JsonObject AddObject(string key, List<KeyValuePair<string, JsonElement>> value)
+        {
+            this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonObject(value)));
+            return this;
+        }
+
+        public JsonObject AddElementIf(string key, JsonElement value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, value));
+            return this;
+        }
+
+        public JsonObject AddDecimalIf(string key, string value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddDecimalIf(string key, int value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddDecimalIf(string key, float value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonDecimal(value)));
+            return this;
+        }
+
+        public JsonObject AddBooleanIf(string key, bool value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonBoolean(value)));
+            return this;
+        }
+
+        public JsonObject AddStringIf(string key, string value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonString(value)));
+            return this;
+        }
+
+        public JsonObject AddNullIf(string key, bool condition)
+        {
+            if (condition)
+                value.Add(new KeyValuePair<string, JsonElement>(key, new JsonNull()));
+            return this;
+        }
+
+        public JsonObject AddArrayIf(string key, List<JsonElement> value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonArray(value)));
+            return this;
+        }
+
+        public JsonObject AddObjectIf(string key, List<KeyValuePair<string, JsonElement>> value, bool condition)
+        {
+            if (condition)
+                this.value.Add(new KeyValuePair<string, JsonElement>(key, new JsonObject(value)));
+            return this;
+        }
+
+        public override string ToString(int depth = 0)
+        {
+            if (value.Count == 0)
+                return "[ ]";
+            string space = "";
+            for (int i = 0; i < depth; i++)
+                space += "    ";
+
+            string valStr = "{\n";
+            for (int i = 0; i < value.Count; i++)
+            {
+                valStr += space + "    \"" + value[i].Key.Replace("\"", "\\\"") + "\" : ";
+                valStr += value[i].Value.ToString(depth + 1);
+                valStr += ",\n";
+            }
+            valStr = valStr.Remove(valStr.Length - 2, 2);
+            valStr += "\n" + space + "}";
+            return valStr;
+        }
+    }
+}
