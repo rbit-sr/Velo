@@ -3,7 +3,8 @@ using System;
 using Microsoft.Xna.Framework.Graphics;
 using System.Reflection.Emit;
 using System.Windows.Forms;
-using System.Text;
+using SDL2;
+using System.Runtime.CompilerServices;
 
 namespace Velo
 {
@@ -34,10 +35,12 @@ namespace Velo
                     //fixed (byte* bytes = Encoding.ASCII.GetBytes(json))
                         //LoadProgram((IntPtr)bytes, json.Length);
                 }
+                //test();
                 initialized = true;
             }
 
             RenderImGui();
+            //test2();
         }
 
         private delegate uint GetPtrFromObjDel(object o);
@@ -76,16 +79,29 @@ namespace Velo
             InitializeImGui((IntPtr)SwapChainPtr);
         }
 
-        [DllImport("DirectX11IMGUI.dll", EntryPoint = "InitializeImGui")]
+        public void SdlPoll(ref SDL.SDL_Event sdl_event)
+        {
+            if (!initialized)
+                return;
+            unsafe
+            {
+                ProcessEvent((IntPtr)Unsafe.AsPointer(ref sdl_event));
+            }
+        }
+
+        [DllImport("DirectX11.dll", EntryPoint = "InitializeImGui")]
         private static extern void InitializeImGui(IntPtr swapChain);
 
-        [DllImport("DirectX11IMGUI.dll", EntryPoint = "RenderImGui")]
+        [DllImport("DirectX11.dll", EntryPoint = "RenderImGui")]
         private static extern void RenderImGui();
 
-        [DllImport("DirectX11IMGUI.dll", EntryPoint = "ShutdownImGui")]
+        [DllImport("DirectX11.dll", EntryPoint = "ShutdownImGui")]
         private static extern void ShutdownImGui();
 
-        [DllImport("DirectX11IMGUI.dll", EntryPoint = "LoadProgram")]
+        [DllImport("DirectX11.dll", EntryPoint = "LoadProgram")]
         private static extern void LoadProgram(IntPtr str, int strSize);
+
+        [DllImport("DirectX11.dll", EntryPoint = "ProcessEvent")]
+        private static extern void ProcessEvent(IntPtr eventPtr);
     }
 }

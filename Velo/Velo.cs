@@ -10,6 +10,10 @@ using CEngine.Graphics.Layer;
 using Lidgren.Network;
 using System.Windows.Forms;
 using System.IO;
+using SDL2;
+using System.Runtime.CompilerServices;
+using static SDL2.SDL;
+using System.Runtime.InteropServices;
 
 namespace Velo
 {
@@ -91,10 +95,10 @@ namespace Velo
 
             if (Keyboard.Pressed[(ushort)Keys.F1])
             {
-                string json = ModuleManager.Instance.ToJson(false).ToString(0);
-                File.WriteAllText("test.txt", json);
-                json = File.ReadAllText("test2.txt");
-                ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
+                //string json = ModuleManager.Instance.ToJson(false).ToString(0);
+                //File.WriteAllText("test.txt", json);
+                //json = File.ReadAllText("test2.txt");
+                //ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
             }
 
             if (!Util.IsFocused()) // we don't want inputs to be detected when game is unfocused
@@ -171,6 +175,13 @@ namespace Velo
             }
 
             return 1.0f;
+        }
+
+        
+
+        public static void sdl_poll(ref SDL.SDL_Event sdl_event)
+        {
+            SettingsUI.Instance.SdlPoll(ref sdl_event);
         }
 
         public static float get_camera_max_speed(ICCameraModifier camera)
