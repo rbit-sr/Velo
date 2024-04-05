@@ -51,7 +51,7 @@ namespace Velo
 
             if (text.Length > 0)
             {
-                text.Remove(0, 1);
+                text = text.Remove(0, 1);
                 watermark.StringText = text;
                 watermark.IsVisible = true;
                 watermark.UpdateBounds();

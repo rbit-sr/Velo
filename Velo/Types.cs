@@ -1,12 +1,16 @@
 ﻿using Microsoft.Xna.Framework;
 using System.Linq;
 using System;
+using System.Globalization;
+using System.Collections.Generic;
+using System.Collections;
 
 namespace Velo
 {
     public class Toggle
     {
-        public bool Enabled = false;
+        private readonly bool enabled = false;
+        public bool Enabled { get { return enabled; } }
         public ushort Hotkey = 0x97;
 
         public Toggle(ushort hotkey = 0x97)
@@ -16,13 +20,8 @@ namespace Velo
 
         public Toggle(bool enabled, ushort hotkey = 0x97)
         {
-            Enabled = enabled;
+            this.enabled = enabled;
             Hotkey = hotkey;
-        }
-
-        public void ToggleEnabled()
-        {
-            Enabled = !Enabled;
         }
 
         public JsonElement ToJson()
@@ -30,6 +29,23 @@ namespace Velo
             return new JsonObject(2).
                 AddBoolean("State", Enabled).
                 AddDecimal("Hotkey", Hotkey);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is Toggle toggle &&
+                   enabled == toggle.enabled &&
+                   Enabled == toggle.Enabled &&
+                   Hotkey == toggle.Hotkey;
+        }
+
+        public override int GetHashCode()
+        {
+            int hashCode = 689577727;
+            hashCode = hashCode * -1521134295 + enabled.GetHashCode();
+            hashCode = hashCode * -1521134295 + Enabled.GetHashCode();
+            hashCode = hashCode * -1521134295 + Hotkey.GetHashCode();
+            return hashCode;
         }
     }
 
@@ -47,6 +63,17 @@ namespace Velo
                 Precision = 0;
             else
                 Precision = String.Length - String.IndexOf('.') - 1;
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is RoundingMultiplier multiplier &&
+                   ValueStr == multiplier.ValueStr;
+        }
+
+        public override int GetHashCode()
+        {
+            return 135179013 + EqualityComparer<string>.Default.GetHashCode(ValueStr);
         }
 
         public JsonElement ToJson()
@@ -79,8 +106,11 @@ namespace Velo
 
         public Color Get()
         {
+            if (colors.Length == 0)
+                return Color.White;
+
             if (colors.Length == 1)
-                return colors[0];
+                return Util.ApplyAlpha(colors[0]);
 
             long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
 
@@ -92,9 +122,28 @@ namespace Velo
             int index2 = index1 + 1 < colors.Length ? index1 + 1 : 0;
 
             if (!discrete)
-                return Color.Lerp(colors[index1], colors[index2], index - index1);
+                return Util.ApplyAlpha(Color.Lerp(colors[index1], colors[index2], index - index1));
             else
-                return colors[index1];
+                return Util.ApplyAlpha(colors[index1]);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is ColorTransition transition &&
+                   period == transition.period &&
+                   offset == transition.offset &&
+                   discrete == transition.discrete &&
+                   colors.SequenceEqual(transition.colors);
+        }
+
+        public override int GetHashCode()
+        {
+            int hashCode = -1419435415;
+            hashCode = hashCode * -1521134295 + period.GetHashCode();
+            hashCode = hashCode * -1521134295 + offset.GetHashCode();
+            hashCode = hashCode * -1521134295 + discrete.GetHashCode();
+            hashCode = hashCode * -1521134295 + ((IStructuralEquatable)colors).GetHashCode(EqualityComparer<Color>.Default);
+            return hashCode;
         }
 
         public JsonElement ToJson()
@@ -133,6 +182,23 @@ namespace Velo
                 AddDecimal("Y", position.Y).
                 AddDecimal("W", size.X).
                 AddDecimal("H", size.Y);
+        }
+
+        public override bool Equals(object obj)
+        {
+            return obj is InputBox box &&
+                   text == box.text &&
+                   position.Equals(box.position) &&
+                   size.Equals(box.size);
+        }
+
+        public override int GetHashCode()
+        {
+            int hashCode = -1359643628;
+            hashCode = hashCode * -1521134295 + EqualityComparer<string>.Default.GetHashCode(text);
+            hashCode = hashCode * -1521134295 + position.GetHashCode();
+            hashCode = hashCode * -1521134295 + size.GetHashCode();
+            return hashCode;
         }
     }
 
@@ -228,7 +294,7 @@ namespace Velo
         public static string ToString(this JsonElement elem)
         {
             if (!(elem is JsonString))
-                return default;
+                return "";
             return ((JsonString)elem).value;
         }
 
@@ -238,8 +304,8 @@ namespace Velo
                 return default;
             JsonObject jsonObject = (JsonObject)elem;
             return new Vector2(
-                jsonObject.Get("X").ToFloat(), 
-                jsonObject.Get("Y").ToFloat()
+                jsonObject.DoWithValue("X", value => value.ToFloat()),
+                jsonObject.DoWithValue("Y", value => value.ToFloat())
                 );
         }
 
@@ -249,60 +315,62 @@ namespace Velo
                 return default;
             JsonObject jsonObject = (JsonObject)elem;
             return new Color(
-                jsonObject.Get("R").ToInt(), 
-                jsonObject.Get("G").ToInt(),
-                jsonObject.Get("B").ToInt(),
-                jsonObject.Get("A").ToInt()
+                jsonObject.DoWithValue("R", value => value.ToInt()),
+                jsonObject.DoWithValue("G", value => value.ToInt()),
+                jsonObject.DoWithValue("B", value => value.ToInt()),
+                jsonObject.DoWithValue("A", value => value.ToInt())
                 );
         }
 
         public static bool[] ToBoolArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
-                return default;
+                return new bool[0];
             return ((JsonArray)elem).value.Select(jsonBool => jsonBool.ToBool()).ToArray();
         }
 
         public static string[] ToStringArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
-                return default;
+                return new string[0];
             return ((JsonArray)elem).value.Select(jsonString => ToString(jsonString)).ToArray();
         }
 
         public static Color[] ToColorArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
-                return default;
+                return new Color[0];
             return ((JsonArray)elem).value.Select(jsonColor => jsonColor.ToColor()).ToArray();
         }
 
         public static Toggle ToToggle(this JsonElement elem)
         {
             if (!(elem is JsonObject))
-                return default;
+                return new Toggle();
+            JsonObject jsonObject = (JsonObject)elem;
             return new Toggle(
-                ((JsonObject)elem).Get("State").ToBool(),
-                (ushort)((JsonObject)elem).Get("Hotkey").ToInt()
+                jsonObject.DoWithValue("State", value => value.ToBool()),
+                jsonObject.DoWithValue("Hotkey", value => (ushort)value.ToInt())
                 );
         }
 
         public static RoundingMultiplier ToRoundingMultiplier(this JsonElement elem)
         {
             if (!(elem is JsonString))
-                return default;
+                return new RoundingMultiplier("1");
             return new RoundingMultiplier(ToString(elem));
         }
 
         public static ColorTransition ToColorTransition(this JsonElement elem)
         {
             if (!(elem is JsonObject))
-                return default;
+                return new ColorTransition(Color.White);
+            JsonObject jsonObject = (JsonObject)elem;
             return new ColorTransition(
-                ((JsonObject)elem).Get("Period").ToInt(),
-                ((JsonObject)elem).Get("Offset").ToInt(),
-                ((JsonObject)elem).Get("Discrete").ToBool(),
-                ((JsonObject)elem).Get("Colors").ToColorArr()
+                jsonObject.DoWithValue("Period", value => value.ToInt()),
+                jsonObject.DoWithValue("Offset", value => value.ToInt()),
+                jsonObject.DoWithValue("Discrete", value => value.ToBool()),
+                jsonObject.DoWithValue("Colors", value => value.ToColorArr())
                 );
         }
 
@@ -310,15 +378,16 @@ namespace Velo
         {
             if (!(elem is JsonObject))
                 return default;
+            JsonObject jsonObject = (JsonObject)elem;
             return new InputBox(
-                ToString(((JsonObject)elem).Get("Label")),
+                jsonObject.DoWithValue("Label", value => ToString(value)),
                 new Vector2(
-                    ((JsonObject)elem).Get("X").ToInt(),
-                    ((JsonObject)elem).Get("Y").ToInt()
+                    jsonObject.DoWithValue("X", value => value.ToInt()),
+                    jsonObject.DoWithValue("Y", value => value.ToInt())
                 ),
                 new Vector2(
-                    ((JsonObject)elem).Get("W").ToInt(),
-                    ((JsonObject)elem).Get("H").ToInt()
+                    jsonObject.DoWithValue("W", value => value.ToInt()),
+                    jsonObject.DoWithValue("H", value => value.ToInt())
                 ));
         }
     }

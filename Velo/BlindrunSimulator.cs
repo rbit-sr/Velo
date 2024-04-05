@@ -22,9 +22,9 @@ namespace Velo
 
             SlowSpeed = AddVector("slow speed", new Vector2(100, 200), new Vector2(0, 0), new Vector2(2000, 2000));
             FastSpeed = AddVector("fast speed", new Vector2(1250, 1250), new Vector2(0, 0), new Vector2(2000, 2000));
-            SlowSpeedBorderOffset = AddVector("slow speed border offset", new Vector2(-100, -50), new Vector2(-500, -500), new Vector2(500, 500));
-            FastSpeedBorderOffset = AddVector("fast speed border offset", new Vector2(100, 50), new Vector2(-500, -500), new Vector2(500, 500));
-            MaxAcceleration = AddVector("max acceleration", new Vector2(3000, 6000), new Vector2(0, 0), new Vector2(20000, 20000));
+            SlowSpeedBorderOffset = AddVector("slow border off", new Vector2(-100, -50), new Vector2(-500, -500), new Vector2(500, 500));
+            FastSpeedBorderOffset = AddVector("fast border off", new Vector2(100, 50), new Vector2(-500, -500), new Vector2(500, 500));
+            MaxAcceleration = AddVector("max acc", new Vector2(3000, 6000), new Vector2(0, 0), new Vector2(20000, 20000));
         }
 
         public static BlindrunSimulator Instance = new BlindrunSimulator();

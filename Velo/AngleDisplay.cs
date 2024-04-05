@@ -10,7 +10,7 @@ namespace Velo
         public ColorTransitionSetting GoodAngleColor;
         public ColorTransitionSetting BadAngleColor;
 
-        public Vector2 position = Vector2.Zero;
+        public Vector2 positionPrev = Vector2.Zero; // player center position of previous frame
         public bool wasConnected = false;
         public int connectedFrames = 0;
 
@@ -20,12 +20,14 @@ namespace Velo
         private AngleDisplay() : base("Angle Display", true)
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F6));
+
+            BadAngleOffset = AddFloat("bad offset", 20.0f, 0.0f, 180.0f);
+            GoodAngleColor = AddColorTransition("good color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
+            BadAngleColor = AddColorTransition("bad color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+
+            AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -30.0f));
             RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("0.1"));
-
-            BadAngleOffset = AddFloat("bad angle offset", 20.0f, 0.0f, 180.0f);
-            GoodAngleColor = AddColorTransition("good angle color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
-            BadAngleColor = AddColorTransition("bad angle color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
         }
 
         public static AngleDisplay Instance = new AngleDisplay();
@@ -38,9 +40,13 @@ namespace Velo
             double angle = 0.0f;
             bool angleChanged = false;
 
-            if (!Velo.MainPlayer.grapple.connected && wasConnected && connectedFrames >= 2)
+            if (
+                !Velo.MainPlayer.grapple.connected && 
+                wasConnected && 
+                connectedFrames >= 2 // don't measure single frame grapples which don't affect speed at all
+                )
             {
-                Vector2 diff = position - Velo.MainPlayer.grapple.actor.Collision.Center;
+                Vector2 diff = positionPrev - Velo.MainPlayer.grapple.actor.Collision.Center; // rope vector
                 angle = Math.Atan2(diff.Y, diff.X) / Math.PI * 180.0;
                 connectedFrames = 0;
                 angleChanged = true;
@@ -48,12 +54,14 @@ namespace Velo
 
             if (angleChanged || text.Length == 0)
             {
-                text = Util.ToStringRounded((float)angle, RoundingMultiplier.Value.Value, RoundingMultiplier.Value.Precision);
-                float ratio = MathHelper.Clamp(Math.Abs((float)(angle - 90.0)) / BadAngleOffset.Value, 0.0f, 1.0f);
+                text = Util.ToStringRounded((float)angle, RoundingMultiplier.Value);
+                float ratio = BadAngleOffset.Value != 0.0f ? // prevent division by 0
+                    MathHelper.Clamp(Math.Abs((float)(angle - 90.0)) / BadAngleOffset.Value, 0.0f, 1.0f) : 
+                    1.0f;
                 color = Microsoft.Xna.Framework.Color.Lerp(GoodAngleColor.Value.Get(), BadAngleColor.Value.Get(), ratio);
             }
 
-            position = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
+            positionPrev = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
 
             wasConnected = Velo.MainPlayer.grapple.connected;
             if (Velo.MainPlayer.grapple.connected)

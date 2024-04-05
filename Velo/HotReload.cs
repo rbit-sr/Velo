@@ -45,7 +45,7 @@ namespace Velo
 
         private void ReloadContent(string id)
         {
-            if (id.ToLower().EndsWith(".xnb"))
+            if (id.EndsWith(".xnb"))
                 id = id.Replace(".xnb", "");
             if (id.StartsWith("Content\\"))
                 id = id.Replace("Content\\", "");
@@ -67,23 +67,26 @@ namespace Velo
                 return;
             }
 
-            if (Velo.ContentManager != null)
+            if (Velo.ContentManager == null)
+                return;
+
+            foreach (var entry in Velo.ContentManager.dict)
             {
-                foreach (var entry in Velo.ContentManager.dict)
+                if (entry.Value == null) 
+                    continue;
+                for (int i = 0; i < entry.Value.ContentCount; i++)
                 {
-                    if (entry.Value == null) continue;
-                    for (int i = 0; i < entry.Value.ContentCount; i++)
+                    ICContent content = entry.Value.GetContent(i);
+                    if (content == null || content.Name == null) 
+                        continue;
+                    if (content.Name.ToLower() == id.ToLower())
                     {
-                        ICContent content = entry.Value.GetContent(i);
-                        if (content == null || content.Name == null) continue;
-                        if (content.Name.ToLower() == id.ToLower())
-                        {
-                            Velo.ContentManager.Release(content);
-                            Velo.ContentManager.Load(content, false);
-                            return;
-                        }
+                        Velo.ContentManager.Release(content);
+                        Velo.ContentManager.Load(content, false);
+                        return;
                     }
                 }
+
             }
         }
     }

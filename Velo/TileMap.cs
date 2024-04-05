@@ -180,19 +180,19 @@ namespace Velo
         {
             ColorMultiplier = AddColorTransition("color multiplier", new ColorTransition(Color.White));
             NewCategory("outline");
-            OutlineWidth = AddInt("outline width", 0, 0, 16);
-            OutlineColor = AddColor("outline color", Color.White);
-            SlopeOutlineColor = AddColor("slope outline color", Color.White);
+            OutlineWidth = AddInt("width", 0, 0, 16);
+            OutlineColor = AddColor("color", Color.White);
+            SlopeOutlineColor = AddColor("slope color", Color.White);
             NewCategory("Velo custom tiles");
             EnableVeloCustomTiles = AddBool("enable", false);
             FillColor = AddColor("fill color", Color.Black);
-            GrappleCeilingColor = AddColor("grapple ceiling color", Color.White);
-            GrappleCeilingWidth = AddInt("grapple ceiling width", 3, 0, 16);
-            GrappleCeilingStyle = AddLineStyle("grapple ceiling style", ELineStyle.SOLID);
+            GrappleCeilingColor = AddColor("grapple ceil color", Color.White);
+            GrappleCeilingWidth = AddInt("grapple ceil width", 3, 0, 16);
+            GrappleCeilingStyle = AddLineStyle("grapple ceil style", ELineStyle.SOLID);
             WallColor = AddColor("wall color", Color.White);
             WallWidth = AddInt("wall width", 3, 0, 16);
             WallStyle = AddLineStyle("wall style", ELineStyle.DOTTED);
-            StairsReplaceWithSlopes = AddBool("stairs replace width slopes", false);
+            StairsReplaceWithSlopes = AddBool("stairs replace with slopes", false);
             RemoveCheckered = AddBool("remove checkered", false);
             SlopeAntiAliasing = AddBool("slope anti aliasing", false);
             EndCategory();

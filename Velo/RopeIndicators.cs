@@ -12,7 +12,7 @@ namespace Velo
 
         public CLineDrawComponent drawComp;
 
-        public Vector2 position = Vector2.Zero;
+        public Vector2 prevPosition = Vector2.Zero;
         public bool wasConnected = false;
         public int connectedFrames = 0;
 
@@ -44,13 +44,13 @@ namespace Velo
 
             if (!Velo.MainPlayer.grapple.connected && wasConnected && connectedFrames >= 2)
             {
-                Vector2 playerPos = (position + Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f)) / 2;
+                Vector2 playerPos = (prevPosition + Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f)) / 2;
                 drawComp.AddLine(new CLine(Velo.MainPlayer.grapple.actor.Collision.Center, playerPos, new Color(0, 0, 0)));
                 drawComp.AddLine(new CLine(Velo.MainPlayer.grapple.actor.Collision.Center, playerPos, new Color(0, 0, 0)));
                 connectedFrames = 0;
             }
 
-            position = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
+            prevPosition = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
 
             wasConnected = Velo.MainPlayer.grapple.connected;
             if (Velo.MainPlayer.grapple.connected)

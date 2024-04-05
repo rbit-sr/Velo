@@ -106,14 +106,12 @@ namespace Velo
                 Keyboard.Held.Fill(false);
                 Keyboard.Pressed.Fill(false);
             }
-            
-            foreach (Module module in ModuleManager.Instance.Modules)
-                module.PreUpdate();
+
+            ModuleManager.Instance.PreUpdate();
 
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
 
-            foreach (Module module in ModuleManager.Instance.Modules)
-                module.PostUpdate();
+            ModuleManager.Instance.PostUpdate();
 
             if (
                 !(Performance.Instance.Enabled.Value.Enabled &&
@@ -127,13 +125,11 @@ namespace Velo
 
         public static void game_draw(GameTime gameTime)
         {
-            foreach (Module module in ModuleManager.Instance.Modules)
-                module.PreRender();
+            ModuleManager.Instance.PreRender();
 
             Main.game.GameDraw(gameTime);
 
-            foreach (Module module in ModuleManager.Instance.Modules)
-                module.PostRender();
+            ModuleManager.Instance.PostRender();
 
             if (
                 Performance.Instance.Enabled.Value.Enabled &&
@@ -157,6 +153,8 @@ namespace Velo
             if (Online)
                 return 10000000L / Math.Min(Math.Max(framelimit, 30), 300);
 
+            if (framelimit < 10)
+                framelimit = 10;
             return 10000000L / framelimit;
         }
 
@@ -320,7 +318,7 @@ namespace Velo
 
         public static float popup_opacity()
         {
-            return ColorsAndAppearance.Instance.PopupOpacity.Value;
+            return ColorsAndAppearance.Instance.PopupColor.Value.Get().A / 255.0f;
         }
 
         public static float popup_scale()

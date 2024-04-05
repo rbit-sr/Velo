@@ -13,6 +13,7 @@ namespace Velo
         public VectorSetting Offset;
         public StringSetting Font;
         public IntSetting FontSize;
+        public FloatSetting Opacity;
         public ColorTransitionSetting PressedBoxColor;
         public ColorTransitionSetting PressedTextColor;
         public ColorTransitionSetting PressedOutlineColor;
@@ -38,30 +39,32 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F3));
 
-            Color[] rainbowColors = new Color[]
+            /*Color[] rainbowColors = new Color[]
                 {
-                    new Color(0, 0, 255),
-                    new Color(0, 255, 255),
-                    new Color(0, 255, 0),
-                    new Color(255, 255, 0),
-                    new Color(255, 0, 0),
-                    new Color(255, 0, 255)
-                };
+                    new Color(0, 0, 255, 102),
+                    new Color(0, 255, 255, 102),
+                    new Color(0, 255, 0, 102),
+                    new Color(255, 255, 0, 102),
+                    new Color(255, 0, 0, 102),
+                    new Color(255, 0, 255, 102)
+                };*/
 
+            NewCategory("style");
             Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
             Orientation = AddOrientation("orientation", EOrientation.BOTTOM_RIGHT);
             Offset = AddVector("offset", new Vector2(-64.0f, -64.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             Font = AddString("font", "CEngine\\Debug\\FreeMonoBold.ttf");
             FontSize = AddInt("font size", 18, 1, 100);
+            Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
             NewCategory("pressed");
-            PressedBoxColor = AddColorTransition("pressed box color", new ColorTransition(2000, 1000, false, rainbowColors));
-            PressedTextColor = AddColorTransition("pressed text color", new ColorTransition(2000, 0, false, rainbowColors));
-            PressedOutlineColor = AddColorTransition("pressed outline color", new ColorTransition(Color.Transparent));
+            PressedBoxColor = AddColorTransition("pressed box color", new ColorTransition(new Color(255, 100, 100, 175)), true);
+            PressedTextColor = AddColorTransition("pressed text color", new ColorTransition(Color.Black), true);
+            PressedOutlineColor = AddColorTransition("pressed outline color", new ColorTransition(Color.Transparent), true);
             PressedOutlineWidth = AddInt("pressed outline width", 0, 0, 10);
             NewCategory("released");
-            ReleasedBoxColor = AddColorTransition("released box color", new ColorTransition(new Color(160, 160, 160, 102)));
-            ReleasedTextColor = AddColorTransition("released text color", new ColorTransition(Color.Black));
-            ReleasedOutlineColor = AddColorTransition("released outline color", new ColorTransition(Color.Transparent));
+            ReleasedBoxColor = AddColorTransition("released box color", new ColorTransition(new Color(160, 160, 160, 175)), true);
+            ReleasedTextColor = AddColorTransition("released text color", new ColorTransition(Color.Black), true);
+            ReleasedOutlineColor = AddColorTransition("released outline color", new ColorTransition(Color.Transparent), true);
             ReleasedOutlineWidth = AddInt("released outline width", 0, 0, 10);
             NewCategory("boxes");
             LeftBox = AddInputBox("left box", new InputBox("<", new Vector2(0.0f, 64.0f), new Vector2(64.0f, 64.0f)));
@@ -183,15 +186,15 @@ namespace Velo
             {
                 bool isPressed = pressed[i];
 
-                boxComps[i].FillColor = isPressed ? pressedBoxColor : releasedBoxColor;
-                boxComps[i].OutlineColor = isPressed ? pressedOutlineColor : releasedOutlineColor;
+                boxComps[i].FillColor = (isPressed ? pressedBoxColor : releasedBoxColor) * Opacity.Value;
+                boxComps[i].OutlineColor = (isPressed ? pressedOutlineColor : releasedOutlineColor) * Opacity.Value;
                 boxComps[i].OutlineThickness = isPressed ? PressedOutlineWidth.Value : ReleasedOutlineWidth.Value;
                 boxComps[i].SetPositionSize(origin + inputBoxes[i].position * Scale.Value, inputBoxes[i].size * Scale.Value);
 
                 textComps[i].StringText = inputBoxes[i].text;
                 textComps[i].Font = font;
                 textComps[i].Color = isPressed ? pressedTextColor : releasedTextColor;
-                textComps[i].Opacity = textComps[i].Color.A / 255.0f;
+                textComps[i].Opacity = Opacity.Value;
                 textComps[i].UpdateBounds();
                 textComps[i].Position = origin + inputBoxes[i].position * Scale.Value + (inputBoxes[i].size * Scale.Value - textComps[i].Bounds.Size) / 2.0f;
             }

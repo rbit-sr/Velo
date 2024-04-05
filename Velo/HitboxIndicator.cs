@@ -11,13 +11,11 @@ namespace Velo
     public class HitboxIndicator : MultiDisplayModule
     {
         public HitboxListSetting IdList;
-        public FloatSetting LocalPlayersOpacity;
-        public FloatSetting RemotePlayersOpacity;
-        public FloatSetting ObjectsOpacity;
         public ColorTransitionSetting LocalPlayersColor;
         public ColorTransitionSetting RemotePlayersColor;
         public ColorTransitionSetting ObjectsColor;
 
+        // collision ID to IdList index
         public Dictionary<int, int> colToIndex = new Dictionary<int, int>
         {
             { 100, 0 },
@@ -46,13 +44,10 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F4));
 
-            IdList = AddHitboxList("ID list", new bool[] { true, false, false, true, true, true, true, false, true, true, true, false, false, false, true, false, true, false });
-            LocalPlayersOpacity = AddFloat("local players opacity", 0.5f, 0.0f, 1.0f);
-            RemotePlayersOpacity = AddFloat("remote players opacity", 0.5f, 0.0f, 1.0f);
-            ObjectsOpacity = AddFloat("objects opacity", 0.5f, 0.0f, 1.0f);
-            LocalPlayersColor = AddColorTransition("local players color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
-            RemotePlayersColor = AddColorTransition("remote players color", new ColorTransition(Microsoft.Xna.Framework.Color.Blue));
-            ObjectsColor = AddColorTransition("objects color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+            IdList = AddHitboxList("hitbox list", new bool[] { true, false, false, true, true, true, true, false, true, true, true, false, false, false, true, false, true, false });
+            LocalPlayersColor = AddColorTransition("local players color", new ColorTransition(new Color(0, 255, 0, 128)));
+            RemotePlayersColor = AddColorTransition("remote players color", new ColorTransition(new Color(0, 0, 255, 128)));
+            ObjectsColor = AddColorTransition("objects color", new ColorTransition(new Color(255, 0, 0, 128)));
         }
 
         public static HitboxIndicator Instance = new HitboxIndicator();
@@ -68,6 +63,8 @@ namespace Velo
 
             int count = collisionEngine.ActorCount;
 
+            // make a list of all currently added hitboxes and remove them from it
+            // in the upcoming loop if visited
             List<CActor> unvisited = new List<CActor>();
             foreach (var pair in hitboxes)
                 unvisited.Add(pair.Key);
@@ -99,6 +96,9 @@ namespace Velo
 
                 bool useRect = collision is CEngine.World.Collision.Shape.CAABB;
 
+                // boost sections and bounce pads use CConvexPolygons as their collision
+                // detect if they are axis-aligned or rotated
+                // for rotated boxes or other polygons we draw outlines instead
                 if (actor.CollidableType == 107 || actor.CollidableType == 142)
                 {
                     CEngine.World.Collision.Shape.CConvexPolygon poly = (CEngine.World.Collision.Shape.CConvexPolygon)collision;
@@ -117,13 +117,6 @@ namespace Velo
                     actor.CollidableType != 100 ? ObjectsColor.Value.Get() : 
                     actor.localPlayer ? LocalPlayersColor.Value.Get() : 
                     RemotePlayersColor.Value.Get();
-
-                float opacity = 
-                    actor.CollidableType != 100 ? ObjectsOpacity.Value : 
-                    actor.localPlayer ? LocalPlayersOpacity.Value : 
-                    RemotePlayersOpacity.Value;
-
-                color = new Color(color.R, color.G, color.B) * opacity;
 
                 if (useRect)
                 {
@@ -187,6 +180,7 @@ namespace Velo
                 }
             }
 
+            // remove unvisited hitboxes
             foreach (CActor actor in unvisited)
             {
                 RemoveComponent(hitboxes[actor]);

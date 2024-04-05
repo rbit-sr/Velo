@@ -19,7 +19,7 @@ namespace Velo
             DisableSteamInputApi = AddBool("disable Steam input API", false);
             EnableControllerId = AddInt("enable controller ID", -1, -2, 16);
             LimitFramerateAfterRender = AddBool("limit framerate after render", false);
-            PollNetworkPacketsInSeparateThread = AddBool("poll network packets in separate thread", true);
+            PollNetworkPacketsInSeparateThread = AddBool("multithreaded network", true);
         }
 
         public static Performance Instance = new Performance();

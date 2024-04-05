@@ -17,12 +17,13 @@ namespace Velo
 
         private JumpHoldingDisplay() : base("Jump Holding Display", true)
         {
+            BadDuration = AddFloat("bad duration", 0.1f, 0.0f, 1.0f);
+            GoodDurationColor = AddColorTransition("good color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
+            BadDurationColor = AddColorTransition("bad color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+
+            AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -90.0f));
             RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("0.001"));
-
-            BadDuration = AddFloat("bad duration", 0.1f, 0.0f, 1.0f);
-            GoodDurationColor = AddColorTransition("good duration color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
-            BadDurationColor = AddColorTransition("bad duration color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
         }
 
         public static JumpHoldingDisplay Instance = new JumpHoldingDisplay();
@@ -53,8 +54,10 @@ namespace Velo
 
             if (durationChanged || text.Length == 0)
             {
-                text = Util.ToStringRounded((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond), RoundingMultiplier.Value.Value, RoundingMultiplier.Value.Precision);
-                float ratio = MathHelper.Clamp((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond) / BadDuration.Value, 0.0f, 1.0f);
+                text = Util.ToStringRounded((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond), RoundingMultiplier.Value);
+                float ratio = BadDuration.Value != 0.0f ?
+                    MathHelper.Clamp((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond) / BadDuration.Value, 0.0f, 1.0f) :
+                    1.0f;
                 color = Microsoft.Xna.Framework.Color.Lerp(GoodDurationColor.Value.Get(), BadDurationColor.Value.Get(), ratio);
             }
         }

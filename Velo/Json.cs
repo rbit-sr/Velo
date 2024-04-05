@@ -5,11 +5,11 @@ namespace Velo
 {
     public abstract class JsonElement
     {
-        public abstract string ToString(int depth);
+        public abstract string ToString(bool whiteSpace, int depth = 0);
 
         private static void SkipSpaces(string value, ref int offset)
         {
-            while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n' || value[offset] == '\r'))
+            while (offset < value.Length && (value[offset] == ' ' || value[offset] == '\n' || value[offset] == '\r' || value[offset] == '\0'))
                 offset++;
         }
 
@@ -17,6 +17,8 @@ namespace Velo
         {
             int start = offset;
             offset++;
+            if (offset >= value.Length)
+                return "";
             while (offset < value.Length && (value[offset] != '\"' || value[offset - 1] == '\\'))
                 offset++;
             offset++;
@@ -30,8 +32,10 @@ namespace Velo
 
         private static string ReadNumber(string value, ref int offset)
         {
+            if (offset >= value.Length)
+                return "0";
             int start = offset;
-            while (IsNumberChar(value[offset]))
+            while (offset < value.Length && IsNumberChar(value[offset]))
                 offset++;
             return value.Substring(start, offset - start);
         }
@@ -46,12 +50,14 @@ namespace Velo
         {
             SkipSpaces(value, ref offset);
 
+            if (offset >= value.Length)
+                return new JsonNull();
             if (value[offset] == '{')
             {
                 JsonObject jsonObject = new JsonObject(new List<KeyValuePair<string, JsonElement>>());
                 offset++;
                 SkipSpaces(value, ref offset);
-                if (value[offset] == '}')
+                if (offset >= value.Length || value[offset] == '}')
                 {
                     offset++;
                     return jsonObject;
@@ -64,7 +70,7 @@ namespace Velo
                     SkipSpaces(value, ref offset);
                     jsonObject.AddElement(key, FromString(value, ref offset));
                     SkipSpaces(value, ref offset);
-                    if (value[offset] == '}')
+                    if (offset >= value.Length || value[offset] == '}')
                     {
                         offset++;
                         return jsonObject;
@@ -78,13 +84,13 @@ namespace Velo
                 JsonArray jsonArray = new JsonArray(new List<JsonElement>());
                 offset++;
                 SkipSpaces(value, ref offset);
-                if (value[offset] == ']')
+                if (offset >= value.Length || value[offset] == ']')
                     return jsonArray;
                 while (true)
                 {
                     jsonArray.AddElement(FromString(value, ref offset));
                     SkipSpaces(value, ref offset);
-                    if (value[offset++] == ']')
+                    if (offset >= value.Length || value[offset] == ']')
                     {
                         offset++;
                         return jsonArray;
@@ -136,7 +142,7 @@ namespace Velo
             this.value = value.ToString();
         }
 
-        public override string ToString(int depth)
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             return value;
         }
@@ -151,7 +157,7 @@ namespace Velo
             this.value = value;
         }
 
-        public override string ToString(int depth)
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             return value ? "true" : "false";
         }
@@ -166,7 +172,7 @@ namespace Velo
             this.value = value;
         }
 
-        public override string ToString(int depth)
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
         }
@@ -179,7 +185,7 @@ namespace Velo
 
         }
 
-        public override string ToString(int depth)
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             return "null";
         }
@@ -316,24 +322,38 @@ namespace Velo
             return this;
         }
 
-        public override string ToString(int depth)
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             if (value.Count == 0)
-                return "{ }";
+                return "{}";
 
             string space = "";
-            for (int i = 0; i < depth; i++)
-                space += "    ";
+            if (whiteSpace)
+            {
+                for (int i = 0; i < depth; i++)
+                    space += "    ";
+            }
 
-            string valStr = "[\n";
+            string valStr = "[";
+            if (whiteSpace)
+                valStr += "\n";
             for (int i = 0; i < value.Count; i++)
             {
                 if (value[i] == null)
                     continue;
-                valStr += space + "    " + value[i].ToString(depth + 1) + ",\n";
+                if (whiteSpace)
+                    valStr += space + "    ";
+                valStr += value[i].ToString(whiteSpace, depth + 1) + ",";
+                if (whiteSpace)
+                    valStr += "\n";
             }
-            valStr = valStr.Remove(valStr.Length - 2, 2);
-            valStr += "\n" + space + "]";
+            if (whiteSpace)
+                valStr = valStr.Remove(valStr.Length - 2, 2);
+            else
+                valStr = valStr.Remove(valStr.Length - 1, 1);
+            if (whiteSpace)
+                valStr += "\n" + space;
+            valStr += "]";
             return valStr;
         }
     }
@@ -481,23 +501,48 @@ namespace Velo
                 action(value);
         }
 
-        public override string ToString(int depth = 0)
+        public T DoWithValue<T>(string key, Func<JsonElement, T> func)
+        {
+            JsonElement value = Get(key);
+            if (value != null)
+                return func(value);
+            return default;
+        }
+
+        public override string ToString(bool whiteSpace, int depth = 0)
         {
             if (value.Count == 0)
-                return "[ ]";
-            string space = "";
-            for (int i = 0; i < depth; i++)
-                space += "    ";
+                return "[]";
 
-            string valStr = "{\n";
+            string space = "";
+            if (whiteSpace)
+            {
+                for (int i = 0; i < depth; i++)
+                    space += "    ";
+            }
+
+            string valStr = "{";
+            if (whiteSpace)
+                valStr += "\n";
             for (int i = 0; i < value.Count; i++)
             {
-                valStr += space + "    \"" + value[i].Key.Replace("\"", "\\\"") + "\" : ";
-                valStr += value[i].Value.ToString(depth + 1);
-                valStr += ",\n";
+                if (whiteSpace)
+                    valStr += space + "    ";
+                valStr += "\"" + value[i].Key.Replace("\"", "\\\"") + "\":";
+                if (whiteSpace)
+                    valStr += " ";
+                valStr += value[i].Value.ToString(whiteSpace, depth + 1);
+                valStr += ",";
+                if (whiteSpace)
+                    valStr += "\n";
             }
-            valStr = valStr.Remove(valStr.Length - 2, 2);
-            valStr += "\n" + space + "}";
+            if (whiteSpace)
+                valStr = valStr.Remove(valStr.Length - 2, 2);
+            else
+                valStr = valStr.Remove(valStr.Length - 1, 1);
+            if (whiteSpace)
+                valStr += "\n" + space;
+            valStr += "}";
             return valStr;
         }
     }

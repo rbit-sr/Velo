@@ -17,11 +17,13 @@ namespace Velo
         private Speedometer() : base("Speedometer", true)
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F2));
-            Offset.SetValueAndDefault(new Vector2(7.0f, -60.0f));
-            RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("5"));
 
             UpdateInterval = AddInt("update interval", 100, 0, 2000);
             ShowXVelocity = AddBool("show x-velocity", false);
+
+            AddStyleSettings();
+            Offset.SetValueAndDefault(new Vector2(7.0f, -60.0f));
+            RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("5"));
         }
 
         public static Speedometer Instance = new Speedometer();
@@ -37,7 +39,7 @@ namespace Velo
             if (milliseconds - lastUpdate >= UpdateInterval.Value)
             {
                 lastUpdate = milliseconds;
-                text = Util.ToStringRounded(speed, RoundingMultiplier.Value.Value, RoundingMultiplier.Value.Precision);
+                text = Util.ToStringRounded(speed, RoundingMultiplier.Value);
 
                 if (Math.Abs(speed) < 300)
                     color = new Color(220, 220, 255);

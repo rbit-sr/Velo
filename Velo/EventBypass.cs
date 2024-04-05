@@ -10,9 +10,11 @@
         private EventBypass() : base("Event Bypass")
         {
             EventId = AddInt("event ID", 255, -1, 255);
-            BypassPumpkinCosmo = AddBool("bypass Pumpkin Cosmo", false);
-            BypassXl = AddBool("bypass XL", false);
-            BypassExcel = AddBool("bypass Excel", false);
+            NewCategory("bypass");
+            BypassPumpkinCosmo = AddBool("Pumpkin Cosmo", false);
+            BypassXl = AddBool("XL", false);
+            BypassExcel = AddBool("Excel", false);
+            EndCategory();
         }
 
         public static EventBypass Instance = new EventBypass();

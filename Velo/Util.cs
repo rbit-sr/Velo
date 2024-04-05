@@ -15,18 +15,21 @@ namespace Velo
             }
         }
 
-        public static string ToStringRounded(float value, float roundingMultiplier, int prec)
+        public static string ToStringRounded(float value, RoundingMultiplier roundingMultiplier)
         {
+            if (roundingMultiplier.Value == 0)
+                return value + "";
+
             float s = value >= 0.0f ? 1.0f : -1.0f;
 
             value = Math.Abs(value);
 
-            int c = (int)(value / roundingMultiplier + 0.5f);
+            int c = (int)(value / roundingMultiplier.Value + 0.5f);
 
-            value = roundingMultiplier * c;
+            value = roundingMultiplier.Value * c;
             value *= s;
 
-            return value.ToString("F" + prec);
+            return value.ToString("F" + roundingMultiplier.Precision);
         }
 
         public static Vector2 GetOrigin(EOrientation orientation, float width, float height, float screenWidth, float screenHeight)
@@ -72,6 +75,16 @@ namespace Velo
             }
 
             return origin;
+        }
+
+        public static Color ApplyAlpha(Color color)
+        {
+            return new Color(color.R, color.G, color.B) * (color.A / 255.0f);
+        }
+
+        public static Color FullAlpha(Color color)
+        {
+            return new Color(color.R, color.G, color.B, 255);
         }
 
         [DllImport("Kernel32.dll", CallingConvention = CallingConvention.Winapi)]

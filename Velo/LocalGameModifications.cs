@@ -23,8 +23,8 @@ namespace Velo
         {
             Framelimit = AddInt("framelimit", -1, -1, 2500);
             TimeScale = AddFloat("time scale", 1.0f, 0.0f, 10.0f);
-            CameraZoom = AddFloat("camera zoom", -1.0f, 0.0f, 10.0f);
-            CameraMaxSpeed = AddFloat("camera max speed", 1250.0f, 0.0f, 2000.0f);
+            CameraZoom = AddFloat("cam zoom", -1.0f, 0.0f, 10.0f);
+            CameraMaxSpeed = AddFloat("cam max speed", 1250.0f, 0.0f, 2000.0f);
             MaxSpeed = AddFloat("max speed", 1500.0f, 0.0f, 10000.0f);
             Gravity = AddVector("gravity", new Vector2(0.0f, 1000.0f), new Vector2(-10000.0f, -10000.0f), new Vector2(10000.0f, 10000.0f));
             GrappleHookSpeed = AddFloat("grapple hook speed", 3000.0f, 0.0f, 20000.0f);
@@ -56,7 +56,7 @@ namespace Velo
         public void UpdateCamera(ICCameraModifier cameraMod)
         {
             if (cameraMod is Camera camera)
-                camera.camera.Position = Vector2.Zero;
+                camera.camera.Position = Vector2.Zero; // not sure anymore why I added this
 
             if (!Velo.Online && CameraZoom.Value != CameraZoom.DefaultValue)
             {

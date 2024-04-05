@@ -8,7 +8,8 @@ namespace Velo
 {
     public class ModuleManager
     {
-        public List<Module> Modules = new List<Module>();
+        private readonly List<Module> modules = new List<Module>();
+        private readonly Dictionary<string, Module> modulesLookup = new Dictionary<string, Module>();
 
         private ModuleManager()
         {
@@ -17,27 +18,83 @@ namespace Velo
 
         public static ModuleManager Instance = new ModuleManager();
 
+        public void Add(Module module)
+        {
+            modules.Add(module);
+            modulesLookup.Add(module.Name, module);
+        }
+
+        public void PreUpdate()
+        {
+            foreach (var module in modules)
+                module.PreUpdate();
+        }
+
+        public void PostUpdate()
+        {
+            foreach (var module in modules)
+                module.PostUpdate();
+        }
+
+        public void PreRender()
+        {
+            foreach (var module in modules)
+                module.PreRender();
+        }
+
+        public void PostRender()
+        {
+            foreach (var module in modules)
+                module.PostRender();
+        }
+
         public JsonElement ToJson(bool valueOnly = false)
         {
             return new JsonObject(2).
-                AddDecimal("Count", Modules.Sum(module => module.SettingsCount())).
-                AddArray("Modules", Modules.Where(module => module.Settings.Count > 0).Select(module => module.ToJson(valueOnly)).ToList());
+                AddDecimal("Count", modules.Sum(module => module.SettingsCount())).
+                AddArray("Modules", modules.Where(module => module.HasSettings()).Select(module => module.ToJson(valueOnly)).ToList());
         }
 
         public void CommitChanges(JsonElement elem)
         {
-            var changes = ((JsonArray)((JsonObject)elem).Get("Changes")).value;
-            if (changes == null)
+            if (!(elem is JsonObject))
                 return;
-            foreach (JsonElement item in changes)
+            JsonElement changes = ((JsonObject)elem).Get("Changes");
+            if (!(changes is JsonArray))
+                return;
+            foreach (JsonElement item in ((JsonArray)changes).value)
             {
+                if (!(item is JsonObject)) 
+                    continue;
                 JsonElement jsonId = ((JsonObject)item).Get("ID");
-                if (jsonId == null)
+                if (!(jsonId is JsonDecimal))
                     continue;
                 int id = jsonId.ToInt();
                 if (Setting.IdToSetting.ContainsKey(id))
                 {
                     Setting.IdToSetting[id].FromJson(item);
+                }
+            }
+        }
+
+        public void LoadSettings(JsonElement elem)
+        {
+            if (!(elem is JsonObject))
+                return;
+            JsonElement modules = ((JsonObject)elem).Get("Modules");
+            if (!(modules is JsonArray))
+                return;
+            foreach (JsonElement module in ((JsonArray)modules).value)
+            {
+                if (!(module is JsonObject)) 
+                    continue;
+                JsonElement nameJson = ((JsonObject)module).Get("Name");
+                if (!(nameJson is JsonString))
+                    continue;
+                string name = FromJsonExt.ToString(nameJson);
+                if (modulesLookup.ContainsKey(name))
+                {
+                    modulesLookup[name].LoadSettings(module);
                 }
             }
         }
@@ -47,23 +104,28 @@ namespace Velo
     {
         public string Name { get; }
 
-        public List<Setting> Settings { get; }
+        private readonly List<Setting> settings;
+        private readonly Dictionary<string, Setting> settingsLookup;
 
         private Category currentCategory;
 
         public Module(string name)
         {
             Name = name;
-            Settings = new List<Setting>();
+            settings = new List<Setting>();
+            settingsLookup = new Dictionary<string, Setting>();
             currentCategory = null;
 
-            ModuleManager.Instance.Modules.Add(this);
+            ModuleManager.Instance.Add(this);
         }
 
         private Setting Add(Setting setting)
         {
             if (currentCategory == null)
-                Settings.Add(setting);
+            {
+                settings.Add(setting);
+                settingsLookup.Add(setting.Name, setting);
+            }
             else
                 currentCategory.Children.Add(setting);
             return setting;
@@ -72,12 +134,18 @@ namespace Velo
         protected void NewCategory(string name)
         {
             currentCategory = new Category(name);
-            Settings.Add(currentCategory);
+            settings.Add(currentCategory);
+            settingsLookup.Add(name, currentCategory);
         }
 
         protected void EndCategory()
         {
             currentCategory = null;
+        }
+
+        public bool HasSettings()
+        {
+            return settings.Count > 0;
         }
 
         protected IntSetting AddInt(string name, int defaultValue, int min, int max)
@@ -140,12 +208,12 @@ namespace Velo
             return (LineStyleSetting)Add(new LineStyleSetting(name, defaultValue));
         }
 
-        protected ColorSetting AddColor(string name, Color defaultValue, bool enableAlpha = false)
+        protected ColorSetting AddColor(string name, Color defaultValue, bool enableAlpha = true)
         {
             return (ColorSetting)Add(new ColorSetting(name, defaultValue, enableAlpha));
         }
 
-        protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue, bool enableAlpha = false)
+        protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue, bool enableAlpha = true)
         {
             return (ColorTransitionSetting)Add(new ColorTransitionSetting(name, defaultValue, enableAlpha));
         }
@@ -157,14 +225,34 @@ namespace Velo
 
         public int SettingsCount()
         {
-            return Settings.Sum((setting) => setting is Category category ? category.Children.Count : 1);
+            return settings.Sum(setting => setting is Category category ? category.Children.Count : 1);
         }
 
         public JsonElement ToJson(bool valueOnly = false)
         {
             return new JsonObject(2).
                 AddString("Name", Name).
-                AddArray("Settings", Settings.Select(setting => setting.ToJson(valueOnly)).ToList());
+                AddArray("Settings", settings.Select(setting => setting.ToJson(valueOnly)).ToList());
+        }
+
+        public void LoadSettings(JsonElement elem)
+        {
+            if (!(elem is JsonObject))
+                return;
+            JsonElement settings = ((JsonObject)elem).Get("Settings");
+            if (!(settings is JsonArray))
+                return;
+            foreach (JsonElement setting in ((JsonArray)settings).value)
+            {
+                JsonElement nameJson = ((JsonObject)setting).Get("Name");
+                if (!(nameJson is JsonString))
+                    continue;
+                string name = FromJsonExt.ToString(nameJson);
+                if (settingsLookup.ContainsKey(name))
+                {
+                    settingsLookup[name].FromJson(setting);
+                }
+            }
         }
 
         public virtual void Init() { }
@@ -190,7 +278,7 @@ namespace Velo
 
             if (Keyboard.Pressed[Enabled.Value.Hotkey])
             {
-                Enabled.Value.ToggleEnabled();
+                Enabled.ToggleEnabled();
                 Enabled.modified = true;
             }
         }
@@ -381,24 +469,32 @@ namespace Velo
 
         public StatDisplayModule(string name, bool ingameOnly) : base(name, ingameOnly)
         {
+            
+        }
+
+        protected void AddStyleSettings(bool roundingMultiplier = true, bool disablePopup = true, bool useFixedColor = true)
+        {
             NewCategory("style");
-            Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
+            Scale = AddFloat("scale", 1.5f, 0.0f, 10.0f);
             Orientation = AddOrientation("orientation", EOrientation.PLAYER);
             Offset = AddVector("offset", Vector2.Zero, new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             Font = AddString("font", "UI\\Font\\Souses.ttf");
             FontSize = AddInt("font size", 16, 1, 50);
             Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
             Rotation = AddFloat("rotation", -0.05f, 0.0f, 3.14159f);
-            RoundingMultiplier = AddRoundingMultiplier("rounding multiplier", new RoundingMultiplier("1"));
-            DisablePopup = AddBool("disable popup", true);
-            UseFixedColor = AddBool("use fixed color", false);
+            if (roundingMultiplier)
+                RoundingMultiplier = AddRoundingMultiplier("rounding multiplier", new RoundingMultiplier("1"));
+            if (disablePopup)
+                DisablePopup = AddBool("disable popup", true);
+            if (useFixedColor)
+                UseFixedColor = AddBool("fixed color", false);
             Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Yellow));
             EndCategory();
         }
 
         public abstract void Update();
         public abstract string GetText();
-        public abstract Microsoft.Xna.Framework.Color GetColor();
+        public abstract Color GetColor();
 
         public override bool FixedPos()
         {
@@ -438,15 +534,15 @@ namespace Velo
             drawComp.DropShadowColor = Microsoft.Xna.Framework.Color.Black;
             drawComp.DropShadowOffset = Vector2.One;
             drawComp.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup.Flipped;
-            drawComp.Scale = Scale.Value * Vector2.One;
+            drawComp.Scale = Vector2.One;
             drawComp.Rotation = Rotation.Value;
             drawComp.StringText = GetText();
             drawComp.Color = GetColor();
             drawComp.Opacity = Opacity.Value;
             drawComp.UpdateBounds();
 
-            float screen_width = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
-            float screen_height = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
+            float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
+            float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
 
             float width = drawComp.Bounds.Width;
             float height = drawComp.Bounds.Height;
@@ -466,12 +562,12 @@ namespace Velo
                 case EOrientation.TOP_RIGHT:
                 case EOrientation.RIGHT:
                 case EOrientation.BOTTOM_RIGHT:
-                    origin.X = screen_width - width;
+                    origin.X = screenWidth - width;
                     break;
                 case EOrientation.TOP:
                 case EOrientation.CENTER:
                 case EOrientation.BOTTOM:
-                    origin.X = (screen_width - width) / 2.0f;
+                    origin.X = (screenWidth - width) / 2.0f;
                     break;
             }
 
@@ -485,12 +581,12 @@ namespace Velo
                 case EOrientation.BOTTOM_LEFT:
                 case EOrientation.BOTTOM:
                 case EOrientation.BOTTOM_RIGHT:
-                    origin.Y = screen_height - height;
+                    origin.Y = screenHeight - height;
                     break;
                 case EOrientation.LEFT:
                 case EOrientation.CENTER:
                 case EOrientation.RIGHT:
-                    origin.Y = (screen_height - height) / 2.0f;
+                    origin.Y = (screenHeight - height) / 2.0f;
                     break;
             }
 
