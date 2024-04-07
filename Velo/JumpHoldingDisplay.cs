@@ -18,8 +18,8 @@ namespace Velo
         private JumpHoldingDisplay() : base("Jump Holding Display", true)
         {
             BadDuration = AddFloat("bad duration", 0.1f, 0.0f, 1.0f);
-            GoodDurationColor = AddColorTransition("good color", new ColorTransition(Microsoft.Xna.Framework.Color.Green));
-            BadDurationColor = AddColorTransition("bad color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+            GoodDurationColor = AddColorTransition("good color", new ColorTransition(new Color(0, 255, 0)));
+            BadDurationColor = AddColorTransition("bad color", new ColorTransition(new Color(255, 0, 0)));
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -90.0f));

@@ -8,12 +8,7 @@ using CEngine.Graphics.Camera;
 using CEngine.World.Actor;
 using CEngine.Graphics.Layer;
 using Lidgren.Network;
-using System.Windows.Forms;
-using System.IO;
 using SDL2;
-using System.Runtime.CompilerServices;
-using static SDL2.SDL;
-using System.Runtime.InteropServices;
 
 namespace Velo
 {
@@ -24,6 +19,7 @@ namespace Velo
         public static Player MainPlayer = null;
         public static bool Ingame = false;
         public static bool Online = false;
+        public static Vector2 PlayerPos = Vector2.Zero;
 
         public static Player GetMainPlayer()
         {
@@ -77,30 +73,17 @@ namespace Velo
             {
                 if (typeof(Module).IsAssignableFrom(t)&& !t.IsAbstract)
                 {
-                    Module m = (Module)t.GetField("Instance").GetValue(null);
-                    m.Init();
+                    t.GetField("Instance").GetValue(null);
                 }
             }
 
+            SaveFile.Instance.Load();
             Keyboard.Init();
         }
 
         // replaces the game's update call
         public static void game_update(GameTime gameTime)
         {
-            // cache a few commonly needed values
-            MainPlayer = GetMainPlayer();
-            Ingame = MainPlayer != null;
-            Online = IsOnline();
-
-            if (Keyboard.Pressed[(ushort)Keys.F1])
-            {
-                //string json = ModuleManager.Instance.ToJson(false).ToString(0);
-                //File.WriteAllText("test.txt", json);
-                //json = File.ReadAllText("test2.txt");
-                //ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
-            }
-
             if (!Util.IsFocused()) // we don't want inputs to be detected when game is unfocused
             {
                 Keyboard.Held.Fill(false);
@@ -110,6 +93,12 @@ namespace Velo
             ModuleManager.Instance.PreUpdate();
 
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
+
+            // cache a few commonly needed values
+            MainPlayer = GetMainPlayer();
+            Ingame = MainPlayer != null;
+            Online = IsOnline();
+            PlayerPos = MainPlayer != null ? MainPlayer.actor.Position : Vector2.Zero;
 
             ModuleManager.Instance.PostUpdate();
 
@@ -288,7 +277,7 @@ namespace Velo
 
         public static int event_id()
         {
-            return EventBypass.Instance.EventId.Value;
+            return EventBypass.Instance.Event.Value.Id();
         }
 
         public static bool bypass_pumpkin_cosmo()
@@ -411,6 +400,13 @@ namespace Velo
             if (layer.Id != "Collision")
                 return Color.White;
             return TileMap.Instance.ColorMultiplier.Value.Get();
+        }
+
+        public static Color get_background_color(ICLayer layer, Color color)
+        {
+            if (layer.Id != "BackgroundLayer0")
+                return color;
+            return new Color(color.ToVector4() * ColorsAndAppearance.Instance.BackgroundColor.Value.Get().ToVector4());
         }
 
         public static bool draw_chunk(CBufferedTileMapLayer tilemap, Vector2 pos, int x, int y)

@@ -207,9 +207,147 @@ namespace Velo
         PLAYER, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
     }
 
+    public enum EEvent
+    {
+        DEFAULT, NONE, SRENNUR_DEEPS, SCREAM_RUNNERS, WINTER
+    }
+
     public enum ELineStyle
     {
         SOLID, DASHED, DOTTED
+    }
+
+    public static class EnumExt
+    {
+        public static string Label(this EOrientation orientation)
+        {
+            switch (orientation)
+            {
+                case EOrientation.PLAYER:
+                    return "player";
+                case EOrientation.TOP_LEFT:
+                    return "top left";
+                case EOrientation.TOP_RIGHT:
+                    return "top right";
+                case EOrientation.BOTTOM_LEFT:
+                    return "bottom left";
+                case EOrientation.BOTTOM_RIGHT:
+                    return "bottom right";
+                case EOrientation.TOP:
+                    return "top";
+                case EOrientation.BOTTOM:
+                    return "bottom";
+                case EOrientation.LEFT:
+                    return "left";
+                case EOrientation.RIGHT:
+                    return "right";
+                case EOrientation.CENTER:
+                    return "center";
+                default:
+                    return "";
+            }
+        }
+
+        public static Vector2 GetOrigin(this EOrientation orientation, float width, float height, float screenWidth, float screenHeight, Vector2 playerPos)
+        {
+            if (orientation == EOrientation.PLAYER)
+                return playerPos;
+
+            Vector2 origin = Vector2.Zero;
+
+            switch (orientation)
+            {
+                case EOrientation.TOP_LEFT:
+                case EOrientation.LEFT:
+                case EOrientation.BOTTOM_LEFT:
+                    origin.X = 0.0f;
+                    break;
+                case EOrientation.TOP_RIGHT:
+                case EOrientation.RIGHT:
+                case EOrientation.BOTTOM_RIGHT:
+                    origin.X = screenWidth - width;
+                    break;
+                case EOrientation.TOP:
+                case EOrientation.CENTER:
+                case EOrientation.BOTTOM:
+                    origin.X = (screenWidth - width) / 2.0f;
+                    break;
+            }
+
+            switch (orientation)
+            {
+                case EOrientation.TOP_LEFT:
+                case EOrientation.TOP:
+                case EOrientation.TOP_RIGHT:
+                    origin.Y = 0.0f;
+                    break;
+                case EOrientation.BOTTOM_LEFT:
+                case EOrientation.BOTTOM:
+                case EOrientation.BOTTOM_RIGHT:
+                    origin.Y = screenHeight - height;
+                    break;
+                case EOrientation.LEFT:
+                case EOrientation.CENTER:
+                case EOrientation.RIGHT:
+                    origin.Y = (screenHeight - height) / 2.0f;
+                    break;
+            }
+
+            return origin;
+        }
+
+        public static string Label(this EEvent _event)
+        {
+            switch (_event)
+            {
+                case EEvent.DEFAULT:
+                    return "default";
+                case EEvent.NONE:
+                    return "none";
+                case EEvent.SRENNUR_DEEPS:
+                    return "srennuRdeepS";
+                case EEvent.SCREAM_RUNNERS:
+                    return "ScreamRunners";
+                case EEvent.WINTER:
+                    return "winter";
+                default:
+                    return "";
+            }
+        }
+
+        public static int Id(this EEvent _event)
+        {
+            switch (_event)
+            {
+                case EEvent.DEFAULT:
+                    return 255;
+                case EEvent.NONE:
+                    return 0;
+                case EEvent.SRENNUR_DEEPS:
+                    return 2;
+                case EEvent.SCREAM_RUNNERS:
+                    return 11;
+                case EEvent.WINTER:
+                    return 14;
+                default:
+                    return 255;
+            }
+        }
+
+        public static string Label(this ELineStyle lineStyle)
+        {
+            switch (lineStyle)
+            {
+                case ELineStyle.SOLID:
+                    return "solid";
+                case ELineStyle.DASHED:
+                    return "dashed";
+                case ELineStyle.DOTTED:
+                    return "dotted";
+                default:
+                    return "";
+            }
+        }
     }
 
     public static class ToJsonExt

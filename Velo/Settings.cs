@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -6,20 +7,20 @@ namespace Velo
 {
     public abstract class Setting
     {
-        public static Dictionary<int, Setting> IdToSetting = new Dictionary<int, Setting>();
-        public static int NextId = 0;
-
+        public Module Module { get; }
         public string Name { get; }
+        public string Tooltip { get; set; }
 
-        public bool modified;
-        public int Id;
+        protected bool modified;
+        public int Id { get; }
 
-        public Setting(string name)
+        public Setting(Module module, string name)
         {
+            Module = module;
             Name = name;
+            Tooltip = name;
             modified = false;
-            Id = NextId++;
-            IdToSetting.Add(Id, this);
+            Id = ModuleManager.Instance.Add(this);
         }
 
         public bool Modified()
@@ -35,6 +36,7 @@ namespace Velo
         {
             return new JsonObject(8).
                 AddStringIf("Name", Name, !useId).
+                AddStringIf("Tooltip", Tooltip, !valueOnly).
                 AddDecimalIf("ID", Id, !valueOnly || useId);
         }
 
@@ -48,8 +50,8 @@ namespace Velo
     {
         public List<Setting> Children;
 
-        public Category(string name) :
-            base(name)
+        public Category(Module module, string name) :
+            base(module, name)
         {
             Children = new List<Setting>();
         }
@@ -70,10 +72,14 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (!(elem is JsonArray))
+            if (!(elem is JsonObject))
                 return;
 
-            foreach (var setting in ((JsonArray)elem).value)
+            JsonElement settings = ((JsonObject)elem).Get("Value");
+            if (!(settings is JsonArray))
+                return;
+
+            foreach (var setting in ((JsonArray)settings).value)
             {
                 JsonElement nameJson = ((JsonObject)setting).Get("Name");
                 if (!(nameJson is JsonString))
@@ -96,13 +102,13 @@ namespace Velo
             { 
                 this.value = value; 
                 modified = true;
-                SettingsUI.Instance.SettingUpdate(this);
+                ModuleManager.Instance.ReportModified(this);
             }
         }
         public T DefaultValue { get; set; }
 
-        public Setting(string name, T defaultValue) :
-            base(name)
+        public Setting(Module module, string name, T defaultValue) :
+            base(module,name)
         {
             value = defaultValue;
             DefaultValue = defaultValue;
@@ -125,8 +131,8 @@ namespace Velo
         public int Min;
         public int Max;
 
-        public IntSetting(string name, int defaultValue, int min, int max) :
-            base(name, defaultValue) 
+        public IntSetting(Module module, string name, int defaultValue, int min, int max) :
+            base(module, name, defaultValue) 
         {
             Min = min;
             Max = max;
@@ -156,8 +162,8 @@ namespace Velo
         public float Min;
         public float Max;
 
-        public FloatSetting(string name, float defaultValue, float min, float max) :
-            base(name, defaultValue)
+        public FloatSetting(Module module, string name, float defaultValue, float min, float max) :
+            base(module, name, defaultValue)
         { 
             Min = min;
             Max = max;
@@ -184,8 +190,8 @@ namespace Velo
 
     public class BoolSetting : Setting<bool>
     {
-        public BoolSetting(string name, bool defaultValue) :
-            base(name, defaultValue)
+        public BoolSetting(Module module, string name, bool defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -207,8 +213,8 @@ namespace Velo
 
     public class ToggleSetting : Setting<Toggle>
     {
-        public ToggleSetting(string name, Toggle defaultValue) :
-            base(name, defaultValue)
+        public ToggleSetting(Module module, string name, Toggle defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public void ToggleEnabled()
@@ -235,8 +241,8 @@ namespace Velo
 
     public class HotkeySetting : Setting<ushort>
     {
-        public HotkeySetting(string name, ushort defaultValue) :
-            base(name, defaultValue)
+        public HotkeySetting(Module module, string name, ushort defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -261,8 +267,8 @@ namespace Velo
         Vector2 Min;
         Vector2 Max;
 
-        public VectorSetting(string name, Vector2 defaultValue, Vector2 min, Vector2 max) :
-            base(name, defaultValue)
+        public VectorSetting(Module module, string name, Vector2 defaultValue, Vector2 min, Vector2 max) :
+            base(module, name, defaultValue)
         { 
             Min = min;
             Max = max;
@@ -289,8 +295,8 @@ namespace Velo
 
     public class StringSetting : Setting<string>
     {
-        public StringSetting(string name, string defaultValue) :
-            base(name, defaultValue)
+        public StringSetting(Module module, string name, string defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -312,8 +318,8 @@ namespace Velo
 
     public class RoundingMultiplierSetting : Setting<RoundingMultiplier>
     {
-        public RoundingMultiplierSetting(string name, RoundingMultiplier defaultValue) :
-            base(name, defaultValue)
+        public RoundingMultiplierSetting(Module module, string name, RoundingMultiplier defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -335,8 +341,8 @@ namespace Velo
 
     public class HitboxListSetting : Setting<bool[]>
     {
-        public HitboxListSetting(string name, bool[] defaultValue) :
-            base(name, defaultValue)
+        public HitboxListSetting(Module module, string name, bool[] defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -379,8 +385,8 @@ namespace Velo
 
     public class StringListSetting : Setting<string[]>
     {
-        public StringListSetting(string name, string[] defaultValue) :
-            base(name, defaultValue)
+        public StringListSetting(Module module, string name, string[] defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -400,31 +406,23 @@ namespace Velo
         }
     }
 
-    public class OrientationSetting : Setting<EOrientation>
+    public class EnumSetting<E> : Setting<E> where E : struct, Enum
     {
-        public OrientationSetting(string name, EOrientation defaultValue) :
-            base(name, defaultValue)
-        { }
+        private readonly string[] labels;
 
-        public override JsonElement ToJson(bool valueOnly, bool useId = false)
+        public EnumSetting(Module module, string name, E defaultValue, string[] labels) :
+            base(module, name, defaultValue)
+        {
+            this.labels = labels;
+        }
+
+        public override JsonElement ToJson(bool valueOnly = false, bool useId = false)
         {
             return ((JsonObject)base.ToJson(valueOnly, useId)).
                 AddDecimalIf("Type", 10, !valueOnly).
-                AddDecimalIf("Default", (int)DefaultValue, !valueOnly).
-                AddArrayIf("Identifiers", new List<JsonElement>
-                    {
-                        new JsonString("player"),
-                        new JsonString("top left"),
-                        new JsonString("top right"),
-                        new JsonString("bottom left"),
-                        new JsonString("bottom right"),
-                        new JsonString("top"),
-                        new JsonString("bottom"),
-                        new JsonString("left"),
-                        new JsonString("right"),
-                        new JsonString("center")
-                    }, !valueOnly).
-                AddDecimal("Value", (int)Value);
+                AddDecimalIf("Default", (int)(object)DefaultValue, !valueOnly).
+                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), !valueOnly).
+                AddDecimal("Value", (int)(object)Value);
         }
 
         public override void FromJson(JsonElement elem)
@@ -432,36 +430,7 @@ namespace Velo
             base.FromJson(elem);
 
             if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = (EOrientation)value.ToInt());
-        }
-    }
-
-    public class LineStyleSetting : Setting<ELineStyle>
-    {
-        public LineStyleSetting(string name, ELineStyle defaultValue) :
-            base(name, defaultValue)
-        { }
-
-        public override JsonElement ToJson(bool valueOnly, bool useId = false)
-        {
-            return ((JsonObject)base.ToJson(valueOnly, useId)).
-                AddDecimalIf("Type", 10, !valueOnly).
-                AddDecimalIf("Default", (int)DefaultValue, !valueOnly).
-                AddArrayIf("Identifiers", new List<JsonElement>
-                    {
-                        new JsonString("solid"),
-                        new JsonString("dashed"),
-                        new JsonString("dotted")
-                    }, !valueOnly).
-                AddDecimal("Value", (int)Value);
-        }
-
-        public override void FromJson(JsonElement elem)
-        {
-            base.FromJson(elem);
-
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = (ELineStyle)value.ToInt());
+                setting.DoWithValue("Value", value => Value = (E)(object)value.ToInt());
         }
     }
 
@@ -469,8 +438,8 @@ namespace Velo
     {
         public bool EnableAlpha;
 
-        public ColorSetting(string name, Color defaultValue, bool enableAlpha = true) :
-            base(name, defaultValue)
+        public ColorSetting(Module module, string name, Color defaultValue, bool enableAlpha = true) :
+            base(module, name, defaultValue)
         {
             EnableAlpha = enableAlpha;
         }
@@ -497,8 +466,8 @@ namespace Velo
     {
         public bool EnableAlpha;
 
-        public ColorTransitionSetting(string name, ColorTransition defaultValue, bool enableAlpha = true) :
-            base(name, defaultValue)
+        public ColorTransitionSetting(Module module, string name, ColorTransition defaultValue, bool enableAlpha = true) :
+            base(module, name, defaultValue)
         {
             EnableAlpha = enableAlpha;
         }
@@ -523,8 +492,8 @@ namespace Velo
 
     public class InputBoxSetting : Setting<InputBox>
     {
-        public InputBoxSetting(string name, InputBox defaultValue) :
-            base(name, defaultValue)
+        public InputBoxSetting(Module module, string name, InputBox defaultValue) :
+            base(module, name, defaultValue)
         { }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)

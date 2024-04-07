@@ -81,6 +81,7 @@ namespace Velo
                 }
                 initialized = true;
                 sendUpdates = true;
+                ModuleManager.Instance.AddModifiedListener(SettingUpdate);
             }
 
             int size = GetChangeSize();

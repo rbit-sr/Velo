@@ -15,7 +15,7 @@ namespace Velo
         public FloatSetting PopupOpacity;
         public VectorSetting PopupOffset; 
         public ColorTransitionSetting PopupColor;
-        public BoolSetting ChangeOnlyYourOwn;
+        public BoolSetting LocalOnly;
         public IntSetting GrappleRopeThickness;
         public IntSetting GoldenHookRopeThickness;
         public ColorTransitionSetting GrappleRopeColor;
@@ -27,6 +27,7 @@ namespace Velo
         public ColorTransitionSetting GoldenHookColor;
         public ColorTransitionSetting GoldenHookBreakColor;
         public ColorTransitionSetting PlayerColor;
+        public ColorTransitionSetting BackgroundColor;
         public ColorTransitionSetting WinStarColor;
         public ColorTransitionSetting BubbleColor;
         public ColorTransitionSetting SawColor;
@@ -65,39 +66,50 @@ namespace Velo
             PopupOpacity = AddFloat("opacity", 1.0f, 0.0f, 10.0f);
             PopupOffset = AddVector("offset", new Vector2(7.0f, -60.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             PopupColor = AddColorTransition("color", new ColorTransition(Color.Yellow));
+            
             NewCategory("grapple");
-            ChangeOnlyYourOwn = AddBool("local only", false);
+            LocalOnly = AddBool("local only", false);
             GrappleRopeThickness = AddInt("rope thickness", 1, 0, 10);
             GrappleRopeColor = AddColorTransition("rope color", new ColorTransition(Color.Black));
             GrappleRopeBreakColor = AddColorTransition("rope break color", new ColorTransition(Color.White));
             GrappleHookColor = AddColorTransition("hook color", new ColorTransition(new Color(0, 252, 255)));
             GrappleHookBreakColor = AddColorTransition("hook break color", new ColorTransition(Color.White));
+
+            LocalOnly.Tooltip =
+                "whether to only affect grapples of local players or not";
+
             NewCategory("golden hook");
             GoldenHookRopeThickness = AddInt("rope thickness", 1, 0, 10);
             GoldenHookRopeColor = AddColorTransition("rope color", new ColorTransition(Color.Black));
             GoldenHookRopeBreakColor = AddColorTransition("rope break color", new ColorTransition(Color.White));
             GoldenHookColor = AddColorTransition("hook color", new ColorTransition(new Color(255, 241, 16)));
             GoldenHookBreakColor = AddColorTransition("hook break color", new ColorTransition(Color.White));
+            
             NewCategory("lethal laser");
             LaserLethalInnerColor = AddColorTransition("inner color", new ColorTransition(new Color(255, 255, 0)));
             LaserLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(191, 51, 191)));
             LaserLethalParticleColor = AddColorTransition("particle color", new ColorTransition(new Color(255, 69, 255)));
             LaserLethalSmokeColor = AddColorTransition("smoke color", new ColorTransition(new Color(255, 255, 0)));
+            
             NewCategory("non lethal laser");
             LaserNonLethalInnerColor = AddColorTransition("inner color", new ColorTransition(new Color(255, 255, 255)));
             LaserNonLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(191, 191, 0)));
             LaserNonLethalParticleColor = AddColorTransition("particle color", new ColorTransition(new Color(255, 255, 255)));
             LaserNonLethalSmokeColor = AddColorTransition("smoke color", new ColorTransition(new Color(255, 255, 150)));
+            
             NewCategory("chat");
             ChatTextColor = AddColorTransition("text color", new ColorTransition(Color.White));
             ChatNameColor = AddColorTransition("name color", new ColorTransition(Color.Yellow));
             ChatSystemColor = AddColorTransition("system color", new ColorTransition(Color.Yellow));
             ChatWriteColor = AddColorTransition("write color", new ColorTransition(Color.White));
+            
             NewCategory("other");
             PlayerColor = AddColorTransition("player color", new ColorTransition(Color.White));
+            BackgroundColor = AddColorTransition("background color", new ColorTransition(Color.White));
             WinStarColor = AddColorTransition("win star color", new ColorTransition(new Color(12, 106, 201)));
             BubbleColor = AddColorTransition("bubble color", new ColorTransition(Color.White));
             SawColor = AddColorTransition("saw color", new ColorTransition(Color.White));
+            
             NewCategory("UI color replacements");
             EnableUIColorReplacements = AddBool("enable", false);
             UIWhiteColor = AddColorTransition("UI white", new ColorTransition(Color.White));
@@ -157,6 +169,51 @@ namespace Velo
                 UIBlueColors[i] = AddColorTransition("UI blue tone " + i, new ColorTransition(blueTones[i]), true);
                 colorReplLookup.Add(blueTones[i].PackedValue, UIBlueColors[i]);
             }
+
+            CurrentCategory.Tooltip =
+                "Replaces specific colors from the game's UI. " +
+                "To find the right blue tone of a specific UI element, " +
+                "refer to the tooltip or make a screenshot and use a color picker.";
+
+            EnableUIColorReplacements.Tooltip =
+                "Restart your game for changes to fully take effect. " +
+                "Enabling this can lead to a slight loss in FPS.";
+
+            UIBlueColors[0].Tooltip = "level select \"Workshop Levels\" bar and scroll bar";
+            UIBlueColors[1].Tooltip = "story level select menu title text shadow";
+            UIBlueColors[2].Tooltip = "level select workshop list separator bar and main menu news text background";
+            UIBlueColors[3].Tooltip = "level select workshop list background";
+            UIBlueColors[4].Tooltip = "main menu text shadow";
+            UIBlueColors[5].Tooltip = "level select map description and \"Game options\"";
+            UIBlueColors[6].Tooltip = "level select workshop list separator text";
+            UIBlueColors[7].Tooltip = "level select \"Workshop Levels\" text";
+            UIBlueColors[8].Tooltip = "story chapter select menu text";
+            UIBlueColors[9].Tooltip = "chat \"SUPERCHAT\" text and \"SEND\" text";
+            UIBlueColors[10].Tooltip = "main menu news image background";
+            UIBlueColors[11].Tooltip = "XP Level text";
+            UIBlueColors[12].Tooltip = "edit controls menu text";
+            UIBlueColors[13].Tooltip = "leaderboard player names, league, points text";
+            UIBlueColors[14].Tooltip = "leaderboard \"Rank Progress\", your points and season text";
+            UIBlueColors[15].Tooltip = "trail editor menu trail selected background";
+            UIBlueColors[16].Tooltip = "story level select menu level description text and level icon background";
+            UIBlueColors[17].Tooltip = "XP screen XP event points text";
+            UIBlueColors[18].Tooltip = "story villain speech bubble text";
+            UIBlueColors[19].Tooltip = "leaderboard \"Back\" text";
+            UIBlueColors[20].Tooltip = "main menu news text";
+            UIBlueColors[21].Tooltip = "XP Level \"XP\" text";
+            UIBlueColors[22].Tooltip = "confirmation popup \"Cancel\" and \"Ok\" text";
+            UIBlueColors[23].Tooltip = "main menu text";
+            UIBlueColors[24].Tooltip = "story level select menu title text";
+            UIBlueColors[25].Tooltip = "trail editor menu trail name";
+            UIBlueColors[26].Tooltip = "level select workshop list selected background";
+            UIBlueColors[27].Tooltip = "leaderboard \"Friends\", \"My League\" and \"World\" text";
+            UIBlueColors[28].Tooltip = "story chapter select difficulty text";
+            UIBlueColors[29].Tooltip = "XP screen \"Points!!!\" text and XP event name text";
+            UIBlueColors[30].Tooltip = "level select menu level name text and \"Press Y to save this replay!\" text";
+            UIBlueColors[31].Tooltip = "level select menu level icon background";
+            UIBlueColors[32].Tooltip = "main menu button tooltip text";
+            UIBlueColors[33].Tooltip = "level editor info text";
+
             EndCategory();
         }
 
@@ -226,7 +283,7 @@ namespace Velo
         public void UpdateGrappleColor(Grapple grapple)
         {
             if (
-                !ChangeOnlyYourOwn.Value ||
+                !LocalOnly.Value ||
                 (grapple.owner.slot.LocalPlayer && !grapple.owner.slot.IsBot))
             {
                 grapple.spriteDrawComp1.Color = GrappleHookColor.Value.Get();
@@ -253,7 +310,7 @@ namespace Velo
             if (rope.target is Grapple)
             {
                 if (
-                    !ChangeOnlyYourOwn.Value ||
+                    !LocalOnly.Value ||
                     (rope.owner.slot.LocalPlayer && !rope.owner.slot.IsBot))
                 {
                     if (!rope.breaking)

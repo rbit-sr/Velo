@@ -3,13 +3,14 @@ using Microsoft.Xna.Framework;
 using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using System.Windows.Forms;
+using System.Linq;
 
 namespace Velo
 {
     public class InputDisplay : MultiDisplayModule
     {
         public FloatSetting Scale;
-        public OrientationSetting Orientation;
+        public EnumSetting<EOrientation> Orientation;
         public VectorSetting Offset;
         public StringSetting Font;
         public IntSetting FontSize;
@@ -39,33 +40,27 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F3));
 
-            /*Color[] rainbowColors = new Color[]
-                {
-                    new Color(0, 0, 255, 102),
-                    new Color(0, 255, 255, 102),
-                    new Color(0, 255, 0, 102),
-                    new Color(255, 255, 0, 102),
-                    new Color(255, 0, 0, 102),
-                    new Color(255, 0, 255, 102)
-                };*/
-
             NewCategory("style");
             Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
-            Orientation = AddOrientation("orientation", EOrientation.BOTTOM_RIGHT);
+            Orientation = AddEnum("orientation", EOrientation.BOTTOM_RIGHT,
+                Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
             Offset = AddVector("offset", new Vector2(-64.0f, -64.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             Font = AddString("font", "CEngine\\Debug\\FreeMonoBold.ttf");
             FontSize = AddInt("font size", 18, 1, 100);
             Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
+
             NewCategory("pressed");
             PressedBoxColor = AddColorTransition("pressed box color", new ColorTransition(new Color(255, 100, 100, 175)), true);
             PressedTextColor = AddColorTransition("pressed text color", new ColorTransition(Color.Black), true);
             PressedOutlineColor = AddColorTransition("pressed outline color", new ColorTransition(Color.Transparent), true);
             PressedOutlineWidth = AddInt("pressed outline width", 0, 0, 10);
+            
             NewCategory("released");
             ReleasedBoxColor = AddColorTransition("released box color", new ColorTransition(new Color(160, 160, 160, 175)), true);
             ReleasedTextColor = AddColorTransition("released text color", new ColorTransition(Color.Black), true);
             ReleasedOutlineColor = AddColorTransition("released outline color", new ColorTransition(Color.Transparent), true);
             ReleasedOutlineWidth = AddInt("released outline width", 0, 0, 10);
+            
             NewCategory("boxes");
             LeftBox = AddInputBox("left box", new InputBox("<", new Vector2(0.0f, 64.0f), new Vector2(64.0f, 64.0f)));
             RightBox = AddInputBox("right box", new InputBox(">", new Vector2(64.0f, 64.0f), new Vector2(64.0f, 64.0f)));
@@ -74,6 +69,7 @@ namespace Velo
             SlideBox = AddInputBox("slide box", new InputBox("slid", new Vector2(128.0f, 0.0f), new Vector2(64.0f, 64.0f)));
             BoostBox = AddInputBox("boost box", new InputBox("bst", new Vector2(128.0f, 64.0f), new Vector2(64.0f, 64.0f)));
             ItemBox = AddInputBox("item box", new InputBox("item", new Vector2(192.0f, 64.0f), new Vector2(64.0f, 64.0f)));
+            
             EndCategory();
         }
 
@@ -180,7 +176,8 @@ namespace Velo
             float width = (maxX - minX) * Scale.Value;
             float height = (maxY - minY) * Scale.Value;
 
-            Vector2 origin = Util.GetOrigin(Orientation.Value, width, height, screenWidth, screenHeight) + Offset.Value;
+            Vector2 origin = 
+                Offset.Value + Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
 
             for (int i = 0; i < 7; i++)
             {

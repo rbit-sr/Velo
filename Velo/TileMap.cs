@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework;
 using CEngine.Graphics.Layer;
 using Microsoft.Xna.Framework.Graphics;
+using System.Linq;
 
 namespace Velo
 {
@@ -143,10 +144,10 @@ namespace Velo
         public ColorSetting FillColor;
         public ColorSetting GrappleCeilingColor;
         public IntSetting GrappleCeilingWidth;
-        public LineStyleSetting GrappleCeilingStyle;
+        public EnumSetting<ELineStyle> GrappleCeilingStyle;
         public ColorSetting WallColor;
         public IntSetting WallWidth;
-        public LineStyleSetting WallStyle;
+        public EnumSetting<ELineStyle> WallStyle;
         public BoolSetting StairsReplaceWithSlopes;
         public BoolSetting RemoveCheckered;
         public BoolSetting SlopeAntiAliasing;
@@ -188,10 +189,12 @@ namespace Velo
             FillColor = AddColor("fill color", Color.Black);
             GrappleCeilingColor = AddColor("grapple ceil color", Color.White);
             GrappleCeilingWidth = AddInt("grapple ceil width", 3, 0, 16);
-            GrappleCeilingStyle = AddLineStyle("grapple ceil style", ELineStyle.SOLID);
+            GrappleCeilingStyle = AddEnum("grapple ceil style", ELineStyle.SOLID,
+                Enum.GetValues(typeof(ELineStyle)).Cast<ELineStyle>().Select(lineStyle => lineStyle.Label()).ToArray());
             WallColor = AddColor("wall color", Color.White);
             WallWidth = AddInt("wall width", 3, 0, 16);
-            WallStyle = AddLineStyle("wall style", ELineStyle.DOTTED);
+            WallStyle = AddEnum("wall style", ELineStyle.DOTTED,
+                Enum.GetValues(typeof(ELineStyle)).Cast<ELineStyle>().Select(lineStyle => lineStyle.Label()).ToArray());
             StairsReplaceWithSlopes = AddBool("stairs replace with slopes", false);
             RemoveCheckered = AddBool("remove checkered", false);
             SlopeAntiAliasing = AddBool("slope anti aliasing", false);
@@ -285,7 +288,7 @@ namespace Velo
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    if (x >= 16 - WallWidth.Value && TileUtil.FromLineStyle(WallStyle.Value, y))
+                    if (x >= 16 - WallWidth.Value && TileUtil.FromLineStyle((ELineStyle)WallStyle.Value, y))
                         data[i] = WallColor.Value;
                     else
                         data[i] = FillColor.Value;
@@ -300,7 +303,7 @@ namespace Velo
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    if (x < WallWidth.Value && TileUtil.FromLineStyle(WallStyle.Value, y))
+                    if (x < WallWidth.Value && TileUtil.FromLineStyle((ELineStyle)WallStyle.Value, y))
                         data[i] = WallColor.Value;
                     else
                         data[i] = FillColor.Value;
@@ -315,7 +318,7 @@ namespace Velo
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    if (y >= 16 - GrappleCeilingWidth.Value && TileUtil.FromLineStyle(GrappleCeilingStyle.Value, x))
+                    if (y >= 16 - GrappleCeilingWidth.Value && TileUtil.FromLineStyle((ELineStyle)GrappleCeilingStyle.Value, x))
                         data[i] = GrappleCeilingColor.Value;
                     else
                         data[i] = FillColor.Value;

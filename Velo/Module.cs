@@ -2,6 +2,7 @@
 using CEngine.Graphics.Library;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 namespace Velo
@@ -10,6 +11,11 @@ namespace Velo
     {
         private readonly List<Module> modules = new List<Module>();
         private readonly Dictionary<string, Module> modulesLookup = new Dictionary<string, Module>();
+        private readonly Dictionary<int, Setting> idToSetting = new Dictionary<int, Setting>();
+        private int nextId = 0;
+        private readonly List<Action<Setting>> modifiedListeners = new List<Action<Setting>>();
+
+        public List<Module> Modules { get { return modules; } }
 
         private ModuleManager()
         {
@@ -22,6 +28,25 @@ namespace Velo
         {
             modules.Add(module);
             modulesLookup.Add(module.Name, module);
+        }
+
+        public int Add(Setting setting)
+        {
+            idToSetting.Add(nextId, setting);
+            return nextId++;
+        }
+
+        public void AddModifiedListener(Action<Setting> listener)
+        {
+            modifiedListeners.Add(listener);
+        }
+
+        public void ReportModified(Setting setting)
+        {
+            foreach (var listener in modifiedListeners)
+            {
+                listener(setting);
+            }
         }
 
         public void PreUpdate()
@@ -55,6 +80,13 @@ namespace Velo
                 AddArray("Modules", modules.Where(module => module.HasSettings()).Select(module => module.ToJson(valueOnly)).ToList());
         }
 
+        public Module Get(string name)
+        {
+            if (modulesLookup.ContainsKey(name))
+                return modulesLookup[name];
+            return null;
+        }
+
         public void CommitChanges(JsonElement elem)
         {
             if (!(elem is JsonObject))
@@ -70,31 +102,9 @@ namespace Velo
                 if (!(jsonId is JsonDecimal))
                     continue;
                 int id = jsonId.ToInt();
-                if (Setting.IdToSetting.ContainsKey(id))
+                if (idToSetting.ContainsKey(id))
                 {
-                    Setting.IdToSetting[id].FromJson(item);
-                }
-            }
-        }
-
-        public void LoadSettings(JsonElement elem)
-        {
-            if (!(elem is JsonObject))
-                return;
-            JsonElement modules = ((JsonObject)elem).Get("Modules");
-            if (!(modules is JsonArray))
-                return;
-            foreach (JsonElement module in ((JsonArray)modules).value)
-            {
-                if (!(module is JsonObject)) 
-                    continue;
-                JsonElement nameJson = ((JsonObject)module).Get("Name");
-                if (!(nameJson is JsonString))
-                    continue;
-                string name = FromJsonExt.ToString(nameJson);
-                if (modulesLookup.ContainsKey(name))
-                {
-                    modulesLookup[name].LoadSettings(module);
+                    idToSetting[id].FromJson(item);
                 }
             }
         }
@@ -103,15 +113,18 @@ namespace Velo
     public abstract class Module
     {
         public string Name { get; }
+        public string Tooltip { get; set; }
 
         private readonly List<Setting> settings;
         private readonly Dictionary<string, Setting> settingsLookup;
 
         private Category currentCategory;
+        protected Category CurrentCategory { get { return currentCategory; } }
 
         public Module(string name)
         {
             Name = name;
+            Tooltip = name;
             settings = new List<Setting>();
             settingsLookup = new Dictionary<string, Setting>();
             currentCategory = null;
@@ -133,7 +146,7 @@ namespace Velo
 
         protected void NewCategory(string name)
         {
-            currentCategory = new Category(name);
+            currentCategory = new Category(this, name);
             settings.Add(currentCategory);
             settingsLookup.Add(name, currentCategory);
         }
@@ -150,77 +163,72 @@ namespace Velo
 
         protected IntSetting AddInt(string name, int defaultValue, int min, int max)
         {
-            return (IntSetting)Add(new IntSetting(name, defaultValue, min, max));
+            return (IntSetting)Add(new IntSetting(this, name, defaultValue, min, max));
         }
 
         protected FloatSetting AddFloat(string name, float defaultValue, float min, float max)
         {
-            return (FloatSetting)Add(new FloatSetting(name, defaultValue, min, max));
+            return (FloatSetting)Add(new FloatSetting(this, name, defaultValue, min, max));
         }
 
         protected BoolSetting AddBool(string name, bool defaultValue)
         {
-            return (BoolSetting)Add(new BoolSetting(name, defaultValue));
+            return (BoolSetting)Add(new BoolSetting(this, name, defaultValue));
         }
 
         protected ToggleSetting AddToggle(string name, Toggle defaultValue)
         {
-            return (ToggleSetting)Add(new ToggleSetting(name, defaultValue));
+            return (ToggleSetting)Add(new ToggleSetting(this, name, defaultValue));
         }
 
         protected HotkeySetting AddHotkey(string name, ushort defaultValue)
         {
-            return (HotkeySetting)Add(new HotkeySetting(name, defaultValue));
+            return (HotkeySetting)Add(new HotkeySetting(this, name, defaultValue));
         }
 
         protected VectorSetting AddVector(string name, Vector2 defaultValue, Vector2 min, Vector2 max)
         {
-            return (VectorSetting)Add(new VectorSetting(name, defaultValue, min, max));
+            return (VectorSetting)Add(new VectorSetting(this, name, defaultValue, min, max));
         }
 
         protected StringSetting AddString(string name, string defaultValue)
         {
-            return (StringSetting)Add(new StringSetting(name, defaultValue));
+            return (StringSetting)Add(new StringSetting(this, name, defaultValue));
         }
 
         protected RoundingMultiplierSetting AddRoundingMultiplier(string name, RoundingMultiplier defaultValue)
         {
-            return (RoundingMultiplierSetting)Add(new RoundingMultiplierSetting(name, defaultValue));
+            return (RoundingMultiplierSetting)Add(new RoundingMultiplierSetting(this, name, defaultValue));
         }
 
         protected HitboxListSetting AddHitboxList(string name, bool[] defaultValue)
         {
-            return (HitboxListSetting)Add(new HitboxListSetting(name, defaultValue));
+            return (HitboxListSetting)Add(new HitboxListSetting(this, name, defaultValue));
         }
 
         protected StringListSetting AddStringList(string name, string[] defaultValue)
         {
-            return (StringListSetting)Add(new StringListSetting(name, defaultValue));
+            return (StringListSetting)Add(new StringListSetting(this, name, defaultValue));
         }
 
-        protected OrientationSetting AddOrientation(string name, EOrientation defaultValue)
+        protected EnumSetting<E> AddEnum<E>(string name, E defaultValue, string[] labels) where E : struct, Enum
         {
-            return (OrientationSetting)Add(new OrientationSetting(name, defaultValue));
-        }
-
-        protected LineStyleSetting AddLineStyle(string name, ELineStyle defaultValue)
-        {
-            return (LineStyleSetting)Add(new LineStyleSetting(name, defaultValue));
+            return (EnumSetting<E>)Add(new EnumSetting<E>(this, name, defaultValue, labels));
         }
 
         protected ColorSetting AddColor(string name, Color defaultValue, bool enableAlpha = true)
         {
-            return (ColorSetting)Add(new ColorSetting(name, defaultValue, enableAlpha));
+            return (ColorSetting)Add(new ColorSetting(this, name, defaultValue, enableAlpha));
         }
 
         protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue, bool enableAlpha = true)
         {
-            return (ColorTransitionSetting)Add(new ColorTransitionSetting(name, defaultValue, enableAlpha));
+            return (ColorTransitionSetting)Add(new ColorTransitionSetting(this, name, defaultValue, enableAlpha));
         }
 
         protected InputBoxSetting AddInputBox(string name, InputBox defaultValue)
         {
-            return (InputBoxSetting)Add(new InputBoxSetting(name, defaultValue));
+            return (InputBoxSetting)Add(new InputBoxSetting(this, name, defaultValue));
         }
 
         public int SettingsCount()
@@ -230,8 +238,9 @@ namespace Velo
 
         public JsonElement ToJson(bool valueOnly = false)
         {
-            return new JsonObject(2).
+            return new JsonObject(3).
                 AddString("Name", Name).
+                AddStringIf("Tooltip", Tooltip, !valueOnly).
                 AddArray("Settings", settings.Select(setting => setting.ToJson(valueOnly)).ToList());
         }
 
@@ -255,8 +264,6 @@ namespace Velo
             }
         }
 
-        public virtual void Init() { }
-
         public virtual void PreUpdate() { }
         public virtual void PostUpdate() { }
         public virtual void PreRender() { }
@@ -279,7 +286,6 @@ namespace Velo
             if (Keyboard.Pressed[Enabled.Value.Hotkey])
             {
                 Enabled.ToggleEnabled();
-                Enabled.modified = true;
             }
         }
     }
@@ -453,7 +459,7 @@ namespace Velo
     public abstract class StatDisplayModule : DisplayModule
     {
         public FloatSetting Scale;
-        public OrientationSetting Orientation;
+        public EnumSetting<EOrientation> Orientation;
         public VectorSetting Offset;
         public StringSetting Font;
         public IntSetting FontSize;
@@ -476,7 +482,8 @@ namespace Velo
         {
             NewCategory("style");
             Scale = AddFloat("scale", 1.5f, 0.0f, 10.0f);
-            Orientation = AddOrientation("orientation", EOrientation.PLAYER);
+            Orientation = AddEnum("orientation", EOrientation.PLAYER, 
+                Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
             Offset = AddVector("offset", Vector2.Zero, new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             Font = AddString("font", "UI\\Font\\Souses.ttf");
             FontSize = AddInt("font size", 16, 1, 50);
@@ -525,11 +532,17 @@ namespace Velo
 
             Update();
 
+            if (Orientation.Value == EOrientation.PLAYER && Velo.MainPlayer == null)
+            {
+                drawComp.IsVisible = false;
+                return;
+            }
+            
             drawComp.color_replace = false;
             drawComp.IsVisible = true;
             drawComp.Font = font;
             drawComp.Align = 0.5f * Vector2.One;
-            drawComp.Offset = Offset.Value;
+            //drawComp.Offset = Offset.Value;
             drawComp.HasDropShadow = true;
             drawComp.DropShadowColor = Microsoft.Xna.Framework.Color.Black;
             drawComp.DropShadowOffset = Vector2.One;
@@ -547,50 +560,8 @@ namespace Velo
             float width = drawComp.Bounds.Width;
             float height = drawComp.Bounds.Height;
 
-            Vector2 origin = Vector2.Zero;
+            drawComp.Position = Offset.Value + Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
 
-            if (Orientation.Value == EOrientation.PLAYER && Velo.MainPlayer != null)
-                origin = Velo.MainPlayer.actor.Position;
-
-            switch (Orientation.Value)
-            {
-                case EOrientation.TOP_LEFT:
-                case EOrientation.LEFT:
-                case EOrientation.BOTTOM_LEFT:
-                    origin.X = 0.0f;
-                    break;
-                case EOrientation.TOP_RIGHT:
-                case EOrientation.RIGHT:
-                case EOrientation.BOTTOM_RIGHT:
-                    origin.X = screenWidth - width;
-                    break;
-                case EOrientation.TOP:
-                case EOrientation.CENTER:
-                case EOrientation.BOTTOM:
-                    origin.X = (screenWidth - width) / 2.0f;
-                    break;
-            }
-
-            switch (Orientation.Value)
-            {
-                case EOrientation.TOP_LEFT:
-                case EOrientation.TOP:
-                case EOrientation.TOP_RIGHT:
-                    origin.Y = 0.0f;
-                    break;
-                case EOrientation.BOTTOM_LEFT:
-                case EOrientation.BOTTOM:
-                case EOrientation.BOTTOM_RIGHT:
-                    origin.Y = screenHeight - height;
-                    break;
-                case EOrientation.LEFT:
-                case EOrientation.CENTER:
-                case EOrientation.RIGHT:
-                    origin.Y = (screenHeight - height) / 2.0f;
-                    break;
-            }
-
-            drawComp.Position = origin;
             drawComp.UpdateBounds();
         }
     }

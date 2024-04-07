@@ -20,11 +20,31 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F5));
 
+            NewCategory("general");
             SlowSpeed = AddVector("slow speed", new Vector2(100, 200), new Vector2(0, 0), new Vector2(2000, 2000));
             FastSpeed = AddVector("fast speed", new Vector2(1250, 1250), new Vector2(0, 0), new Vector2(2000, 2000));
             SlowSpeedBorderOffset = AddVector("slow border off", new Vector2(-100, -50), new Vector2(-500, -500), new Vector2(500, 500));
             FastSpeedBorderOffset = AddVector("fast border off", new Vector2(100, 50), new Vector2(-500, -500), new Vector2(500, 500));
             MaxAcceleration = AddVector("max acc", new Vector2(3000, 6000), new Vector2(0, 0), new Vector2(20000, 20000));
+
+            CurrentCategory.Tooltip =
+                "The blindrun simulator has two different speed settings, slow and fast. " +
+                "The camera's move speed depends on the player's current position on screen. " +
+                "If they're on the screen's center position, the camera will not move at all, " +
+                "if they're on the slow border, the camera will move with slow speed, " +
+                "and if they're on the fast border, the camera will move with fast speed. " +
+                "For any position inbetween, the speed will be linearly interpolated. " +
+                "Beyond the fast speed border, the camera will just move with fast speed. " +
+                "From the screen's center, its border is 640 units away horizontally and 360 units vertically. " +
+                "You can specify the slow and fast speed border relative to the screen's border by specifying an offset. " +
+                "The speed and offset settings are divided into x and y.";
+
+            SlowSpeedBorderOffset.Tooltip = 
+                "offset from the screen's border for when to move the camera with slow speed";
+            FastSpeedBorderOffset.Tooltip =
+                "offset from the screen's border for when to move the camera with fast speed";
+            MaxAcceleration.Tooltip =
+                "camera's maximum acceleration (provide a lower maximum for more jerk-free movement)";
         }
 
         public static BlindrunSimulator Instance = new BlindrunSimulator();
