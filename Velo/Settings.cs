@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,20 +8,31 @@ namespace Velo
 {
     public abstract class Setting
     {
-        public Module Module { get; }
-        public string Name { get; }
-        public string Tooltip { get; set; }
+        private readonly Module module;
+        public Module Module { get { return module; } }
+        private readonly string name;
+        public string Name { get { return name; } }
+        private string tooltip;
+        public string Tooltip 
+        { 
+            get { return tooltip; }
+            set
+            {
+                tooltip = Util.LineBreaks(value, 80);
+            }
+        }
 
         protected bool modified;
-        public int Id { get; }
+        private readonly int id;
+        public int Id { get { return id; } }
 
         public Setting(Module module, string name)
         {
-            Module = module;
-            Name = name;
+            this.module = module;
+            this.name = name;
             Tooltip = name;
             modified = false;
-            Id = ModuleManager.Instance.Add(this);
+            id = ModuleManager.Instance.Add(this);
         }
 
         public bool Modified()
@@ -86,7 +98,9 @@ namespace Velo
                     continue;
                 string name = FromJsonExt.ToString(nameJson);
                 Setting match = Children.Find(child => child.Name == name);
-                match?.FromJson(setting);
+                if (match == null)
+                    continue;
+                match.FromJson(setting);
             }
         }
     }
@@ -152,8 +166,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToInt());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToInt()));
         }
     }
 
@@ -183,8 +196,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToFloat());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToFloat()));
         }
     }
 
@@ -206,8 +218,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToBool());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToBool()));
         }
     }
 
@@ -217,9 +228,24 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public void ToggleEnabled()
+        public void ToggleState()
         {
             Value = new Toggle(!Value.Enabled, Value.Hotkey);
+        }
+
+        public void Enable()
+        {
+            Value = new Toggle(true, Value.Hotkey);
+        }
+
+        public void Disable()
+        {
+            Value = new Toggle(false, Value.Hotkey);
+        }
+
+        public override bool IsDefault()
+        {
+            return Value.Enabled == DefaultValue.Enabled;
         }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
@@ -234,8 +260,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToToggle());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToToggle()));
         }
     }
 
@@ -257,8 +282,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = (ushort)value.ToInt());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = (ushort)value.ToInt()));
+
         }
     }
 
@@ -288,8 +313,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToVector2());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToVector2()));
         }
     }
 
@@ -311,8 +335,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = FromJsonExt.ToString(value));
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = FromJsonExt.ToString(value)));
+
         }
     }
 
@@ -334,43 +358,26 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToRoundingMultiplier());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToRoundingMultiplier()));
         }
     }
 
-    public class HitboxListSetting : Setting<bool[]>
+    public class BoolListSetting : Setting<bool[]>
     {
-        public HitboxListSetting(Module module, string name, bool[] defaultValue) :
+        private readonly string[] labels;
+
+        public BoolListSetting(Module module, string name, string[] labels, bool[] defaultValue) :
             base(module, name, defaultValue)
-        { }
+        {
+            this.labels = labels;
+        }
 
         public override JsonElement ToJson(bool valueOnly, bool useId = false)
         {
             return ((JsonObject)base.ToJson(valueOnly, useId)).
                 AddDecimalIf("Type", 8, !valueOnly).
                 AddElementIf("Default", DefaultValue.ToJson(), !valueOnly).
-                AddArrayIf("Identifiers", new List<JsonElement>
-                    {
-                        new JsonString("player"),
-                        new JsonString("hook"),
-                        new JsonString("fall tile"),
-                        new JsonString("saw / spike"),
-                        new JsonString("obstacle"),
-                        new JsonString("boost section"),
-                        new JsonString("super boost"),
-                        new JsonString("trigger"),
-                        new JsonString("item box"),
-                        new JsonString("dropped obstacle"),
-                        new JsonString("gate"),
-                        new JsonString("rocket"),
-                        new JsonString("bomb"),
-                        new JsonString("straight rocket"),
-                        new JsonString("fireball"),
-                        new JsonString("boosta coke"),
-                        new JsonString("bouncepad"),
-                        new JsonString("freeze ray")
-                    }, !valueOnly).
+                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), !valueOnly).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -378,8 +385,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToBoolArr());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToBoolArr()));
         }
     }
 
@@ -401,12 +407,11 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToStringArr());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToStringArr()));
         }
     }
 
-    public class EnumSetting<E> : Setting<E> where E : struct, Enum
+    public class EnumSetting<E> : Setting<E> where E : struct
     {
         private readonly string[] labels;
 
@@ -429,8 +434,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = (E)(object)value.ToInt());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = (E)(object)value.ToInt()));
         }
     }
 
@@ -457,8 +461,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToColor());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToColor()));
         }
     }
 
@@ -485,8 +488,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToColorTransition());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToColorTransition()));
         }
     }
 
@@ -508,8 +510,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            if (elem is JsonObject setting)
-                setting.DoWithValue("Value", value => Value = value.ToInputBox());
+            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToInputBox()));
         }
     }
 }

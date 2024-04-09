@@ -33,8 +33,10 @@ namespace Velo
 
         public override bool Equals(object obj)
         {
-            return obj is Toggle toggle &&
-                   enabled == toggle.enabled &&
+            if (!(obj is Toggle))
+                return false;
+            Toggle toggle = obj as Toggle;
+            return enabled == toggle.enabled &&
                    Enabled == toggle.Enabled &&
                    Hotkey == toggle.Hotkey;
         }
@@ -67,8 +69,10 @@ namespace Velo
 
         public override bool Equals(object obj)
         {
-            return obj is RoundingMultiplier multiplier &&
-                   ValueStr == multiplier.ValueStr;
+            if (!(obj is RoundingMultiplier))
+                return false;
+            RoundingMultiplier roundingMultiplier = obj as RoundingMultiplier;
+            return ValueStr == roundingMultiplier.ValueStr;
         }
 
         public override int GetHashCode()
@@ -114,26 +118,76 @@ namespace Velo
 
             long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
 
-            milliseconds = (milliseconds + offset) % period;
+            return Get(milliseconds, true);
+        }
 
-            float index = milliseconds / (float)period * colors.Length;
+        public Color Get(long x, bool repeat)
+        {
+            if (colors.Length == 0)
+                return Color.White;
+
+            if (colors.Length == 1)
+                return Util.ApplyAlpha(colors[0]);
+
+            double index = repeat ?
+                ((x + offset) % period) / (double)period * colors.Length :
+                Math.Min(Math.Max(Math.Abs(x + offset), 0), period) / (double)period * (colors.Length - 1);
 
             int index1 = (int)index;
-            int index2 = index1 + 1 < colors.Length ? index1 + 1 : 0;
+            int index2 = index1 + 1;
+            
+            if (index2 >= colors.Length)
+            {
+                if (repeat)
+                    index2 = 0;
+                else
+                    index2 = colors.Length - 1;
+            }
 
             if (!discrete)
-                return Util.ApplyAlpha(Color.Lerp(colors[index1], colors[index2], index - index1));
+                return Util.ApplyAlpha(Color.Lerp(colors[index1], colors[index2], (float)(index - index1)));
+            else
+                return Util.ApplyAlpha(colors[index1]);
+        }
+
+        public Color Get(double x, bool repeat)
+        {
+            if (colors.Length == 0)
+                return Color.White;
+
+            if (colors.Length == 1)
+                return Util.ApplyAlpha(colors[0]);
+
+            double index = repeat ?
+                ((x + offset) % period) / period * colors.Length :
+                Math.Min(Math.Max(Math.Abs(x + offset), 0), period) / period * (colors.Length - 1);
+
+            int index1 = (int)index;
+            int index2 = index1 + 1;
+
+            if (index2 >= colors.Length)
+            {
+                if (repeat)
+                    index2 = 0;
+                else
+                    index2 = colors.Length - 1;
+            }
+
+            if (!discrete)
+                return Util.ApplyAlpha(Color.Lerp(colors[index1], colors[index2], (float)(index - index1)));
             else
                 return Util.ApplyAlpha(colors[index1]);
         }
 
         public override bool Equals(object obj)
         {
-            return obj is ColorTransition transition &&
-                   period == transition.period &&
-                   offset == transition.offset &&
-                   discrete == transition.discrete &&
-                   colors.SequenceEqual(transition.colors);
+            if (!(obj is ColorTransition))
+                return false;
+            ColorTransition colorTransition = obj as ColorTransition;
+            return period == colorTransition.period &&
+                   offset == colorTransition.offset &&
+                   discrete == colorTransition.discrete &&
+                   colors.SequenceEqual(colorTransition.colors);
         }
 
         public override int GetHashCode()
@@ -186,10 +240,12 @@ namespace Velo
 
         public override bool Equals(object obj)
         {
-            return obj is InputBox box &&
-                   text == box.text &&
-                   position.Equals(box.position) &&
-                   size.Equals(box.size);
+            if (!(obj is InputBox))
+                return false;
+            InputBox inputBox = obj as InputBox;
+            return text == inputBox.text &&
+                   position.Equals(inputBox.position) &&
+                   size.Equals(inputBox.size);
         }
 
         public override int GetHashCode()
@@ -199,154 +255,6 @@ namespace Velo
             hashCode = hashCode * -1521134295 + position.GetHashCode();
             hashCode = hashCode * -1521134295 + size.GetHashCode();
             return hashCode;
-        }
-    }
-
-    public enum EOrientation
-    {
-        PLAYER, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
-    }
-
-    public enum EEvent
-    {
-        DEFAULT, NONE, SRENNUR_DEEPS, SCREAM_RUNNERS, WINTER
-    }
-
-    public enum ELineStyle
-    {
-        SOLID, DASHED, DOTTED
-    }
-
-    public static class EnumExt
-    {
-        public static string Label(this EOrientation orientation)
-        {
-            switch (orientation)
-            {
-                case EOrientation.PLAYER:
-                    return "player";
-                case EOrientation.TOP_LEFT:
-                    return "top left";
-                case EOrientation.TOP_RIGHT:
-                    return "top right";
-                case EOrientation.BOTTOM_LEFT:
-                    return "bottom left";
-                case EOrientation.BOTTOM_RIGHT:
-                    return "bottom right";
-                case EOrientation.TOP:
-                    return "top";
-                case EOrientation.BOTTOM:
-                    return "bottom";
-                case EOrientation.LEFT:
-                    return "left";
-                case EOrientation.RIGHT:
-                    return "right";
-                case EOrientation.CENTER:
-                    return "center";
-                default:
-                    return "";
-            }
-        }
-
-        public static Vector2 GetOrigin(this EOrientation orientation, float width, float height, float screenWidth, float screenHeight, Vector2 playerPos)
-        {
-            if (orientation == EOrientation.PLAYER)
-                return playerPos;
-
-            Vector2 origin = Vector2.Zero;
-
-            switch (orientation)
-            {
-                case EOrientation.TOP_LEFT:
-                case EOrientation.LEFT:
-                case EOrientation.BOTTOM_LEFT:
-                    origin.X = 0.0f;
-                    break;
-                case EOrientation.TOP_RIGHT:
-                case EOrientation.RIGHT:
-                case EOrientation.BOTTOM_RIGHT:
-                    origin.X = screenWidth - width;
-                    break;
-                case EOrientation.TOP:
-                case EOrientation.CENTER:
-                case EOrientation.BOTTOM:
-                    origin.X = (screenWidth - width) / 2.0f;
-                    break;
-            }
-
-            switch (orientation)
-            {
-                case EOrientation.TOP_LEFT:
-                case EOrientation.TOP:
-                case EOrientation.TOP_RIGHT:
-                    origin.Y = 0.0f;
-                    break;
-                case EOrientation.BOTTOM_LEFT:
-                case EOrientation.BOTTOM:
-                case EOrientation.BOTTOM_RIGHT:
-                    origin.Y = screenHeight - height;
-                    break;
-                case EOrientation.LEFT:
-                case EOrientation.CENTER:
-                case EOrientation.RIGHT:
-                    origin.Y = (screenHeight - height) / 2.0f;
-                    break;
-            }
-
-            return origin;
-        }
-
-        public static string Label(this EEvent _event)
-        {
-            switch (_event)
-            {
-                case EEvent.DEFAULT:
-                    return "default";
-                case EEvent.NONE:
-                    return "none";
-                case EEvent.SRENNUR_DEEPS:
-                    return "srennuRdeepS";
-                case EEvent.SCREAM_RUNNERS:
-                    return "ScreamRunners";
-                case EEvent.WINTER:
-                    return "winter";
-                default:
-                    return "";
-            }
-        }
-
-        public static int Id(this EEvent _event)
-        {
-            switch (_event)
-            {
-                case EEvent.DEFAULT:
-                    return 255;
-                case EEvent.NONE:
-                    return 0;
-                case EEvent.SRENNUR_DEEPS:
-                    return 2;
-                case EEvent.SCREAM_RUNNERS:
-                    return 11;
-                case EEvent.WINTER:
-                    return 14;
-                default:
-                    return 255;
-            }
-        }
-
-        public static string Label(this ELineStyle lineStyle)
-        {
-            switch (lineStyle)
-            {
-                case ELineStyle.SOLID:
-                    return "solid";
-                case ELineStyle.DASHED:
-                    return "dashed";
-                case ELineStyle.DOTTED:
-                    return "dotted";
-                default:
-                    return "";
-            }
         }
     }
 
@@ -409,37 +317,39 @@ namespace Velo
         public static int ToInt(this JsonElement elem)
         {
             if (!(elem is JsonDecimal))
-                return default;
-            int.TryParse(((JsonDecimal)elem).value, out int value);
+                return default(int);
+            int value;
+            int.TryParse((elem as JsonDecimal).value, out value);
             return value;
         }
 
         public static float ToFloat(this JsonElement elem)
         {
             if (!(elem is JsonDecimal))
-                return default;
-            float.TryParse(((JsonDecimal)elem).value, out float value);
+                return default(float);
+            float value;
+            float.TryParse((elem as JsonDecimal).value, out value);
             return value;
         }
 
         public static bool ToBool(this JsonElement elem)
         {
             if (!(elem is JsonBoolean))
-                return default;
-            return ((JsonBoolean)elem).value;
+                return default(bool);
+            return (elem as JsonBoolean).value;
         }
 
         public static string ToString(this JsonElement elem)
         {
             if (!(elem is JsonString))
                 return "";
-            return ((JsonString)elem).value;
+            return (elem as JsonString).value;
         }
 
         public static Vector2 ToVector2(this JsonElement elem)
         {
             if (!(elem is JsonObject))
-                return default;
+                return default(Vector2);
             JsonObject jsonObject = (JsonObject)elem;
             return new Vector2(
                 jsonObject.DoWithValue("X", value => value.ToFloat()),
@@ -450,7 +360,7 @@ namespace Velo
         public static Color ToColor(this JsonElement elem)
         {
             if (!(elem is JsonObject))
-                return default;
+                return default(Color);
             JsonObject jsonObject = (JsonObject)elem;
             return new Color(
                 jsonObject.DoWithValue("R", value => value.ToInt()),
@@ -515,7 +425,7 @@ namespace Velo
         public static InputBox ToInputBox(this JsonElement elem)
         {
             if (!(elem is JsonObject))
-                return default;
+                return new InputBox();
             JsonObject jsonObject = (JsonObject)elem;
             return new InputBox(
                 jsonObject.DoWithValue("Label", value => ToString(value)),

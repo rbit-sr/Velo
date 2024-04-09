@@ -5,21 +5,60 @@ namespace Velo
 {
     public class Performance : ToggleModule
     {
+        public IntSetting Framelimit;
+        public IntSetting FramelimitMethod;
         public BoolSetting DisableBubbles;
         public BoolSetting DisableSteamInputApi;
         public IntSetting EnableControllerId;
         public BoolSetting LimitFramerateAfterRender;
-        public BoolSetting PollNetworkPacketsInSeparateThread;
+        public BoolSetting MultithreadedNetwork;
 
         private Performance() : base("Performance")
         {
             Enabled.SetValueAndDefault(new Toggle(true));
 
+            NewCategory("framerate");
+            Framelimit = AddInt("framelimit", -1, -1, 2500);
+            FramelimitMethod = AddInt("framelimit method", -1, -1, 3);
+            LimitFramerateAfterRender = AddBool("limit framerate after render", false);
+
+            Framelimit.Tooltip =
+                "framelimit, as in the +framelimit launch argument (-1 for default, below 30 and above 300 cannot be used in multiplayer.)";
+            FramelimitMethod.Tooltip =
+                "framelimit method, as in the +framelimitmethod launch argument:\n" +
+                "-1: default\n" +
+                "0: calls Thread.Yield() repeatedly\n" +
+                "1: calls Thread.Sleep(0) repeatedly\n" +
+                "2: calls nothing, basically a spin wait\n" +
+                "3: calls Thread.Sleep(1) repeatedly";
+            LimitFramerateAfterRender.Tooltip =
+                "Makes the game render its current frame before waiting to limit the framerate. " +
+                "Might reduce input lag.";
+
+            NewCategory("particles");
             DisableBubbles = AddBool("disable bubbles", false);
+
+            DisableBubbles.Tooltip =
+                "Disabling bubbles gives a good performance boost on maps like SpeedCity Nights. " +
+                "The game does a collision detection for each bubble on every frame.";
+
+            NewCategory("input");
             DisableSteamInputApi = AddBool("disable Steam input API", false);
             EnableControllerId = AddInt("enable controller ID", -1, -2, 16);
-            LimitFramerateAfterRender = AddBool("limit framerate after render", false);
-            PollNetworkPacketsInSeparateThread = AddBool("multithreaded network", true);
+
+            DisableSteamInputApi.Tooltip =
+                "Disables the Steam input API. Might break controller inputs.";
+            EnableControllerId.Tooltip =
+                "Enables only the specified controller ID. " +
+                "Put -1 to enable all and -2 to enable none (-2 for best performance). " +
+                "Might break controller inputs.";
+
+            NewCategory("other");
+            MultithreadedNetwork = AddBool("multithreaded network", true);
+            
+            MultithreadedNetwork.Tooltip =
+                "[WARNING: Experimental] Starts a new thread to poll network packets. " +
+                "If you experience more crashes than usual, then disable this setting again.";
         }
 
         public static Performance Instance = new Performance();
@@ -44,7 +83,7 @@ namespace Velo
         {
             if (
                 !(Enabled.Value.Enabled &&
-                PollNetworkPacketsInSeparateThread.Value)
+                MultithreadedNetwork.Value)
                 )
             {
                 if (pollers.Count > 0)
@@ -54,10 +93,12 @@ namespace Velo
                         pollers.Clear();
                     }
                 }
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, channel))
+                uint num;
+                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, channel))
                 {
                     NetIncomingMessage msg = pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, channel);
+                    Steamworks.CSteamID identifier;
+                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, channel);
                     msg.LengthBits = (int)(num * 8u);
                     return new Velo.Message(msg, identifier);
                 }
@@ -96,7 +137,7 @@ namespace Velo
         public void RecyclePacket(NetIncomingMessage message, MessagePools pools)
         {
             if (!(Enabled.Value.Enabled &&
-                PollNetworkPacketsInSeparateThread.Value)
+                MultithreadedNetwork.Value)
                 )
             {
                 pools.Recycle(message);
@@ -114,17 +155,19 @@ namespace Velo
             MessagePoller poller = (MessagePoller)pollerObj;
             while (
                 Enabled.Value.Enabled &&
-                PollNetworkPacketsInSeparateThread.Value
+                MultithreadedNetwork.Value
                 )
             {
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, poller.channel))
+                uint num;
+                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, poller.channel))
                 {
                     NetIncomingMessage msg;
                     lock (poller.pools)
                     {
                         msg = poller.pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
                     }
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, poller.channel);
+                    Steamworks.CSteamID identifier;
+                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, poller.channel);
                     msg.LengthBits = (int)(num * 8u);
                     lock (poller.messages)
                     {

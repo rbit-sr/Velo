@@ -6,8 +6,9 @@ namespace Velo
 {
     public class RopeIndicators : DisplayModule
     {
-        public IntSetting Thickness;
         public IntSetting MaxCount;
+        public IntSetting Thickness;
+        public BoolSetting AntiAliasing;
         public ColorTransitionSetting Color;
 
         public CLineDrawComponent drawComp;
@@ -18,9 +19,16 @@ namespace Velo
 
         private RopeIndicators() : base("Rope Release Indicators", true)
         {
-            Thickness = AddInt("thickness", 3, 0, 10);
+            NewCategory("general");
             MaxCount = AddInt("max count", 50, 1, 500);
+
+            NewCategory("style");
+            Thickness = AddInt("thickness", 3, 0, 10);
+            AntiAliasing = AddBool("anti aliasing", true);
             Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+
+            AntiAliasing.Tooltip =
+                "Draws another slightly thicker line on top with half transparency.";
         }
 
         public static RopeIndicators Instance = new RopeIndicators();
@@ -41,6 +49,9 @@ namespace Velo
         {
             if (Velo.MainPlayer == null)
                 return;
+
+            if (Enabled.Modified())
+                drawComp.lines.Clear();
 
             if (!Velo.MainPlayer.grapple.connected && wasConnected && connectedFrames >= 2)
             {
@@ -68,16 +79,17 @@ namespace Velo
 
             foreach (CLine line in drawComp.Lines)
             {
-                line.color.R = color.R;
-                line.color.G = color.G;
-                line.color.B = color.B;
+                line.color = color;
 
                 if (!antiAlias)
                     line.thickness = Thickness.Value;
                 else
                 {
-                    line.thickness = Thickness.Value + 2;
-                    line.color.A = 128;
+                    line.thickness = Thickness.Value + 1;
+                    if (AntiAliasing.Value)
+                        line.color *= 0.5f;
+                    else
+                        line.color = new Color(0, 0, 0, 0);
                 }
 
                 antiAlias = !antiAlias;

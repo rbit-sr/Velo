@@ -6,35 +6,35 @@ namespace Velo
 {
     public class AngleDisplay : StatDisplayModule
     {
-        public FloatSetting BadAngle;
-        public ColorTransitionSetting GoodColor;
-        public ColorTransitionSetting BadColor;
+        public enum EVariable
+        {
+            GLOBAL_TIME, ANGLE
+        }
+
+        private static readonly string[] VariableLabels = new[] { "global time", "angle" };
+
+        public EnumSetting<EVariable> Variable;
+        public ColorTransitionSetting Color;
 
         public Vector2 positionPrev = Vector2.Zero; // player center position of previous frame
         public bool wasConnected = false;
         public int connectedFrames = 0;
 
         private string text = "";
-        private Color color = Microsoft.Xna.Framework.Color.White;
+        private double angle = 0.0f;
 
         private AngleDisplay() : base("Angle Display", true)
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F6));
 
             NewCategory("color");
-            BadAngle = AddFloat("bad angle offset", 20.0f, 0.0f, 180.0f);
-            GoodColor = AddColorTransition("good color", new ColorTransition(new Color(0, 255, 0)));
-            BadColor = AddColorTransition("bad color", new ColorTransition(new Color(255, 0, 0)));
+            Variable = AddEnum("variable", EVariable.ANGLE, VariableLabels);
+            Color = AddColorTransition("color", new ColorTransition(50, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
 
-            CurrentCategory.Tooltip =
-                "A good angle is always 90 and a bad angle is specified as 90 +/- bad angle offset. " +
-                "The colors are then calculated as a linear interpolation between the specified good and bad colors.";
-            BadAngle.Tooltip =
-                "offset for what is considered a bad angle (offset from 90 degree)";
-            GoodColor.Tooltip =
-                "good angle color (good angle is 90 degree)";
-            BadColor.Tooltip =
-                "bad angle color (bad angle is 90 +/- bad angle offset)";
+            Variable.Tooltip =
+                "Set the variable to which the color transition should be bound to:\n" +
+                "-global time: global time in milliseconds\n" +
+                "-angle: last grapple release angle in degrees";
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -30.0f));
@@ -48,7 +48,6 @@ namespace Velo
             if (Velo.MainPlayer == null)
                 return;
 
-            double angle = 0.0f;
             bool angleChanged = false;
 
             if (
@@ -66,10 +65,6 @@ namespace Velo
             if (angleChanged || text.Length == 0)
             {
                 text = Util.ToStringRounded((float)angle, RoundingMultiplier.Value);
-                float ratio = BadAngle.Value != 0.0f ? // prevent division by 0
-                    MathHelper.Clamp(Math.Abs((float)(angle - 90.0)) / BadAngle.Value, 0.0f, 1.0f) : 
-                    1.0f;
-                color = Microsoft.Xna.Framework.Color.Lerp(GoodColor.Value.Get(), BadColor.Value.Get(), ratio);
             }
 
             positionPrev = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
@@ -86,10 +81,15 @@ namespace Velo
 
         public override Color GetColor()
         {
-            if (UseFixedColor.Value)
+            if (Variable.Value == EVariable.GLOBAL_TIME)
+            {
                 return Color.Value.Get();
-
-            return color;
+            }
+            else if (Variable.Value == EVariable.ANGLE)
+            {
+                return Color.Value.Get(angle - 90.0, false);
+            }
+            return Microsoft.Xna.Framework.Color.White;
         }
     }
 }

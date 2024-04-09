@@ -134,6 +134,29 @@ namespace Velo
         }
     }
 
+    public enum ELineStyle
+    {
+        SOLID, DASHED, DOTTED
+    }
+
+    public static class ELineStyleExt
+    {
+        public static string Label(this ELineStyle lineStyle)
+        {
+            switch (lineStyle)
+            {
+                case ELineStyle.SOLID:
+                    return "solid";
+                case ELineStyle.DASHED:
+                    return "dashed";
+                case ELineStyle.DOTTED:
+                    return "dotted";
+                default:
+                    return "";
+            }
+        }
+    }
+
     public class TileMap : Module
     {
         public ColorTransitionSetting ColorMultiplier;
@@ -179,11 +202,20 @@ namespace Velo
 
         private TileMap() : base("Tile Map")
         {
+            NewCategory("general");
             ColorMultiplier = AddColorTransition("color multiplier", new ColorTransition(Color.White));
+
+            ColorMultiplier.Tooltip =
+                "color multiplier for the tile map";
+
             NewCategory("outline");
             OutlineWidth = AddInt("width", 0, 0, 16);
             OutlineColor = AddColor("color", Color.White);
             SlopeOutlineColor = AddColor("slope color", Color.White);
+
+            CurrentCategory.Tooltip =
+                "Renders an outline around the tile map";
+
             NewCategory("Velo custom tiles");
             EnableVeloCustomTiles = AddBool("enable", false);
             FillColor = AddColor("fill color", Color.Black);
@@ -198,7 +230,16 @@ namespace Velo
             StairsReplaceWithSlopes = AddBool("stairs replace with slopes", false);
             RemoveCheckered = AddBool("remove checkered", false);
             SlopeAntiAliasing = AddBool("slope anti aliasing", false);
-            EndCategory();
+
+            CurrentCategory.Tooltip =
+                "Allows for quickly editing tiles.";
+            EnableVeloCustomTiles.Tooltip =
+                "Enables Velo custom tiles. This overshadows \"tiles_black_editor.xnb\"";
+            StairsReplaceWithSlopes.Tooltip =
+                "Replaces all stair tiles with regular slope tiles.";
+            SlopeAntiAliasing.Tooltip =
+                "Adds anti-aliasing to slope sprites. Can make them look a bit blurry." +
+                "Does not work for outlines.";
         }
 
         public static TileMap Instance = new TileMap();
@@ -240,25 +281,27 @@ namespace Velo
 
         private void SetUpTextures()
         {
-            pixel?.Dispose();
+            void Dispose(Texture2D texture) => texture.Dispose();
+
+            pixel.NullCond(Dispose);
             for (int i = 1; i < 16; i++)
-                tiles[i]?.Dispose();
-            slopeCeilRightOutline?.Dispose();
-            slopeCeilLeftOutline?.Dispose();
-            slopeFloorRightOutline?.Dispose();
-            slopeFloorLeftOutline?.Dispose();
-            slopeCeilRightOutlineCornerBoth?.Dispose();
-            slopeCeilRightOutlineCornerBelow?.Dispose();
-            slopeCeilRightOutlineCornerRight?.Dispose();
-            slopeCeilLeftOutlineCornerBoth?.Dispose();
-            slopeCeilLeftOutlineCornerBelow?.Dispose();
-            slopeCeilLeftOutlineCornerLeft?.Dispose();
-            slopeFloorRightOutlineCornerBoth?.Dispose();
-            slopeFloorRightOutlineCornerAbove?.Dispose();
-            slopeFloorRightOutlineCornerRight?.Dispose();
-            slopeFloorLeftOutlineCornerBoth?.Dispose();
-            slopeFloorLeftOutlineCornerAbove?.Dispose();
-            slopeFloorLeftOutlineCornerLeft?.Dispose();
+                tiles[i].NullCond(Dispose);
+            slopeCeilRightOutline.NullCond(Dispose);
+            slopeCeilLeftOutline.NullCond(Dispose);
+            slopeFloorRightOutline.NullCond(Dispose);
+            slopeFloorLeftOutline.NullCond(Dispose);
+            slopeCeilRightOutlineCornerBoth.NullCond(Dispose);
+            slopeCeilRightOutlineCornerBelow.NullCond(Dispose);
+            slopeCeilRightOutlineCornerRight.NullCond(Dispose);
+            slopeCeilLeftOutlineCornerBoth.NullCond(Dispose);
+            slopeCeilLeftOutlineCornerBelow.NullCond(Dispose);
+            slopeCeilLeftOutlineCornerLeft.NullCond(Dispose);
+            slopeFloorRightOutlineCornerBoth.NullCond(Dispose);
+            slopeFloorRightOutlineCornerAbove.NullCond(Dispose);
+            slopeFloorRightOutlineCornerRight.NullCond(Dispose);
+            slopeFloorLeftOutlineCornerBoth.NullCond(Dispose);
+            slopeFloorLeftOutlineCornerAbove.NullCond(Dispose);
+            slopeFloorLeftOutlineCornerLeft.NullCond(Dispose);
 
             int outline_width = OutlineWidth.Value;
             int slopeOutline_width = (int)(outline_width * Math.Sqrt(2.0) + 0.5f);

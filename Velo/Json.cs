@@ -174,7 +174,10 @@ namespace Velo
 
         public override string ToString(bool whiteSpace, int depth = 0)
         {
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+            return "\"" + value.
+                Replace("\\", "\\\\").
+                Replace("\"", "\\\"").
+                Replace("\n", "\\n") + "\"";
         }
     }
 
@@ -506,7 +509,7 @@ namespace Velo
             JsonElement value = Get(key);
             if (value != null)
                 return func(value);
-            return default;
+            return default(T);
         }
 
         public override string ToString(bool whiteSpace, int depth = 0)

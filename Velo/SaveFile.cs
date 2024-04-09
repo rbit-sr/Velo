@@ -6,6 +6,8 @@ namespace Velo
 {
     public class SaveFile : Module
     {
+        private static readonly string VERSION = "1.8.0";
+
         private readonly List<Setting> modified = new List<Setting>();
         private TimeSpan lastSave = TimeSpan.Zero;
 
@@ -48,6 +50,7 @@ namespace Velo
             foreach (Module module in modules)
             {
                 JsonElement settings = module.ToJson(true);
+                (settings as JsonObject).AddString("Version", VERSION);
                 File.WriteAllText("Velo\\" + module.Name + ".json", settings.ToString(true));
             }
         }

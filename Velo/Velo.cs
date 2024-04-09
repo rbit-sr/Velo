@@ -29,9 +29,11 @@ namespace Velo
             {
                 CActor actor = collisionEngine.GetActor(i);
                 ICActorController controller = actor.controller;
-                if (controller is Player player && player.actor.localPlayer)
+                if (controller is Player)
                 {
-                    return player;
+                    Player player = controller as Player;
+                    if (player.actor.localPlayer)
+                        return player;
                 }
             }
 
@@ -57,8 +59,10 @@ namespace Velo
             return false;
         }
 
+#if !VELO_OLD
 #pragma warning disable IDE1006
 #pragma warning disable IDE0060
+#endif
         // It follows a list of interface methods that the modded game client
         // can call in order to communicate with Velo.
         // These are all written in snake_case.
@@ -78,6 +82,7 @@ namespace Velo
             }
 
             SaveFile.Instance.Load();
+            SettingsUI.Instance.Enabled.Disable();
             Keyboard.Init();
         }
 
@@ -135,7 +140,7 @@ namespace Velo
         // returns the targetted frame period in ticks
         public static long get_framelimit(long current)
         {
-            int framelimit = LocalGameModifications.Instance.Framelimit.Value;
+            int framelimit = Performance.Instance.Framelimit.Value;
             if (framelimit == -1)
                 return current;
 
@@ -145,6 +150,15 @@ namespace Velo
             if (framelimit < 10)
                 framelimit = 10;
             return 10000000L / framelimit;
+        }
+
+        // called in Main.game.Delay()
+        public static int get_framelimit_method(int current)
+        {
+            if (Performance.Instance.FramelimitMethod.Value < 0 || Performance.Instance.FramelimitMethod.Value > 3)
+                return current;
+
+            return Performance.Instance.FramelimitMethod.Value;
         }
 
         // called in CEngine's update method
@@ -224,7 +238,9 @@ namespace Velo
             if (Online)
                 return LocalGameModifications.Instance.FixGrappleGlitches.DefaultValue.Enabled;
 
-            return LocalGameModifications.Instance.FixGrappleGlitches.Value.Enabled;
+            return
+                LocalGameModifications.Instance.FixGrappleGlitches.Value.Enabled &&
+                !Keyboard.Held[LocalGameModifications.Instance.FixGrappleGlitches.Value.Hotkey];
         }
 
         public static bool get_enable_old_moonwalk()

@@ -5,12 +5,13 @@ using CEngine.World.Collision;
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using CEngine.World.Collision.Shape;
 
 namespace Velo
 {
     public class HitboxIndicator : MultiDisplayModule
     {
-        public HitboxListSetting IdList;
+        public BoolListSetting IdList;
         public ColorTransitionSetting LocalPlayersColor;
         public ColorTransitionSetting RemotePlayersColor;
         public ColorTransitionSetting ObjectsColor;
@@ -18,24 +19,24 @@ namespace Velo
         // collision ID to IdList index
         public Dictionary<int, int> colToIndex = new Dictionary<int, int>
         {
-            { 100, 0 },
-            { 101, 1 },
-            { 102, 2 },
-            { 104, 3 },
-            { 105, 4 },
-            { 107, 5 },
-            { 108, 6 },
-            { 111, 7 },
-            { 117, 8 },
-            { 119, 9 },
-            { 120, 10 },
-            { 122, 11 },
-            { 123, 12 },
-            { 131, 13 },
-            { 132, 14 },
-            { 141, 15 },
-            { 142, 16 },
-            { -1, 17 }
+            { 100, 0 },     // player
+            { 101, 1 },     // hook
+            { 102, 2 },     // fall tile
+            { 104, 3 },     // saw / spike
+            { 105, 4 },     // obstacle
+            { 107, 5 },     // boost section
+            { 108, 6 },     // super boost
+            { 111, 7 },     // trigger
+            { 117, 8 },     // item box
+            { 119, 9 },     // dropped obstacle
+            { 120, 10 },    // gate
+            { 122, 11 },    // rocket
+            { 123, 12 },    // bomb
+            { 131, 13 },    // straight rocket
+            { 132, 14 },    // fireball
+            { 141, 15 },    // boosta coke
+            { 142, 16 },    // bouncepad
+            { -1, 17 }      // freeze ray
         };
 
         public Dictionary<CActor, ICDrawComponent> hitboxes = new Dictionary<CActor, ICDrawComponent>();
@@ -44,7 +45,54 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F4));
 
-            IdList = AddHitboxList("hitbox list", new bool[] { true, false, false, true, true, true, true, false, true, true, true, false, false, false, true, false, true, false });
+            NewCategory("general");
+            IdList = AddBoolList("actor list", new[]
+                {
+                    "player",
+                    "hook",
+                    "fall tile",
+                    "saw / spike",
+                    "obstacle",
+                    "boost section",
+                    "super boost",
+                    "trigger",
+                    "item box",
+                    "dropped obstacle",
+                    "gate",
+                    "rocket",
+                    "bomb",
+                    "straight rocket",
+                    "fireball",
+                    "boosta coke",
+                    "bouncepad",
+                    "freeze ray"
+                },
+                new bool[] 
+                { 
+                    true,   // player
+                    false,  // hook
+                    false,  // fall tile
+                    true,   // saw / spike
+                    true,   // obstacle
+                    true,   // boost section
+                    true,   // super boost
+                    false,  // trigger
+                    true,   // item box
+                    true,   // dropped obstacle
+                    true,   // gate
+                    false,  // rocket
+                    false,  // bomb
+                    false,  // straight rocket
+                    true,   // fireball
+                    false,  // boosta coke
+                    true,   // bouncepad
+                    false   // freeze ray
+                });
+
+            IdList.Tooltip =
+                "List of actors to show the hitboxes of";
+
+            NewCategory("style");
             LocalPlayersColor = AddColorTransition("local players color", new ColorTransition(new Color(0, 255, 0, 128)));
             RemotePlayersColor = AddColorTransition("remote players color", new ColorTransition(new Color(0, 0, 255, 128)));
             ObjectsColor = AddColorTransition("objects color", new ColorTransition(new Color(255, 0, 0, 128)));
@@ -89,19 +137,19 @@ namespace Velo
                     hitbox = hitboxes[actor];
                 }
 
-                CEngine.World.Collision.Shape.ICCollisionShape collision = actor.Collision;
+                ICCollisionShape collision = actor.Collision;
 
-                if (collision is CEngine.World.Collision.Shape.CLineTrace)
+                if (collision is CLineTrace)
                     continue;
 
-                bool useRect = collision is CEngine.World.Collision.Shape.CAABB;
+                bool useRect = collision is CAABB;
 
                 // boost sections and bounce pads use CConvexPolygons as their collision
                 // detect if they are axis-aligned or rotated
                 // for rotated boxes or other polygons we draw outlines instead
                 if (actor.CollidableType == 107 || actor.CollidableType == 142)
                 {
-                    CEngine.World.Collision.Shape.CConvexPolygon poly = (CEngine.World.Collision.Shape.CConvexPolygon)collision;
+                    CConvexPolygon poly = collision as CConvexPolygon;
                     if (poly.GetVertex(0).X == poly.GetVertex(1).X || poly.GetVertex(0).Y == poly.GetVertex(1).Y)
                         useRect = true;
                 }
@@ -120,7 +168,7 @@ namespace Velo
 
                 if (useRect)
                 {
-                    CEngine.World.Collision.Shape.CAABB rect = collision is CEngine.World.Collision.Shape.CAABB cAABB ? cAABB : actor.Bounds;
+                    CAABB rect = collision.Match<CAABB>(actor.Bounds);
 
                     if (hitbox == null)
                     {
@@ -129,7 +177,7 @@ namespace Velo
                         hitboxes.Add(actor, hitbox);
                     }
 
-                    CRectangleDrawComponent rectDraw = (CRectangleDrawComponent)hitbox;
+                    CRectangleDrawComponent rectDraw = hitbox as CRectangleDrawComponent;
                     rectDraw.SetPositionSize(rect.Position, rect.Size);
                     rectDraw.IsVisible = true;
                     rectDraw.FillEnabled = true;
@@ -137,8 +185,9 @@ namespace Velo
                     rectDraw.OutlineThickness = 0;
                     rectDraw.UpdateBounds();
                 }
-                else if (collision is CEngine.World.Collision.Shape.CConvexPolygon poly)
+                else if (collision is CConvexPolygon)
                 {
+                    CConvexPolygon poly = collision as CConvexPolygon;
                     CLineDrawComponent lineDraw;
 
                     if (hitbox == null)
@@ -162,7 +211,7 @@ namespace Velo
                         hitboxes.Add(actor, hitbox);
                     }
 
-                    lineDraw = (CLineDrawComponent)hitbox;
+                    lineDraw = hitbox as CLineDrawComponent;
 
                     for (int j = poly.VertexCount - 1, k = 0; k < poly.VertexCount; j = k++)
                     {

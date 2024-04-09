@@ -12,8 +12,19 @@ namespace Velo
         
         private HotReload() : base("Hot Reload")
         {
+            NewCategory("general");
             ReloadKey = AddHotkey("reload key", 0x97);
             Contents = AddStringList("contents", new string[] { "Speedrunner", "Moonraker", "Cosmonaut" });
+
+            CurrentCategory.Tooltip =
+                "Allows you to reload sprite and sound files while ingame.";
+
+            Contents.Tooltip =
+                "Provide a list of content files or directories you want to reload. " +
+                "For characters, you can just use the folder name in the \"Characters\" folder." +
+                "Otherwise, use the file's path, starting in the \"Content\" folder, " +
+                "like \"UI\\MultiplayerHUD\\PowerUp\".\n" +
+                "Refreshing some specific contents may crash the game.";
         }
 
         public static HotReload Instance = new HotReload();

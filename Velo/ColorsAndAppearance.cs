@@ -1,11 +1,9 @@
 ﻿using CEngine.Graphics.Component;
 using CEngine.World.Actor;
 using Microsoft.Xna.Framework;
-using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
-using static System.Net.Mime.MediaTypeNames;
+using CEngine.Util.UI.Widget;
 
 namespace Velo
 {
@@ -66,7 +64,10 @@ namespace Velo
             PopupOpacity = AddFloat("opacity", 1.0f, 0.0f, 10.0f);
             PopupOffset = AddVector("offset", new Vector2(7.0f, -60.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             PopupColor = AddColorTransition("color", new ColorTransition(Color.Yellow));
-            
+
+            CurrentCategory.Tooltip = 
+                "the player's XP popup above their head";
+
             NewCategory("grapple");
             LocalOnly = AddBool("local only", false);
             GrappleRopeThickness = AddInt("rope thickness", 1, 0, 10);
@@ -109,6 +110,9 @@ namespace Velo
             WinStarColor = AddColorTransition("win star color", new ColorTransition(new Color(12, 106, 201)));
             BubbleColor = AddColorTransition("bubble color", new ColorTransition(Color.White));
             SawColor = AddColorTransition("saw color", new ColorTransition(Color.White));
+
+            PlayerColor.Tooltip =
+                "color multiplier for the player's sprite";
             
             NewCategory("UI color replacements");
             EnableUIColorReplacements = AddBool("enable", false);
@@ -171,12 +175,12 @@ namespace Velo
             }
 
             CurrentCategory.Tooltip =
-                "Replaces specific colors from the game's UI. " +
+                "Replaces specific colors from the game's UI.\n" +
                 "To find the right blue tone of a specific UI element, " +
                 "refer to the tooltip or make a screenshot and use a color picker.";
 
             EnableUIColorReplacements.Tooltip =
-                "Restart your game for changes to fully take effect. " +
+                "Restart your game for changes to fully take effect.\n" +
                 "Enabling this can lead to a slight loss in FPS.";
 
             UIBlueColors[0].Tooltip = "level select \"Workshop Levels\" bar and scroll bar";
@@ -213,8 +217,6 @@ namespace Velo
             UIBlueColors[31].Tooltip = "level select menu level icon background";
             UIBlueColors[32].Tooltip = "main menu button tooltip text";
             UIBlueColors[33].Tooltip = "level editor info text";
-
-            EndCategory();
         }
 
         public static ColorsAndAppearance Instance = new ColorsAndAppearance();
@@ -231,32 +233,17 @@ namespace Velo
             foreach (CActor actor in actors)
             {
                 ICDrawComponent drawer = actor.Controller.Drawer;
-                if (drawer is CSpriteDrawComponent sprite)
-                {
-                    sprite.color_replace = false;
-                }
-                if (drawer is CImageDrawComponent image)
-                {
-                    image.color_replace = false;
-                }
-                if (drawer is CGroupDrawComponent group)
-                {
-                    foreach (ICDrawComponent child in group.Children)
+                drawer.Match<CSpriteDrawComponent>(sprite => sprite.color_replace = false);
+                drawer.Match<CImageDrawComponent>(image => image.color_replace = false);
+                drawer.Match<CGroupDrawComponent>(group =>
                     {
-                        if (child is CSpriteDrawComponent sprite1)
+                        foreach (ICDrawComponent child in group.Children)
                         {
-                            sprite1.color_replace = false;
+                            child.Match<CSpriteDrawComponent>(sprite => sprite.color_replace = false);
+                            child.Match<CImageDrawComponent>(image => image.color_replace = false);
+                            child.Match<CTextDrawComponent>(text => text.color_replace = false);
                         }
-                        if (child is CImageDrawComponent image1)
-                        {
-                            image1.color_replace = false;
-                        }
-                        if (child is CTextDrawComponent text)
-                        {
-                            text.color_replace = false;
-                        }
-                    }
-                }
+                    });
             }
         }
 
@@ -370,22 +357,18 @@ namespace Velo
             else if (type == "chat_write")
                 chatColors.Add(obj, Instance.ChatWriteColor);
 
-            if (obj is CEngine.Util.UI.Widget.CTextWidget text)
-                text.draw_comp.color_replace = false;
-            if (obj is CEngine.Util.UI.Widget.CEditableTextWidget editText)
-                editText.draw_comp.color_replace = false;
-
+            obj.Match<CTextWidget>(text => text.draw_comp.color_replace = false);
+            obj.Match<CEditableTextWidget>(editText => editText.draw_comp.color_replace = false);
         }
 
         public void UpdateChatColor(object obj)
         {
-            if (!chatColors.TryGetValue(obj, out ColorTransitionSetting color) || color == null)
+            ColorTransitionSetting color;
+            if (!chatColors.TryGetValue(obj, out color) || color == null)
                 return;
 
-            if (obj is CEngine.Util.UI.Widget.CTextWidget text)
-                text.Color = color.Value.Get();
-            if (obj is CEngine.Util.UI.Widget.CEditableTextWidget editText)
-                editText.Color = color.Value.Get();
+            obj.Match<CTextWidget>(text => text.Color = color.Value.Get());
+            obj.Match<CEditableTextWidget>(editText => editText.Color = color.Value.Get());
         }
 
         private class ColorReplacement
@@ -437,7 +420,8 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            if (uiImageRepls.TryGetValue(image, out ColorReplacement colorReplacement) && colorReplacement != null)
+            ColorReplacement colorReplacement;
+            if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)image.color.A / (float)colorReplacement.originalColor.A);
 
@@ -472,7 +456,8 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            if (uiSpriteRepls.TryGetValue(sprite, out ColorReplacement colorReplacement) && colorReplacement != null)
+            ColorReplacement colorReplacement;
+            if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)sprite.color.A / (float)colorReplacement.originalColor.A);
 
@@ -508,7 +493,8 @@ namespace Velo
             if (!text.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            if (uiTextRepls.TryGetValue(text, out ColorReplacement colorReplacement) && colorReplacement != null)
+            ColorReplacement colorReplacement;
+            if (uiTextRepls.TryGetValue(text, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 text.color = PreserveAlpha(newColor, text.color);
@@ -528,7 +514,8 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            if (uiImageRepls.TryGetValue(image, out ColorReplacement colorReplacement) && colorReplacement != null)
+            ColorReplacement colorReplacement;
+            if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 image.color = PreserveAlpha(newColor, image.color);
@@ -541,7 +528,8 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            if (uiSpriteRepls.TryGetValue(sprite, out ColorReplacement colorReplacement) && colorReplacement != null)
+            ColorReplacement colorReplacement;
+            if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 sprite.color = PreserveAlpha(newColor, sprite.color);

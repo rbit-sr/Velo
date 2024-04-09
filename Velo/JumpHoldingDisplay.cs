@@ -5,21 +5,32 @@ namespace Velo
 {
     public class JumpHoldingDisplay : StatDisplayModule
     {
-        public FloatSetting BadDuration;
-        public ColorTransitionSetting GoodDurationColor;
-        public ColorTransitionSetting BadDurationColor;
+        public enum EVariable
+        {
+            GLOBAL_TIME, MISS
+        }
+
+        private static readonly string[] VariableLabels = new[] { "global time", "miss" };
+
+        public EnumSetting<EVariable> Variable;
+        public ColorTransitionSetting Color;
 
         private TimeSpan releaseTime = new TimeSpan(0);
         private bool wasConnected = false;
+        private TimeSpan miss;
 
         private string text = "";
-        private Color color = Microsoft.Xna.Framework.Color.White;
 
         private JumpHoldingDisplay() : base("Jump Holding Display", true)
         {
-            BadDuration = AddFloat("bad duration", 0.1f, 0.0f, 1.0f);
-            GoodDurationColor = AddColorTransition("good color", new ColorTransition(new Color(0, 255, 0)));
-            BadDurationColor = AddColorTransition("bad color", new ColorTransition(new Color(255, 0, 0)));
+            NewCategory("color");
+            Variable = AddEnum("variable", EVariable.MISS, VariableLabels);
+            Color = AddColorTransition("color", new ColorTransition(100, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
+
+            Variable.Tooltip =
+                "Set the variable to which the color transition should be bound to:\n" +
+                "-global time: global time in milliseconds\n" +
+                "-miss: time between the last jump release and subsequent grapple connection in milliseconds";
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -90.0f));
@@ -33,8 +44,7 @@ namespace Velo
             if (Velo.MainPlayer == null)
                 return;
 
-            TimeSpan duration = new TimeSpan(0);
-            bool durationChanged = false;
+            bool missChanged = false;
 
             if (Velo.MainPlayer.jumpPressed && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.MainPlayer.game_time.TotalGameTime)
             {
@@ -44,21 +54,17 @@ namespace Velo
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
             {
                 wasConnected = true;
-                duration = Velo.MainPlayer.game_time.TotalGameTime - releaseTime;
-                durationChanged = true;
+                miss = Velo.MainPlayer.game_time.TotalGameTime - releaseTime;
+                missChanged = true;
             }
             if (!Velo.MainPlayer.grapple.connected)
             {
                 wasConnected = false;
             }
 
-            if (durationChanged || text.Length == 0)
+            if (missChanged || text.Length == 0)
             {
-                text = Util.ToStringRounded((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond), RoundingMultiplier.Value);
-                float ratio = BadDuration.Value != 0.0f ?
-                    MathHelper.Clamp((float)(duration.Ticks / (double)TimeSpan.TicksPerSecond) / BadDuration.Value, 0.0f, 1.0f) :
-                    1.0f;
-                color = Microsoft.Xna.Framework.Color.Lerp(GoodDurationColor.Value.Get(), BadDurationColor.Value.Get(), ratio);
+                text = Util.ToStringRounded((float)(miss.Ticks / (double)TimeSpan.TicksPerSecond), RoundingMultiplier.Value);
             }
         }
 
@@ -69,10 +75,15 @@ namespace Velo
 
         public override Color GetColor()
         {
-            if (UseFixedColor.Value)
+            if (Variable.Value == EVariable.GLOBAL_TIME)
+            {
                 return Color.Value.Get();
-
-            return color;
+            }
+            else if (Variable.Value == EVariable.MISS)
+            {
+                return Color.Value.Get(miss.TotalMilliseconds, false);
+            }
+            return Microsoft.Xna.Framework.Color.White;
         }
     }
 }

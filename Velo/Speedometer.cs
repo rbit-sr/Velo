@@ -6,20 +6,101 @@ namespace Velo
 {
     public class Speedometer : StatDisplayModule
     {
+        public enum EVariable
+        {
+            GLOBAL_TIME, SPEED
+        }
+
+        private static readonly string[] VariableLabels = new[] { "global time", "speed" };
+
+        public enum ESpeedType
+        {
+            ABSOLUTE, X_VELOCITY, Y_VELOCITY, X_VELOCITY_ABSOLUTE, Y_VELOCITY_ABSOLUTE
+        }
+
+        private static readonly string[] SpeedTypeLabels = new[]
+        {
+            "magnitude", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)"
+        };
+
         public IntSetting UpdateInterval;
-        public BoolSetting ShowXVelocity;
+        public EnumSetting<ESpeedType> SpeedType;
+
+        public EnumSetting<EVariable> Variable;
+        public ColorTransitionSetting Color;
 
         private long lastUpdate = 0;
 
         private string text = "";
-        private Color color = Microsoft.Xna.Framework.Color.White;
+        private float speed = 0.0f;
 
         private Speedometer() : base("Speedometer", true)
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F2));
 
+            NewCategory("general");
             UpdateInterval = AddInt("update interval", 100, 0, 2000);
-            ShowXVelocity = AddBool("show x-velocity", false);
+            SpeedType = AddEnum("speed type", ESpeedType.ABSOLUTE, SpeedTypeLabels);
+
+            UpdateInterval.Tooltip =
+                "update interval in milliseconds";
+            SpeedType.Tooltip =
+                "Set the type of speed to display:\n" +
+                "-absolute: absolute speed (velocity magnitude)\n" +
+                "-x-velocity: x component of velocity\n" +
+                "-y-velocity: y component of velocity\n" +
+                "-x-velocity (absolute): x-velocity without sign\n" +
+                "-y-velocity (absolute): y-velocity without sign";
+
+            NewCategory("color");
+            Variable = AddEnum("variable", EVariable.SPEED, VariableLabels);
+            Color = AddColorTransition("color", new ColorTransition(1550, 0, true, new[] 
+            {
+                new Color(220, 220, 255), // 0
+                new Color(220, 220, 255), // 50
+                new Color(220, 220, 255), // 100
+                new Color(220, 220, 255), // 150
+                new Color(220, 220, 255), // 200
+                new Color(220, 220, 255), // 250
+
+                new Color(0, 200, 200), // 300
+                new Color(0, 200, 200), // 350
+                new Color(0, 200, 200), // 400
+                new Color(0, 200, 200), // 450
+                new Color(0, 200, 200), // 500
+                new Color(0, 200, 200), // 550
+
+                new Color(20, 200, 20), // 600
+                new Color(20, 200, 20), // 650
+                new Color(20, 200, 20), // 700
+
+                new Color(140, 230, 0), // 750
+                new Color(140, 230, 0), // 800
+                new Color(140, 230, 0), // 850
+
+                new Color(230, 230, 0), // 900
+                new Color(230, 230, 0), // 950
+                new Color(230, 230, 0), // 1000
+                new Color(230, 230, 0), // 1050
+                new Color(230, 230, 0), // 1100
+                new Color(230, 230, 0), // 1150
+
+                new Color(230, 100, 0), // 1200
+                new Color(230, 100, 0), // 1250
+                new Color(230, 100, 0), // 1300
+                new Color(230, 100, 0), // 1350
+
+                new Color(180, 0, 0), // 1400
+                new Color(180, 0, 0), // 1450
+                new Color(180, 0, 0), // 1500
+
+                new Color(80, 0, 0), // 1550
+            }));
+
+            Variable.Tooltip =
+                "Set the variable to which the color transition should be bound to:\n" +
+                "-global time: global time in milliseconds\n" +
+                "-speed: player's speed in units per second";
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7.0f, -60.0f));
@@ -33,30 +114,35 @@ namespace Velo
             if (Velo.MainPlayer == null)
                 return;
 
-            float speed = ShowXVelocity.Value ? Velo.MainPlayer.actor.Velocity.X : Velo.MainPlayer.actor.Velocity.Length();
+            Vector2 velocity = Velo.MainPlayer.actor.Velocity;
+
+            float speed = 0.0f;
+
+            switch (SpeedType.Value)
+            {
+                case ESpeedType.ABSOLUTE:
+                    speed = velocity.Length();
+                    break;
+                case ESpeedType.X_VELOCITY:
+                    speed = velocity.X;
+                    break;
+                case ESpeedType.Y_VELOCITY:
+                    speed = velocity.Y;
+                    break;
+                case ESpeedType.X_VELOCITY_ABSOLUTE:
+                    speed = Math.Abs(velocity.X);
+                    break;
+                case ESpeedType.Y_VELOCITY_ABSOLUTE:
+                    speed = Math.Abs(velocity.Y);
+                    break;
+            }
 
             long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             if (milliseconds - lastUpdate >= UpdateInterval.Value)
             {
                 lastUpdate = milliseconds;
                 text = Util.ToStringRounded(speed, RoundingMultiplier.Value);
-
-                if (Math.Abs(speed) < 300)
-                    color = new Color(220, 220, 255);
-                else if (Math.Abs(speed) < 600)
-                    color = new Color(0, 200, 200);
-                else if (Math.Abs(speed) < 750)
-                    color = new Color(20, 200, 20);
-                else if (Math.Abs(speed) < 900)
-                    color = new Color(140, 230, 0);
-                else if (Math.Abs(speed) < 1200)
-                    color = new Color(230, 230, 0);
-                else if (Math.Abs(speed) < 1400)
-                    color = new Color(230, 100, 0);
-                else if (Math.Abs(speed) < 1550)
-                    color = new Color(180, 0, 0);
-                else
-                    color = new Color(80, 0, 0);
+                this.speed = speed;
             }
         }
 
@@ -67,10 +153,15 @@ namespace Velo
 
         public override Color GetColor()
         {
-            if (UseFixedColor.Value)
+            if (Variable.Value == EVariable.GLOBAL_TIME)
+            {
                 return Color.Value.Get();
-
-            return color;
+            }
+            else if (Variable.Value == EVariable.SPEED)
+            {
+                return Color.Value.Get(speed, false);
+            }
+            return Microsoft.Xna.Framework.Color.White;
         }
     }
 }

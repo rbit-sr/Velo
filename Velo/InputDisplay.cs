@@ -50,16 +50,16 @@ namespace Velo
             Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
 
             NewCategory("pressed");
-            PressedBoxColor = AddColorTransition("pressed box color", new ColorTransition(new Color(255, 100, 100, 175)), true);
-            PressedTextColor = AddColorTransition("pressed text color", new ColorTransition(Color.Black), true);
-            PressedOutlineColor = AddColorTransition("pressed outline color", new ColorTransition(Color.Transparent), true);
-            PressedOutlineWidth = AddInt("pressed outline width", 0, 0, 10);
+            PressedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(255, 100, 100, 175)), true);
+            PressedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black), true);
+            PressedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent), true);
+            PressedOutlineWidth = AddInt("outline width", 0, 0, 10);
             
             NewCategory("released");
-            ReleasedBoxColor = AddColorTransition("released box color", new ColorTransition(new Color(160, 160, 160, 175)), true);
-            ReleasedTextColor = AddColorTransition("released text color", new ColorTransition(Color.Black), true);
-            ReleasedOutlineColor = AddColorTransition("released outline color", new ColorTransition(Color.Transparent), true);
-            ReleasedOutlineWidth = AddInt("released outline width", 0, 0, 10);
+            ReleasedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(160, 160, 160, 175)), true);
+            ReleasedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black), true);
+            ReleasedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent), true);
+            ReleasedOutlineWidth = AddInt("outline width", 0, 0, 10);
             
             NewCategory("boxes");
             LeftBox = AddInputBox("left box", new InputBox("<", new Vector2(0.0f, 64.0f), new Vector2(64.0f, 64.0f)));
@@ -69,8 +69,6 @@ namespace Velo
             SlideBox = AddInputBox("slide box", new InputBox("slid", new Vector2(128.0f, 0.0f), new Vector2(64.0f, 64.0f)));
             BoostBox = AddInputBox("boost box", new InputBox("bst", new Vector2(128.0f, 64.0f), new Vector2(64.0f, 64.0f)));
             ItemBox = AddInputBox("item box", new InputBox("item", new Vector2(192.0f, 64.0f), new Vector2(64.0f, 64.0f)));
-            
-            EndCategory();
         }
 
         public static InputDisplay Instance = new InputDisplay();

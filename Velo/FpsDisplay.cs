@@ -6,28 +6,48 @@ namespace Velo
 {
     public class FpsDisplay : StatDisplayModule
     {
+        public enum EVariable
+        {
+            GLOBAL_TIME, FRAMERATE
+        }
+
+        private static readonly string[] VariableLabels = new[] { "global time", "framerate" };
+
         public IntSetting UpdateInterval;
         public IntSetting MeasurementPeriod;
+
+        public EnumSetting<EVariable> Variable;
+        public ColorTransitionSetting Color;
 
         public List<TimeSpan> measurements = new List<TimeSpan>();
 
         public TimeSpan lastUpdate = TimeSpan.Zero;
 
         private string text = "-1";
+        private int fps = -1;
 
         private FpsDisplay() : base("FPS Display", false)
         {
+            NewCategory("general");
             UpdateInterval = AddInt("update interval", 1000, 0, 10000);
             MeasurementPeriod = AddInt("measurement period", 1000, 0, 10000);
 
-            AddStyleSettings(false, false, false);
+            NewCategory("color");
+            Variable = AddEnum("variable", EVariable.GLOBAL_TIME, VariableLabels);
+            Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
+            
+            Variable.Tooltip =
+                "Set the variable to which the color transition should be bound to:\n" +
+                "-global time: global time in milliseconds\n" +
+                "-framerate: frames per second";
+
+            AddStyleSettings(false, false);
             Scale.SetValueAndDefault(1.0f);
             Orientation.SetValueAndDefault(EOrientation.TOP_RIGHT);
             Offset.SetValueAndDefault(new Vector2(-16.0f, 16.0f));
             Font.SetValueAndDefault("UI\\Font\\GOTHIC.ttf");
             FontSize.SetValueAndDefault(18);
             Rotation.SetValueAndDefault(0.0f);
-            Color.SetValueAndDefault(new ColorTransition(Microsoft.Xna.Framework.Color.Red));
         }
 
         public static FpsDisplay Instance = new FpsDisplay();
@@ -48,6 +68,7 @@ namespace Velo
                     fps = (int)((measurements.Count - 1) / (now - measurements[0]).TotalSeconds + 0.5);
                 lastUpdate = now;
                 text = fps + "";
+                this.fps = fps;
             }
         }
 
@@ -58,7 +79,15 @@ namespace Velo
 
         public override Color GetColor()
         {
-            return Color.Value.Get();
+            if (Variable.Value == EVariable.GLOBAL_TIME)
+            {
+                return Color.Value.Get();
+            }
+            else if (Variable.Value == EVariable.FRAMERATE)
+            {
+                return Color.Value.Get(fps, false);
+            }
+            return Microsoft.Xna.Framework.Color.White;
         }
     }
 }

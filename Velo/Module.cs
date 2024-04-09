@@ -112,7 +112,8 @@ namespace Velo
 
     public abstract class Module
     {
-        public string Name { get; }
+        private readonly string name;
+        public string Name { get { return name; } }
         public string Tooltip { get; set; }
 
         private readonly List<Setting> settings;
@@ -123,7 +124,7 @@ namespace Velo
 
         public Module(string name)
         {
-            Name = name;
+            this.name = name;
             Tooltip = name;
             settings = new List<Setting>();
             settingsLookup = new Dictionary<string, Setting>();
@@ -149,11 +150,6 @@ namespace Velo
             currentCategory = new Category(this, name);
             settings.Add(currentCategory);
             settingsLookup.Add(name, currentCategory);
-        }
-
-        protected void EndCategory()
-        {
-            currentCategory = null;
         }
 
         public bool HasSettings()
@@ -201,9 +197,9 @@ namespace Velo
             return (RoundingMultiplierSetting)Add(new RoundingMultiplierSetting(this, name, defaultValue));
         }
 
-        protected HitboxListSetting AddHitboxList(string name, bool[] defaultValue)
+        protected BoolListSetting AddBoolList(string name, string[] labels, bool[] defaultValue)
         {
-            return (HitboxListSetting)Add(new HitboxListSetting(this, name, defaultValue));
+            return (BoolListSetting)Add(new BoolListSetting(this, name, labels, defaultValue));
         }
 
         protected StringListSetting AddStringList(string name, string[] defaultValue)
@@ -211,7 +207,7 @@ namespace Velo
             return (StringListSetting)Add(new StringListSetting(this, name, defaultValue));
         }
 
-        protected EnumSetting<E> AddEnum<E>(string name, E defaultValue, string[] labels) where E : struct, Enum
+        protected EnumSetting<E> AddEnum<E>(string name, E defaultValue, string[] labels) where E : struct
         {
             return (EnumSetting<E>)Add(new EnumSetting<E>(this, name, defaultValue, labels));
         }
@@ -233,7 +229,7 @@ namespace Velo
 
         public int SettingsCount()
         {
-            return settings.Sum(setting => setting is Category category ? category.Children.Count : 1);
+            return settings.Sum(setting => setting is Category ? (setting as Category).Children.Count : 1);
         }
 
         public JsonElement ToJson(bool valueOnly = false)
@@ -285,7 +281,7 @@ namespace Velo
 
             if (Keyboard.Pressed[Enabled.Value.Hotkey])
             {
-                Enabled.ToggleEnabled();
+                Enabled.ToggleState();
             }
         }
     }
@@ -456,6 +452,91 @@ namespace Velo
         }
     }
 
+    public enum EOrientation
+    {
+        PLAYER, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
+    }
+
+    public static class EnumExt
+    {
+        public static string Label(this EOrientation orientation)
+        {
+            switch (orientation)
+            {
+                case EOrientation.PLAYER:
+                    return "player";
+                case EOrientation.TOP_LEFT:
+                    return "top left";
+                case EOrientation.TOP_RIGHT:
+                    return "top right";
+                case EOrientation.BOTTOM_LEFT:
+                    return "bottom left";
+                case EOrientation.BOTTOM_RIGHT:
+                    return "bottom right";
+                case EOrientation.TOP:
+                    return "top";
+                case EOrientation.BOTTOM:
+                    return "bottom";
+                case EOrientation.LEFT:
+                    return "left";
+                case EOrientation.RIGHT:
+                    return "right";
+                case EOrientation.CENTER:
+                    return "center";
+                default:
+                    return "";
+            }
+        }
+
+        public static Vector2 GetOrigin(this EOrientation orientation, float width, float height, float screenWidth, float screenHeight, Vector2 playerPos)
+        {
+            if (orientation == EOrientation.PLAYER)
+                return playerPos;
+
+            Vector2 origin = Vector2.Zero;
+
+            switch (orientation)
+            {
+                case EOrientation.TOP_LEFT:
+                case EOrientation.LEFT:
+                case EOrientation.BOTTOM_LEFT:
+                    origin.X = 0.0f;
+                    break;
+                case EOrientation.TOP_RIGHT:
+                case EOrientation.RIGHT:
+                case EOrientation.BOTTOM_RIGHT:
+                    origin.X = screenWidth - width;
+                    break;
+                case EOrientation.TOP:
+                case EOrientation.CENTER:
+                case EOrientation.BOTTOM:
+                    origin.X = (screenWidth - width) / 2.0f;
+                    break;
+            }
+
+            switch (orientation)
+            {
+                case EOrientation.TOP_LEFT:
+                case EOrientation.TOP:
+                case EOrientation.TOP_RIGHT:
+                    origin.Y = 0.0f;
+                    break;
+                case EOrientation.BOTTOM_LEFT:
+                case EOrientation.BOTTOM:
+                case EOrientation.BOTTOM_RIGHT:
+                    origin.Y = screenHeight - height;
+                    break;
+                case EOrientation.LEFT:
+                case EOrientation.CENTER:
+                case EOrientation.RIGHT:
+                    origin.Y = (screenHeight - height) / 2.0f;
+                    break;
+            }
+
+            return origin;
+        }
+    }
+
     public abstract class StatDisplayModule : DisplayModule
     {
         public FloatSetting Scale;
@@ -467,8 +548,6 @@ namespace Velo
         public FloatSetting Rotation;
         public RoundingMultiplierSetting RoundingMultiplier;
         public BoolSetting DisablePopup;
-        public BoolSetting UseFixedColor;
-        public ColorTransitionSetting Color;
 
         protected CFont font;
         protected CTextDrawComponent drawComp = null;
@@ -478,7 +557,7 @@ namespace Velo
             
         }
 
-        protected void AddStyleSettings(bool roundingMultiplier = true, bool disablePopup = true, bool useFixedColor = true)
+        protected void AddStyleSettings(bool roundingMultiplier = true, bool disablePopup = true)
         {
             NewCategory("style");
             Scale = AddFloat("scale", 1.5f, 0.0f, 10.0f);
@@ -493,10 +572,12 @@ namespace Velo
                 RoundingMultiplier = AddRoundingMultiplier("rounding multiplier", new RoundingMultiplier("1"));
             if (disablePopup)
                 DisablePopup = AddBool("disable popup", true);
-            if (useFixedColor)
-                UseFixedColor = AddBool("fixed color", false);
-            Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Yellow));
-            EndCategory();
+
+            Font.Tooltip =
+                "font " +
+                "(Root directory is the \"Content\" folder. For more fonts, see \"UI\\Font\" or add your own fonts.)";
+            Rotation.Tooltip =
+                "rotation angle in radians";
         }
 
         public abstract void Update();

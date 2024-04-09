@@ -31,6 +31,7 @@
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PlatformTarget>x86</PlatformTarget>
+    <NoWarn>IDE0038, IDE0018, IDE0034</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CEngine">

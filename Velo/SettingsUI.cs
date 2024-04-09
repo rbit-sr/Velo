@@ -6,6 +6,10 @@ using System.Windows.Forms;
 using SDL2;
 using System.Runtime.CompilerServices;
 using System.Text;
+using System.Reflection;
+#if VELO_OLD
+using CEngine.Util.Input.SDLInput;
+#endif
 
 namespace Velo
 {
@@ -16,7 +20,7 @@ namespace Velo
 
         private SettingsUI() : base("UI")
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F1));
+            Enabled.SetValueAndDefault(new Toggle((ushort)System.Windows.Forms.Keys.F1));
         }
 
         public static SettingsUI Instance = new SettingsUI();
@@ -28,10 +32,7 @@ namespace Velo
             if (!initialized || !Enabled.Value.Enabled)
                 return;
 
-            CEngine.CEngine.Instance.input_manager.mouse_state1 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.mouse_state2 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state1 = new Microsoft.Xna.Framework.Input.KeyboardState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state2 = new Microsoft.Xna.Framework.Input.KeyboardState();
+            ResetInputStates();
         }
 
         public override void PostUpdate()
@@ -41,10 +42,7 @@ namespace Velo
             if (!initialized || !Enabled.Value.Enabled)
                 return;
 
-            CEngine.CEngine.Instance.input_manager.mouse_state1 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.mouse_state2 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state1 = new Microsoft.Xna.Framework.Input.KeyboardState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state2 = new Microsoft.Xna.Framework.Input.KeyboardState();
+            ResetInputStates();
         }
 
         public override void PreRender()
@@ -54,10 +52,7 @@ namespace Velo
             if (!initialized || !Enabled.Value.Enabled)
                 return;
 
-            CEngine.CEngine.Instance.input_manager.mouse_state1 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.mouse_state2 = new Microsoft.Xna.Framework.Input.MouseState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state1 = new Microsoft.Xna.Framework.Input.KeyboardState();
-            CEngine.CEngine.Instance.input_manager.keyboard_state2 = new Microsoft.Xna.Framework.Input.KeyboardState();
+            ResetInputStates();
         }
 
         public override void PostRender()
@@ -94,7 +89,6 @@ namespace Velo
                         GetJsonUpdates((IntPtr)bytes);
                 }
                 string json = Encoding.ASCII.GetString(change);
-                Console.WriteLine(json);
                 sendUpdates = false;
                 ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
                 sendUpdates = true;
@@ -102,10 +96,22 @@ namespace Velo
 
             RenderImGui();
 
+            ResetInputStates();
+        }
+
+        private void ResetInputStates()
+        {
+#if !VELO_OLD
             CEngine.CEngine.Instance.input_manager.mouse_state1 = new Microsoft.Xna.Framework.Input.MouseState();
             CEngine.CEngine.Instance.input_manager.mouse_state2 = new Microsoft.Xna.Framework.Input.MouseState();
             CEngine.CEngine.Instance.input_manager.keyboard_state1 = new Microsoft.Xna.Framework.Input.KeyboardState();
             CEngine.CEngine.Instance.input_manager.keyboard_state2 = new Microsoft.Xna.Framework.Input.KeyboardState();
+#else
+            CEngine.CEngine.Instance.input_manager.mouse_state1 = new MouseState();
+            CEngine.CEngine.Instance.input_manager.mouse_state2 = new MouseState();
+            CEngine.CEngine.Instance.input_manager.keyboard_state1 = new KeyboardState();
+            CEngine.CEngine.Instance.input_manager.keyboard_state2 = new KeyboardState();
+#endif
         }
 
         public void SettingUpdate(Setting setting)
@@ -125,44 +131,89 @@ namespace Velo
 
         private delegate uint GetPtrFromObjDel(object o);
 
+#if !VELO_OLD
+        enum ERenderer
+        {
+            D3D11, OPEN_GL
+        }
+#endif
+
         public void InitImGui()
         {
-            var dyn = new DynamicMethod("GetSwapChainPtr", typeof(uint), new[] { typeof(object) }, typeof(Velo).Module);
+#if !VELO_OLD
+            ERenderer renderer = ERenderer.D3D11;
+
+            string[] args = Environment.GetCommandLineArgs();
+            foreach (string arg in args)
+            {
+                if (arg.ToLower() == "opengl")
+                    renderer = ERenderer.OPEN_GL;
+            }
+
+            if (renderer == ERenderer.D3D11)
+            {
+                var dyn = new DynamicMethod("GetSwapChainPtr", typeof(uint), new[] { typeof(object) }, typeof(Velo).Module);
+                var il = dyn.GetILGenerator();
+                il.DeclareLocal(typeof(object), true);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stloc_0);
+                il.Emit(OpCodes.Ldloc_0); // load GraphicsDevice
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ldc_I4, 0x7C);
+                il.Emit(OpCodes.Add);
+                il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::GLDevice : FNA3D_Device*
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ldc_I4, 0x128);
+                il.Emit(OpCodes.Add);
+                il.Emit(OpCodes.Ldind_I4); // load FNA3D_Device::driverData : FNA3D_Renderer* (D3D11Renderer*)
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ldc_I4, 0x24);
+                il.Emit(OpCodes.Add);
+                il.Emit(OpCodes.Ldind_I4); // load D3D11Renderer::swapchainDatas : D3D11SwapChainData**
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ldind_I4);
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ldind_I4); // load D3D11SwapChainData::swapchain : IDXGISwapChain*
+                il.Emit(OpCodes.Conv_I);
+                il.Emit(OpCodes.Ret);
+                GetPtrFromObjDel GetSwapChainPtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
+
+                GraphicsDevice o = CEngine.CEngine.Instance.GraphicsDevice;
+                uint SwapChainPtr = GetSwapChainPtr(o);
+
+                InitializeImGui_d3d11((IntPtr)SwapChainPtr);
+            }
+            else if (renderer == ERenderer.OPEN_GL)
+            {
+                InitializeImGui_opengl();
+            }
+#else
+            var dyn = new DynamicMethod("GetDevicePtr", typeof(uint), new[] { typeof(object) }, typeof(Velo).Module);
             var il = dyn.GetILGenerator();
             il.DeclareLocal(typeof(object), true);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Stloc_0);
             il.Emit(OpCodes.Ldloc_0); // load GraphicsDevice
             il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldc_I4, 0x7C);
+            il.Emit(OpCodes.Ldc_I4, 0xB8);
             il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::GLDevice : FNA3D_Device*
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldc_I4, 0x128);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4); // load FNA3D_Device::driverData : FNA3D_Renderer* (D3D11Renderer*)
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldc_I4, 0x24);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4); // load D3D11Renderer::swapchainDatas : D3D11SwapChainData**
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldind_I4);
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldind_I4); // load D3D11SwapChainData::swapchain : IDXGISwapChain*
+            il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::pComPtr : IDirect3DDevice9*
             il.Emit(OpCodes.Conv_I);
             il.Emit(OpCodes.Ret);
-            GetPtrFromObjDel GetSwapChainPtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
+            GetPtrFromObjDel GetDevicePtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
 
             GraphicsDevice o = CEngine.CEngine.Instance.GraphicsDevice;
-            uint SwapChainPtr = GetSwapChainPtr(o);
+            uint DevicePtr = GetDevicePtr(o);
 
-            InitializeImGui((IntPtr)SwapChainPtr);
+            InitializeImGui_d3d9((IntPtr)DevicePtr);
+#endif
         }
 
         public void SdlPoll(ref SDL.SDL_Event sdl_event)
         {
             if (!initialized || !Enabled.Value.Enabled)
                 return;
+
             unsafe
             {
                 ProcessEvent((IntPtr)Unsafe.AsPointer(ref sdl_event));
@@ -175,28 +226,34 @@ namespace Velo
             }
         }
 
-        [DllImport("DirectX11.dll", EntryPoint = "InitializeImGui")]
-        private static extern void InitializeImGui(IntPtr swapChain);
-
-        [DllImport("DirectX11.dll", EntryPoint = "RenderImGui")]
+#if !VELO_OLD
+        [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d11")]
+        private static extern void InitializeImGui_d3d11(IntPtr swapChain);
+        [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_opengl")]
+        private static extern void InitializeImGui_opengl();
+#else
+        [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d9")]
+        private static extern void InitializeImGui_d3d9(IntPtr device);
+#endif
+        [DllImport("Velo_UI.dll", EntryPoint = "RenderImGui")]
         private static extern void RenderImGui();
 
-        [DllImport("DirectX11.dll", EntryPoint = "ShutdownImGui")]
+        [DllImport("Velo_UI.dll", EntryPoint = "ShutdownImGui")]
         private static extern void ShutdownImGui();
 
-        [DllImport("DirectX11.dll", EntryPoint = "LoadProgram")]
+        [DllImport("Velo_UI.dll", EntryPoint = "LoadProgram")]
         private static extern void LoadProgram(IntPtr str, int strSize);
 
-        [DllImport("DirectX11.dll", EntryPoint = "UpdateProgram")]
+        [DllImport("Velo_UI.dll", EntryPoint = "UpdateProgram")]
         private static extern void UpdateProgram(IntPtr str, int strSize);
 
-        [DllImport("DirectX11.dll", EntryPoint = "ProcessEvent")]
+        [DllImport("Velo_UI.dll", EntryPoint = "ProcessEvent")]
         private static extern void ProcessEvent(IntPtr eventPtr);
 
-        [DllImport("DirectX11.dll", EntryPoint = "GetChangeSize")]
+        [DllImport("Velo_UI.dll", EntryPoint = "GetChangeSize")]
         private static extern int GetChangeSize();
 
-        [DllImport("DirectX11.dll", EntryPoint = "GetJsonUpdates")]
+        [DllImport("Velo_UI.dll", EntryPoint = "GetJsonUpdates")]
         private static extern void GetJsonUpdates(IntPtr str);
     }
 }

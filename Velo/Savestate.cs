@@ -125,7 +125,7 @@ namespace Velo
             index += size;
         }
 
-        public unsafe void WriteArr<T>(T[] arr) where T : struct
+        public unsafe void WriteByteArr(byte[] arr)
         {
             if (arr == null)
             {
@@ -134,39 +134,66 @@ namespace Velo
             }
 
             WriteInt(arr.Length);
-#pragma warning disable CS8500
-            fixed (T* bytes = arr)
+
+            fixed (byte* bytes = arr)
             {
-                WriteBytes((byte*)bytes, arr.Length * sizeof(T));
+                WriteBytes((byte*)bytes, arr.Length * sizeof(byte));
             }
-#pragma warning restore CS8500
         }
 
-        public unsafe T[] ReadArr<T>() where T : struct
+        public unsafe byte[] ReadByteArr()
         {
             int size = ReadInt();
             if (size == -1)
                 return null;
-            T[] bytes = new T[size];
+            byte[] bytes = new byte[size];
 
-#pragma warning disable CS8500
-            fixed (T* data_dst = bytes)
+            fixed (byte* data_dst = bytes)
             {
-                ReadBytes((byte*)data_dst, size * sizeof(T));
+                ReadBytes((byte*)data_dst, size * sizeof(byte));
             }
-#pragma warning restore CS8500
+            return bytes;
+        }
+
+        public unsafe void WriteVector2Arr(Vector2[] arr)
+        {
+            if (arr == null)
+            {
+                WriteInt(-1);
+                return;
+            }
+
+            WriteInt(arr.Length);
+
+            fixed (Vector2* bytes = arr)
+            {
+                WriteBytes((byte*)bytes, arr.Length * sizeof(Vector2));
+            }
+        }
+
+        public unsafe Vector2[] ReadVector2Arr()
+        {
+            int size = ReadInt();
+            if (size == -1)
+                return null;
+            Vector2[] bytes = new Vector2[size];
+
+            fixed (Vector2* data_dst = bytes)
+            {
+                ReadBytes((byte*)data_dst, size * sizeof(Vector2));
+            }
             return bytes;
         }
 
         public unsafe void WriteStr(string str)
         {
             byte[] bytes = str != null ? Encoding.ASCII.GetBytes(str) : null;
-            WriteArr(bytes);
+            WriteByteArr(bytes);
         }
 
         public unsafe string ReadStr()
         {
-            byte[] bytes = ReadArr<byte>();
+            byte[] bytes = ReadByteArr();
             if (bytes == null)
                 return null;
             return Encoding.ASCII.GetString(bytes);
@@ -188,15 +215,15 @@ namespace Velo
         private unsafe void Write(CConvexPolygon obj)
         {
             chunk.Write(obj, 0xC, 0x1C);
-            chunk.WriteArr(obj.localVertices);
-            chunk.WriteArr(obj.vertices);
+            chunk.WriteVector2Arr(obj.localVertices);
+            chunk.WriteVector2Arr(obj.vertices);
         }
 
         private unsafe void Read(CConvexPolygon obj)
         {
             chunk.Read(obj, 0xC, 0x1C);
-            obj.localVertices = chunk.ReadArr<Vector2>();
-            obj.vertices = chunk.ReadArr<Vector2>();
+            obj.localVertices = chunk.ReadVector2Arr();
+            obj.vertices = chunk.ReadVector2Arr();
         }
 
         private unsafe void Write(CActor obj)
@@ -383,10 +410,8 @@ namespace Velo
             chunk.WriteInt(obj.owner != null ? obj.owner.actor.Id : -1);
             if (obj.target == null)
                 chunk.WriteInt(-1);
-            else if (obj.target is Grapple grapple)
-                chunk.WriteInt(grapple.actor.Id);
-             else if (obj.target is GoldenHook goldenHook)
-                chunk.WriteInt(goldenHook.actor.Id);
+            obj.target.Match<Grapple>(grapple => chunk.WriteInt(grapple.actor.Id));
+            obj.target.Match<GoldenHook>(goldenHook => chunk.WriteInt(goldenHook.actor.Id));
         }
 
         private unsafe void Read(Rope obj)
@@ -717,30 +742,30 @@ namespace Velo
             chunk.WriteInt(obj.list1.Count);
             foreach (ICActorController contr in obj.list1)
             {
-                if (contr is Player player)
-                    chunk.WriteInt(contr != null ? player.actor.Id : -1);
-                else if (contr is DroppedBomb droppedBomb)
-                    chunk.WriteInt(contr != null ? droppedBomb.actor.Id : -1);
-                else if (contr is Fireball fireball)
-                    chunk.WriteInt(contr != null ? fireball.actor.Id : -1);
-                else if (contr is Rocket rocket)
-                    chunk.WriteInt(contr != null ? rocket.actor.Id : -1);
-                else
+                if (contr == null)
+                {
                     chunk.WriteInt(-1);
+                    continue;
+                }
+
+                contr.Match<Player>(player => chunk.WriteInt(player.actor.Id));
+                contr.Match<DroppedBomb>(droppedBomb => chunk.WriteInt(droppedBomb.actor.Id));
+                contr.Match<Fireball>(fireball => chunk.WriteInt(fireball.actor.Id));
+                contr.Match<Rocket>(rocket => chunk.WriteInt(rocket.actor.Id));
             }
             chunk.WriteInt(obj.list2.Count);
             foreach (ICActorController contr in obj.list2)
             {
-                if (contr is Player player)
-                    chunk.WriteInt(contr != null ? player.actor.Id : -1);
-                else if (contr is DroppedBomb droppedBomb)
-                    chunk.WriteInt(contr != null ? droppedBomb.actor.Id : -1);
-                else if (contr is Fireball fireball)
-                    chunk.WriteInt(contr != null ? fireball.actor.Id : -1);
-                else if (contr is Rocket rocket)
-                    chunk.WriteInt(contr != null ? rocket.actor.Id : -1);
-                else
+                if (contr == null)
+                {
                     chunk.WriteInt(-1);
+                    continue;
+                }
+
+                contr.Match<Player>(player => chunk.WriteInt(player.actor.Id));
+                contr.Match<DroppedBomb>(droppedBomb => chunk.WriteInt(droppedBomb.actor.Id));
+                contr.Match<Fireball>(fireball => chunk.WriteInt(fireball.actor.Id));
+                contr.Match<Rocket>(rocket => chunk.WriteInt(rocket.actor.Id));
             }
         }
 
@@ -1269,10 +1294,8 @@ namespace Velo
             chunk.Write(obj, 0x1C, 0xA8);
             Write(obj.shakeMod);
             Write(obj.clampMod);
-            if (obj.mods[0] is Camera camera)
-                Write(camera);
-            else if (obj.mods[0] is CameraMP cameraMP)
-                Write(cameraMP);
+            obj.mods[0].Match<Camera>(Write);
+            obj.mods[0].Match<CameraMP>(Write);
         }
 
         private unsafe void Read(CCamera obj)
@@ -1280,10 +1303,8 @@ namespace Velo
             chunk.Read(obj, 0x1C, 0xA8);
             Read(obj.shakeMod);
             Read(obj.clampMod);
-            if (obj.mods[0] is Camera camera)
-                Read(camera);
-            else if (obj.mods[0] is CameraMP cameraMP)
-                Read(cameraMP);
+            obj.mods[0].Match<Camera>(Read);
+            obj.mods[0].Match<CameraMP>(Read);
         }
 
         private unsafe void Write(ModuleSolo obj)
@@ -1353,13 +1374,15 @@ namespace Velo
                 if (actor.ghostOwnedItem)
                     continue;
                 ICActorController controller = actor.Controller;
-                if (controller is Player player)
+                if (controller is Player)
                 {
+                    Player player = controller as Player;
                     if (!player.actor.localPlayer && !player.slot.IsBot)
                         continue;
 
-                    if (player is PlayerBot playerBot)
+                    if (player is PlayerBot)
                     {
+                        PlayerBot playerBot = player as PlayerBot;
                         chunk.WriteInt(-1);
                         chunk.WriteInt(playerBot.slot.Index);
                         Write(playerBot);
@@ -1370,115 +1393,137 @@ namespace Velo
                     chunk.WriteInt(player.slot.Index);
                     Write(player);
                 }
-                else if (controller is Grapple grapple)
+                else if (controller is Grapple)
                 {
+                    Grapple grapple = controller as Grapple;
                     chunk.WriteInt(1);
                     Write(grapple);
                 }
-                else if (controller is Rope rope)
+                else if (controller is Rope)
                 {
+                    Rope rope = controller as Rope;
                     chunk.WriteInt(2);
                     Write(rope);
                 }
-                else if (controller is Fireball fireball)
+                else if (controller is Fireball)
                 {
+                    Fireball fireball = controller as Fireball;
                     chunk.WriteInt(3);
                     Write(fireball);
                 }
-                else if (controller is DroppedObstacle droppedObstacle)
+                else if (controller is DroppedObstacle)
                 {
+                    DroppedObstacle droppedObstacle = controller as DroppedObstacle;
                     chunk.WriteInt(4);
                     Write(droppedObstacle);
                 }
-                else if (controller is Rocket rocket)
+                else if (controller is Rocket)
                 {
+                    Rocket rocket = controller as Rocket;
                     chunk.WriteInt(5);
                     Write(rocket);
                 }
-                else if (controller is GoldenHook goldenHook)
+                else if (controller is GoldenHook)
                 {
+                    GoldenHook goldenHook = controller as GoldenHook;
                     chunk.WriteInt(6);
                     Write(goldenHook);
                 }
-                else if (controller is Shockwave shockwave)
+                else if (controller is Shockwave)
                 {
+                    Shockwave shockwave = controller as Shockwave;
                     chunk.WriteInt(7);
                     Write(shockwave);
                 }
-                else if (controller is DroppedBomb droppedBomb)
+                else if (controller is DroppedBomb)
                 {
+                    DroppedBomb droppedBomb = controller as DroppedBomb;
                     chunk.WriteInt(8);
                     Write(droppedBomb);
                 }
-                else if (controller is Obstacle obstacle)
+                else if (controller is Obstacle)
                 {
+                    Obstacle obstacle = controller as Obstacle;
                     chunk.WriteInt(9);
                     Write(obstacle);
                 }
-                else if (controller is FreezeRay freezeRay)
+                else if (controller is FreezeRay)
                 {
+                    FreezeRay freezeRay = controller as FreezeRay;
                     chunk.WriteInt(10);
                     Write(freezeRay);
                 }
-                else if (controller is Pickup pickup)
+                else if (controller is Pickup)
                 {
+                    Pickup pickup = controller as Pickup;
                     chunk.WriteInt(11);
                     Write(pickup);
                 }
-                else if (controller is Trigger trigger)
+                else if (controller is Trigger)
                 {
+                    Trigger trigger = controller as Trigger;
                     chunk.WriteInt(12);
                     Write(trigger);
                 }
-                else if (controller is SwitchBlock switchBlock)
+                else if (controller is SwitchBlock)
                 {
+                    SwitchBlock switchBlock = controller as SwitchBlock;
                     chunk.WriteInt(13);
                     Write(switchBlock);
                 }
-                else if (controller is FallTile fallTile)
+                else if (controller is FallTile)
                 {
+                    FallTile fallTile = controller as FallTile;
                     chunk.WriteInt(14);
                     Write(fallTile);
                 }
-                else if (controller is TriggerSaw triggerSaw)
+                else if (controller is TriggerSaw)
                 {
+                    TriggerSaw triggerSaw = controller as TriggerSaw;
                     chunk.WriteInt(15);
                     Write(triggerSaw);
                 }
-                else if (controller is RocketLauncher rocketLauncher)
+                else if (controller is RocketLauncher)
                 {
+                    RocketLauncher rocketLauncher = controller as RocketLauncher;
                     chunk.WriteInt(16);
                     Write(rocketLauncher);
                 }
-                else if (controller is BoostaCoke boostaCoke)
+                else if (controller is BoostaCoke)
                 {
+                    BoostaCoke boostaCoke = controller as BoostaCoke;
                     chunk.WriteInt(17);
                     Write(boostaCoke);
                 }
-                else if (controller is Laser laser)
+                else if (controller is Laser)
                 {
+                    Laser laser = controller as Laser;
                     chunk.WriteInt(18);
                     Write(laser);
                 }
-                else if (controller is AIVolume aiVolume)
+                else if (controller is AIVolume)
                 {
                     if (!storeAiVolumes)
                         continue;
+                    AIVolume aiVolume = controller as AIVolume;
                     chunk.WriteInt(19);
                     Write(aiVolume);
                 }
-                else if (controller is Timer timer)
+                else if (controller is Timer)
                 {
+                    Timer timer = controller as Timer;
                     chunk.WriteInt(20);
                     Write(timer);
                 }
-                else if (controller is Checkpoint checkpoint)
+                else if (controller is Checkpoint)
                 {
+                    Checkpoint checkpoint = controller as Checkpoint;
                     chunk.WriteInt(21);
                     Write(checkpoint);
                 }
-                else if (controller is StraightRocket straightRocket)
+                else if (controller is StraightRocket)
                 {
+                    StraightRocket straightRocket = controller as StraightRocket;
                     chunk.WriteInt(22);
                     Write(straightRocket);
                 }
@@ -1488,22 +1533,17 @@ namespace Velo
 
             foreach (var module in stack.modules)
             {
-                if (module is ModuleSolo moduleSolo)
-                {
-                    Write(moduleSolo);
-                    break;
-                }
-                else if (module is ModuleMP moduleMP)
-                {
-                    Write(moduleMP);
-                    break;
-                }
+                module.Match<ModuleSolo>(Write);
+                module.Match<ModuleMP>(Write);
             }
 
             time = CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks;
         }
 
-        private T GetOfType<T>(int n, Func<T, bool> func = null) where T : ICActorController
+#if !VELO_OLD
+#pragma warning disable IDE0034
+#endif
+        private T GetOfType<T>(int n, Func<T, bool> func = null) where T : class, ICActorController
         {
             int c = 0;
 
@@ -1511,17 +1551,20 @@ namespace Velo
             {
                 CActor actor = collisionEngine.GetActor(i);
                 ICActorController controller = actor.controller;
-                if (controller is T t && !actor.ghostOwnedItem && (func == null || func(t)))
+                if (controller is T && !actor.ghostOwnedItem && (func == null || func(controller as T)))
                 {
                     if (c == n)
-                        return t;
+                        return controller as T;
                     else
                         c++;
                 }
             }
 
-            return default;
+            return default(T);
         }
+#if !VELO_OLD
+#pragma warning restore IDE0034
+#endif
 
         public void DestroyAllAfter<T>(int n)
         {
@@ -1540,57 +1583,70 @@ namespace Velo
             }
         }
 
+#if !VELO_OLD
 #pragma warning disable IDE1006
+#endif
         public static void actor_update(CActor actor)
         {
             ICActorController controller = actor.controller;
-            if (controller is Grapple grapple)
+            if (controller is Grapple)
             {
+                Grapple grapple = controller as Grapple;
                 if (grapple.owner != null && !grapple.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is Rope rope)
+            else if (controller is Rope)
             {
+                Rope rope = controller as Rope;
                 if (rope.owner != null && !rope.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is Fireball fireball)
+            else if (controller is Fireball)
             {
+                Fireball fireball = controller as Fireball;
                 if (fireball.owner != null && !fireball.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is DroppedObstacle droppedObstacle)
+            else if (controller is DroppedObstacle)
             {
+                DroppedObstacle droppedObstacle = controller as DroppedObstacle;
                 if (droppedObstacle.owner != null && !droppedObstacle.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is Rocket rocket)
+            else if (controller is Rocket)
             {
+                Rocket rocket = controller as Rocket;
                 if (rocket.owner != null && !rocket.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is GoldenHook goldenHook)
+            else if (controller is GoldenHook)
             {
+                GoldenHook goldenHook = controller as GoldenHook;
                 if (goldenHook.owner != null && !goldenHook.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is Shockwave shockwave)
+            else if (controller is Shockwave)
             {
+                Shockwave shockwave = controller as Shockwave;
                 if (shockwave.owner != null && !shockwave.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is DroppedBomb droppedBomb)
+            else if (controller is DroppedBomb)
             {
+                DroppedBomb droppedBomb = controller as DroppedBomb;
                 if (droppedBomb.owner != null && !droppedBomb.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
-            else if (controller is FreezeRay freezeRay)
+            else if (controller is FreezeRay)
             {
+                FreezeRay freezeRay = controller as FreezeRay;
                 if (freezeRay.owner != null && !freezeRay.owner.slot.LocalPlayer)
                     actor.ghostOwnedItem = true;
             }
         }
+#if !VELO_OLD
 #pragma warning restore IDE1006
+#endif
 
         public bool Load()
         {
@@ -1790,16 +1846,8 @@ namespace Velo
 
             foreach (var module in stack.modules)
             {
-                if (module is ModuleSolo moduleSolo)
-                {
-                    Read(moduleSolo);
-                    break;
-                }
-                else if (module is ModuleMP moduleMP)
-                {
-                    Read(moduleMP);
-                    break;
-                }
+                module.Match<ModuleSolo>(Read);
+                module.Match<ModuleMP>(Read);
             }
 
             foreach (Action action in applyPtr)
@@ -1851,10 +1899,17 @@ namespace Velo
 
         private Savestates() : base("Savestates")
         {
+            NewCategory("general");
             SaveKey = AddHotkey("save key", (ushort)Keys.NumPad0);
             LoadKey = AddHotkey("load key", (ushort)Keys.NumPad1);
             LoadHaltDuration = AddInt("load halt duration", 0, 0, 5000);
             StoreAIVolumes = AddBool("store AI volumes", false);
+
+            LoadHaltDuration.Tooltip =
+                "Duration in milliseconds the game will run in slow motion after loading a savestate.";
+            StoreAIVolumes.Tooltip =
+                "Whether to store AI volumes or not. " +
+                "Storing them should be unnecessary in most circumstances.";
 
             savestate = new Savestate();
         }

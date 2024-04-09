@@ -1,12 +1,33 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Xna.Framework;
 
 namespace Velo
 {
     public static class Util
     {
+        public static void Match<T>(this object o, Action<T> act)
+        {
+            if (o is T)
+                act((T)o);
+        }
+
+        public static T Match<T>(this object o, T def)
+        {
+            if (o is T)
+                return ((T)o);
+            else
+                return def;
+        }
+
+        public static void NullCond<T>(this T t, Action<T> act)
+        {
+            if (t != null)
+                act(t);
+        }
+
         public static void Fill<T>(this T[] array, T value)
         {
             for (int i = 0; i < array.Length; i++)
@@ -32,6 +53,34 @@ namespace Velo
             return value.ToString("F" + roundingMultiplier.Precision);
         }
 
+        public static string LineBreaks(string s, int maxCharPerLine)
+        {
+            StringBuilder sb = new StringBuilder();
+            int index = 0;
+            while (true)
+            {
+                if (index + maxCharPerLine >= s.Length)
+                {
+                    sb.Append(s.Substring(index));
+                    return sb.ToString();
+                }
+
+                int nextBreak = s.IndexOf('\n', index);
+                if (nextBreak != -1 && nextBreak <= index + maxCharPerLine)
+                {
+                    sb.Append(s.Substring(index, nextBreak - index));
+                    sb.Append('\n');
+                    index = nextBreak + 1;
+                    continue;
+                }
+
+                int nextIndex = s.LastIndexOf(' ', index + maxCharPerLine);
+                sb.Append(s.Substring(index, nextIndex - index));
+                sb.Append('\n');
+                index = nextIndex + 1;
+            }
+        }
+
         public static Color ApplyAlpha(Color color)
         {
             return new Color(color.R, color.G, color.B) * (color.A / 255.0f);
@@ -49,7 +98,8 @@ namespace Velo
         {
             get
             {
-                GetSystemTimePreciseAsFileTime(out long filetime);
+                long filetime;
+                GetSystemTimePreciseAsFileTime(out filetime);
                 return DateTime.FromFileTimeUtc(filetime).Ticks;
             }
         }
