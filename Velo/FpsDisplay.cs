@@ -32,6 +32,11 @@ namespace Velo
             UpdateInterval = AddInt("update interval", 1000, 0, 10000);
             MeasurementPeriod = AddInt("measurement period", 1000, 0, 10000);
 
+            UpdateInterval.Tooltip =
+                "update interval in milliseconds";
+            MeasurementPeriod.Tooltip =
+                "measurement period in milliseconds";
+
             NewCategory("color");
             Variable = AddEnum("variable", EVariable.GLOBAL_TIME, VariableLabels);
             Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));

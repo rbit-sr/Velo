@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Velo
 {
@@ -49,7 +50,7 @@ namespace Velo
 
             foreach (Module module in modules)
             {
-                JsonElement settings = module.ToJson(true);
+                JsonElement settings = module.ToJson(EToJsonType.FOR_SAVE_FILE);
                 (settings as JsonObject).AddString("Version", VERSION);
                 File.WriteAllText("Velo\\" + module.Name + ".json", settings.ToString(true));
             }
@@ -58,7 +59,9 @@ namespace Velo
         public void Load()
         {
             if (!Directory.Exists("Velo"))
-                return;
+                Directory.CreateDirectory("Velo");
+
+            List<Module> unvisited = ModuleManager.Instance.Modules.ToList();
 
             string[] files = Directory.GetFiles("Velo");
             foreach (string file in files)
@@ -71,7 +74,11 @@ namespace Velo
                     continue;
                 JsonElement settings = JsonElement.FromString(File.ReadAllText(file));
                 module.LoadSettings(settings);
+
+                unvisited.Remove(module);
             }
+
+            Save(unvisited);
         }
     }
 }

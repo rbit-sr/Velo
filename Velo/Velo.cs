@@ -73,14 +73,7 @@ namespace Velo
             SpriteBatch = CEngine.CEngine.Instance.SpriteBatch;
             ContentManager = CEngine.CEngine.Instance.ContentBundleManager;
 
-            foreach (Type t in typeof(Module).Assembly.GetTypes())
-            {
-                if (typeof(Module).IsAssignableFrom(t)&& !t.IsAbstract)
-                {
-                    t.GetField("Instance").GetValue(null);
-                }
-            }
-
+            ModuleManager.Instance.Init();
             SaveFile.Instance.Load();
             SettingsUI.Instance.Enabled.Disable();
             Keyboard.Init();

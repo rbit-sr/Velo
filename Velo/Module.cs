@@ -5,8 +5,32 @@ using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+
 namespace Velo
 {
+    public enum EToJsonType
+    {
+        FOR_UI_INIT, FOR_UI_UPDATE, FOR_SAVE_FILE
+    }
+
+    public static class EToJsonTypeExt
+    {
+        public static bool ForUIInit(this EToJsonType toJsonType)
+        {
+            return toJsonType == EToJsonType.FOR_UI_INIT;
+        }
+
+        public static bool ForUIUpdate(this EToJsonType toJsonType)
+        {
+            return toJsonType == EToJsonType.FOR_UI_UPDATE;
+        }
+
+        public static bool ForSaveFile(this EToJsonType toJsonType)
+        {
+            return toJsonType == EToJsonType.FOR_SAVE_FILE;
+        }
+    }
+
     public class ModuleManager
     {
         private readonly List<Module> modules = new List<Module>();
@@ -24,6 +48,21 @@ namespace Velo
 
         public static ModuleManager Instance = new ModuleManager();
 
+        public void Init()
+        {
+            foreach (Type t in typeof(Module).Assembly.GetTypes())
+            {
+                if (typeof(Module).IsAssignableFrom(t) && !t.IsAbstract)
+                {
+                    object inst = t.GetField("Instance").GetValue(null);
+                }
+            }
+
+            modules.Sort((left, right) => left.Name.CompareTo(right.Name));
+
+            modules.ForEach(module => module.Init());
+        }
+
         public void Add(Module module)
         {
             modules.Add(module);
@@ -34,6 +73,11 @@ namespace Velo
         {
             idToSetting.Add(nextId, setting);
             return nextId++;
+        }
+
+        public void Add(Setting setting, int id)
+        {
+            idToSetting.Add(id, setting);
         }
 
         public void AddModifiedListener(Action<Setting> listener)
@@ -73,11 +117,14 @@ namespace Velo
                 module.PostRender();
         }
 
-        public JsonElement ToJson(bool valueOnly = false)
+        public JsonElement ToJson(EToJsonType toJsonType)
         {
             return new JsonObject(2).
                 AddDecimal("Count", modules.Sum(module => module.SettingsCount())).
-                AddArray("Modules", modules.Where(module => module.HasSettings()).Select(module => module.ToJson(valueOnly)).ToList());
+                AddArray("Modules", modules.
+                    Where(module => module.HasSettings()).
+                    Select(module => module.ToJson(toJsonType)).ToList()
+                );
         }
 
         public Module Get(string name)
@@ -133,7 +180,7 @@ namespace Velo
             ModuleManager.Instance.Add(this);
         }
 
-        private Setting Add(Setting setting)
+        protected Setting Add(Setting setting)
         {
             if (currentCategory == null)
             {
@@ -232,12 +279,15 @@ namespace Velo
             return settings.Sum(setting => setting is Category ? (setting as Category).Children.Count : 1);
         }
 
-        public JsonElement ToJson(bool valueOnly = false)
+        public JsonElement ToJson(EToJsonType toJsonType)
         {
             return new JsonObject(3).
                 AddString("Name", Name).
-                AddStringIf("Tooltip", Tooltip, !valueOnly).
-                AddArray("Settings", settings.Select(setting => setting.ToJson(valueOnly)).ToList());
+                AddStringIf("Tooltip", Tooltip, toJsonType.ForUIInit()).
+                AddArray("Settings", settings.
+                    Where(setting => !setting.Hidden || toJsonType.ForSaveFile()).
+                    Select(setting => setting.ToJson(toJsonType)).ToList()
+                );
         }
 
         public void LoadSettings(JsonElement elem)
@@ -260,6 +310,7 @@ namespace Velo
             }
         }
 
+        public virtual void Init() { }
         public virtual void PreUpdate() { }
         public virtual void PostUpdate() { }
         public virtual void PreRender() { }
@@ -560,14 +611,14 @@ namespace Velo
         protected void AddStyleSettings(bool roundingMultiplier = true, bool disablePopup = true)
         {
             NewCategory("style");
-            Scale = AddFloat("scale", 1.5f, 0.0f, 10.0f);
+            Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
             Orientation = AddEnum("orientation", EOrientation.PLAYER, 
                 Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
             Offset = AddVector("offset", Vector2.Zero, new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
             Font = AddString("font", "UI\\Font\\Souses.ttf");
-            FontSize = AddInt("font size", 16, 1, 50);
+            FontSize = AddInt("font size", 24, 1, 50);
             Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
-            Rotation = AddFloat("rotation", -0.05f, 0.0f, 3.14159f);
+            Rotation = AddFloat("rotation", -0.05f, 0.0f, (float)(2 * Math.PI));
             if (roundingMultiplier)
                 RoundingMultiplier = AddRoundingMultiplier("rounding multiplier", new RoundingMultiplier("1"));
             if (disablePopup)
@@ -598,7 +649,7 @@ namespace Velo
 
         public override void UpdateComponent()
         {
-            if (Font.Modified() || FontSize.Modified() || Scale.Modified())
+            if (Font.Modified() || FontSize.Modified())
             {
                 if (font != null)
                     Velo.ContentManager.Release(font);
@@ -607,7 +658,7 @@ namespace Velo
 
             if (font == null)
             {
-                font = new CFont(Font.Value, (int)(FontSize.Value * Scale.Value));
+                font = new CFont(Font.Value, FontSize.Value);
                 Velo.ContentManager.Load(font, false);
             }
 
@@ -622,16 +673,18 @@ namespace Velo
             drawComp.color_replace = false;
             drawComp.IsVisible = true;
             drawComp.Font = font;
-            drawComp.Align = 0.5f * Vector2.One;
-            //drawComp.Offset = Offset.Value;
+            drawComp.Align = Orientation.Value == EOrientation.PLAYER ?
+                0.5f * Vector2.One : Vector2.Zero;
+            drawComp.Offset = Offset.Value;
             drawComp.HasDropShadow = true;
-            drawComp.DropShadowColor = Microsoft.Xna.Framework.Color.Black;
+            drawComp.DropShadowColor = Color.Black;
             drawComp.DropShadowOffset = Vector2.One;
             drawComp.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup.Flipped;
-            drawComp.Scale = Vector2.One;
+            drawComp.Scale = Scale.Value * Vector2.One;
             drawComp.Rotation = Rotation.Value;
             drawComp.StringText = GetText();
             drawComp.Color = GetColor();
+            drawComp.DropShadowColor *= drawComp.Color.A / 255.0f;
             drawComp.Opacity = Opacity.Value;
             drawComp.UpdateBounds();
 
@@ -641,7 +694,7 @@ namespace Velo
             float width = drawComp.Bounds.Width;
             float height = drawComp.Bounds.Height;
 
-            drawComp.Position = Offset.Value + Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
+            drawComp.Position = Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
 
             drawComp.UpdateBounds();
         }

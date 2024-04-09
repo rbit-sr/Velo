@@ -28,12 +28,13 @@ namespace Velo
                 act(t);
         }
 
-        public static void Fill<T>(this T[] array, T value)
+        public static T[] Fill<T>(this T[] array, T value)
         {
             for (int i = 0; i < array.Length; i++)
             {
                 array[i] = value;
             }
+            return array;
         }
 
         public static string ToStringRounded(float value, RoundingMultiplier roundingMultiplier)

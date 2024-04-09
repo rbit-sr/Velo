@@ -1,5 +1,7 @@
 ﻿using Lidgren.Network;
+using System;
 using System.Collections.Generic;
+using System.Threading;
 
 namespace Velo
 {
@@ -124,12 +126,13 @@ namespace Velo
                 }
             }
 
+            // couldn't find a poller for specified channel, create a new one
             MessagePoller newPoller = new MessagePoller(pools, channel);
             lock (pollers)
             {
                 pollers.Add(newPoller);
             }
-            System.Threading.Thread thread = new System.Threading.Thread(PollPacketsLoop);
+            Thread thread = new Thread(PollPacketsLoop);
             thread.Start(newPoller);
             return null;
         }
@@ -158,24 +161,28 @@ namespace Velo
                 MultithreadedNetwork.Value
                 )
             {
-                uint num;
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, poller.channel))
+                try
                 {
-                    NetIncomingMessage msg;
-                    lock (poller.pools)
+                    uint num;
+                    if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, poller.channel))
                     {
-                        msg = poller.pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
+                        NetIncomingMessage msg;
+                        lock (poller.pools)
+                        {
+                            msg = poller.pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
+                        }
+                        Steamworks.CSteamID identifier;
+                        Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, poller.channel);
+                        msg.LengthBits = (int)(num * 8u);
+                        lock (poller.messages)
+                        {
+                            poller.messages.Add(new Velo.Message(msg, identifier));
+                        }
                     }
-                    Steamworks.CSteamID identifier;
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, poller.channel);
-                    msg.LengthBits = (int)(num * 8u);
-                    lock (poller.messages)
-                    {
-                        poller.messages.Add(new Velo.Message(msg, identifier));
-                    }
-                }
 
-                System.Threading.Thread.Sleep(1);
+                    Thread.Sleep(1);
+                }
+                catch (Exception) { }
             }
         }
     }

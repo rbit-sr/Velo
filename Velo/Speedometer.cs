@@ -20,7 +20,7 @@ namespace Velo
 
         private static readonly string[] SpeedTypeLabels = new[]
         {
-            "magnitude", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)"
+            "absolute", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)"
         };
 
         public IntSetting UpdateInterval;

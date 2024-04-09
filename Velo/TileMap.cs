@@ -2,11 +2,32 @@
 using Microsoft.Xna.Framework;
 using CEngine.Graphics.Layer;
 using Microsoft.Xna.Framework.Graphics;
-using System.Linq;
 
 namespace Velo
 {
-    public class TileUtil
+    public struct Vector2i
+    {
+        public int X, Y;
+
+        public Vector2i(int x, int y)
+        {
+            X = x; 
+            Y = y;
+        }
+
+        public Vector2i(Vector2 vec)
+        {
+            X = (int)vec.X;
+            Y = (int)vec.Y;
+        }
+
+        public static Rectangle operator +(Rectangle rect, Vector2i vec)
+        {
+            return new Rectangle(rect.X + vec.X, rect.Y + vec.Y, rect.Width, rect.Height);
+        }
+    }
+
+    public static class TileUtil
     {
         public const int TILE_AIR = 0;
         public const int TILE_SQUARE = 1;
@@ -28,11 +49,11 @@ namespace Velo
         public const int SHAPE_AIR = 0;
         public const int SHAPE_SQUARE = 1;
         public const int SHAPE_SLOPE_CEIL_RIGHT = 2;
-        public const int SHAPE_SLOPE_CEIL_LEFT = 3;
-        public const int SHAPE_SLOPE_FLOOR_RIGHT = 4;
-        public const int SHAPE_SLOPE_FLOOR_LEFT = 5;
+        public const int SHAPE_SLOPE_FLOOR_RIGHT = 3;
+        public const int SHAPE_SLOPE_FLOOR_LEFT = 4;
+        public const int SHAPE_SLOPE_CEIL_LEFT = 5;
 
-        public static int GetShape(int tile)
+        public static int GetShape(this int tile)
         {
             switch (tile)
             {
@@ -71,52 +92,94 @@ namespace Velo
             return GetShape(tilemap.GetTile(x, y));
         }
 
-        public static bool TopEdge(int shape)
+        public static int RotateCCW(this int shape, int rotation)
         {
-            return
+            if (shape == SHAPE_AIR || shape == SHAPE_SQUARE)
+                return shape;
+            shape += rotation;
+            while (shape > SHAPE_SLOPE_CEIL_LEFT)
+                shape -= 4;
+            return shape;
+        }
+
+        public static Rectangle RotateCCW(this Rectangle rect, int rotation)
+        {
+            if (rotation > 3 || rotation < 0)
+                rotation %= 4;
+
+            switch (rotation)
+            {
+                case 0:
+                    return rect;
+                case 1:
+                    return new Rectangle(rect.Top, 16 - rect.Right, rect.Height, rect.Width);
+                case 2:
+                    return new Rectangle(16 - rect.Right, 16 - rect.Bottom, rect.Width, rect.Height);
+                case 3:
+                    return new Rectangle(16 - rect.Bottom, rect.Left, rect.Height, rect.Width);
+                default:
+                    return default(Rectangle);
+            }
+        }
+
+        private static void RotateRight<T>(ref T t1, ref T t2, ref T t3, ref T t4)
+        {
+            T temp = t4;
+            t4 = t3;
+            t3 = t2;
+            t2 = t1;
+            t1 = temp;
+        }
+
+        public static void RotateCCW1(this Color[] colors)
+        {
+            for (int y = 0; y < 8; y++)
+            {
+                for (int x = 0; x < 8; x++)
+                {
+                    RotateRight(
+                        ref colors[x + 16 * y],
+                        ref colors[y + 16 * (15 - x)],
+                        ref colors[15 - x + 16 * (15 - y)],
+                        ref colors[15 - y + 16 * x]
+                        );
+                }
+            }
+        }
+
+        public static void Overdraw(this Color[] dst, Color[] src1, Color[] src2)
+        {
+            for (int i = 0; i < 16 * 16; i++)
+            {
+                if (src2[i] == Color.Transparent)
+                    dst[i] = src1[i];
+                else
+                    dst[i] = src2[i];
+            }
+        }
+
+        public static bool Edge(this int shape, int orientation)
+        {
+            shape = shape.RotateCCW(4 - orientation);
+
+            return 
                 shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_CEIL_RIGHT || shape == SHAPE_SLOPE_CEIL_LEFT;
         }
 
-        public static bool BottomEdge(int shape)
+        public static bool Corner(this int shape, int orientation)
         {
-            return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_FLOOR_RIGHT || shape == SHAPE_SLOPE_FLOOR_LEFT;
-        }
+            shape = shape.RotateCCW(4 - orientation);
 
-        public static bool LeftEdge(int shape)
-        {
-            return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_CEIL_RIGHT || shape == SHAPE_SLOPE_FLOOR_RIGHT;
-        }
-
-        public static bool RightEdge(int shape)
-        {
-            return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_CEIL_LEFT || shape == SHAPE_SLOPE_FLOOR_LEFT;
-        }
-
-        public static bool TopLeftCorner(int shape)
-        {
             return
                 shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_CEIL_RIGHT;
         }
 
-        public static bool BottomLeftCorner(int shape)
+        public static bool Slope(this int shape, int orientation)
         {
-            return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_FLOOR_RIGHT;
-        }
+            shape = shape.RotateCCW(4 - orientation);
 
-        public static bool TopRightCorner(int shape)
-        {
             return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_CEIL_LEFT;
-        }
-
-        public static bool BottomRightCorner(int shape)
-        {
-            return
-                shape == SHAPE_SQUARE || shape == SHAPE_SLOPE_FLOOR_LEFT;
+                shape == SHAPE_SLOPE_CEIL_RIGHT;
         }
 
         public static bool FromLineStyle(ELineStyle style, int pos)
@@ -139,24 +202,6 @@ namespace Velo
         SOLID, DASHED, DOTTED
     }
 
-    public static class ELineStyleExt
-    {
-        public static string Label(this ELineStyle lineStyle)
-        {
-            switch (lineStyle)
-            {
-                case ELineStyle.SOLID:
-                    return "solid";
-                case ELineStyle.DASHED:
-                    return "dashed";
-                case ELineStyle.DOTTED:
-                    return "dotted";
-                default:
-                    return "";
-            }
-        }
-    }
-
     public class TileMap : Module
     {
         public ColorTransitionSetting ColorMultiplier;
@@ -175,28 +220,15 @@ namespace Velo
         public BoolSetting RemoveCheckered;
         public BoolSetting SlopeAntiAliasing;
 
+        public static string[] LineStyleLabels = new[] { "solid", "dashed", "dotted" };
+
         private Texture2D pixel;
         private readonly Texture2D[] tiles = new Texture2D[16];
-        private Texture2D slopeCeilRightOutline;
-        private Texture2D slopeCeilLeftOutline;
-        private Texture2D slopeFloorRightOutline;
-        private Texture2D slopeFloorLeftOutline;
-        private Texture2D slopeCeilRightOutlineCornerBoth;
-        private Texture2D slopeCeilRightOutlineCornerBelow;
-        private Texture2D slopeCeilRightOutlineCornerRight;
-        private Texture2D slopeCeilLeftOutlineCornerBoth;
-        private Texture2D slopeCeilLeftOutlineCornerBelow;
-        private Texture2D slopeCeilLeftOutlineCornerLeft;
-        private Texture2D slopeFloorRightOutlineCornerBoth;
-        private Texture2D slopeFloorRightOutlineCornerAbove;
-        private Texture2D slopeFloorRightOutlineCornerRight;
-        private Texture2D slopeFloorLeftOutlineCornerBoth;
-        private Texture2D slopeFloorLeftOutlineCornerAbove;
-        private Texture2D slopeFloorLeftOutlineCornerLeft;
-        private Texture2D slopeCeilRightOutlineCornerSmall;
-        private Texture2D slopeCeilLeftOutlineCornerSmall;
-        private Texture2D slopeFloorRightOutlineCornerSmall;
-        private Texture2D slopeFloorLeftOutlineCornerSmall;
+        private readonly Texture2D[] slopeOutline = new Texture2D[4];
+        private readonly Texture2D[] slopeOutlineCornerBoth = new Texture2D[4];
+        private readonly Texture2D[] slopeOutlineCornerCCW = new Texture2D[4];
+        private readonly Texture2D[] slopeOutlineCornerCW = new Texture2D[4];
+        private readonly Texture2D[] slopeOutlineCornerSmall = new Texture2D[4];
 
         private bool texturesSetUp = false;
 
@@ -221,12 +253,10 @@ namespace Velo
             FillColor = AddColor("fill color", Color.Black);
             GrappleCeilingColor = AddColor("grapple ceil color", Color.White);
             GrappleCeilingWidth = AddInt("grapple ceil width", 3, 0, 16);
-            GrappleCeilingStyle = AddEnum("grapple ceil style", ELineStyle.SOLID,
-                Enum.GetValues(typeof(ELineStyle)).Cast<ELineStyle>().Select(lineStyle => lineStyle.Label()).ToArray());
+            GrappleCeilingStyle = AddEnum("grapple ceil style", ELineStyle.SOLID, LineStyleLabels);
             WallColor = AddColor("wall color", Color.White);
             WallWidth = AddInt("wall width", 3, 0, 16);
-            WallStyle = AddEnum("wall style", ELineStyle.DOTTED,
-                Enum.GetValues(typeof(ELineStyle)).Cast<ELineStyle>().Select(lineStyle => lineStyle.Label()).ToArray());
+            WallStyle = AddEnum("wall style", ELineStyle.DOTTED, LineStyleLabels);
             StairsReplaceWithSlopes = AddBool("stairs replace with slopes", false);
             RemoveCheckered = AddBool("remove checkered", false);
             SlopeAntiAliasing = AddBool("slope anti aliasing", false);
@@ -285,26 +315,42 @@ namespace Velo
 
             pixel.NullCond(Dispose);
             for (int i = 1; i < 16; i++)
+            {
                 tiles[i].NullCond(Dispose);
-            slopeCeilRightOutline.NullCond(Dispose);
-            slopeCeilLeftOutline.NullCond(Dispose);
-            slopeFloorRightOutline.NullCond(Dispose);
-            slopeFloorLeftOutline.NullCond(Dispose);
-            slopeCeilRightOutlineCornerBoth.NullCond(Dispose);
-            slopeCeilRightOutlineCornerBelow.NullCond(Dispose);
-            slopeCeilRightOutlineCornerRight.NullCond(Dispose);
-            slopeCeilLeftOutlineCornerBoth.NullCond(Dispose);
-            slopeCeilLeftOutlineCornerBelow.NullCond(Dispose);
-            slopeCeilLeftOutlineCornerLeft.NullCond(Dispose);
-            slopeFloorRightOutlineCornerBoth.NullCond(Dispose);
-            slopeFloorRightOutlineCornerAbove.NullCond(Dispose);
-            slopeFloorRightOutlineCornerRight.NullCond(Dispose);
-            slopeFloorLeftOutlineCornerBoth.NullCond(Dispose);
-            slopeFloorLeftOutlineCornerAbove.NullCond(Dispose);
-            slopeFloorLeftOutlineCornerLeft.NullCond(Dispose);
+                tiles[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                slopeOutline[i].NullCond(Dispose);
+                slopeOutline[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                slopeOutlineCornerBoth[i].NullCond(Dispose);
+                slopeOutlineCornerBoth[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                slopeOutlineCornerCCW[i].NullCond(Dispose);
+                slopeOutlineCornerCCW[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                slopeOutlineCornerCW[i].NullCond(Dispose);
+                slopeOutlineCornerCW[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                slopeOutlineCornerSmall[i].NullCond(Dispose);
+                slopeOutlineCornerSmall[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            }
 
             int outline_width = OutlineWidth.Value;
             int slopeOutline_width = (int)(outline_width * Math.Sqrt(2.0) + 0.5f);
+
+            Color fillColor = Util.ApplyAlpha(FillColor.Value);
+            Color wallColor = Util.ApplyAlpha(WallColor.Value);
+            Color grappleCeilColor = Util.ApplyAlpha(GrappleCeilingColor.Value);
 
             pixel = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 1, 1);
             pixel.SetData(new Color[]
@@ -313,17 +359,18 @@ namespace Velo
                 }, 0, 1);
 
             Color[] data = new Color[16 * 16];
+            Color[] checkered = new Color[16 * 16];
+            Color[] slope = new Color[16 * 16];
 
             // square
             for (int y = 0, i = 0; y < 16; y++)
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    data[i] = FillColor.Value;
+                    data[i] = fillColor;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_SQUARE] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_SQUARE].SetData(data, 0, 16 * 16);
 
             // wall right
@@ -331,14 +378,13 @@ namespace Velo
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    if (x >= 16 - WallWidth.Value && TileUtil.FromLineStyle((ELineStyle)WallStyle.Value, y))
-                        data[i] = WallColor.Value;
+                    if (x >= 16 - WallWidth.Value && TileUtil.FromLineStyle(WallStyle.Value, y))
+                        data[i] = wallColor;
                     else
-                        data[i] = FillColor.Value;
+                        data[i] = fillColor;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_WALL_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_WALL_RIGHT].SetData(data, 0, 16 * 16);
 
             // wall left
@@ -346,14 +392,13 @@ namespace Velo
             {
                 for (int x = 0; x < 16; x++)
                 {
-                    if (x < WallWidth.Value && TileUtil.FromLineStyle((ELineStyle)WallStyle.Value, y))
-                        data[i] = WallColor.Value;
+                    if (x < WallWidth.Value && TileUtil.FromLineStyle(WallStyle.Value, y))
+                        data[i] = wallColor;
                     else
-                        data[i] = FillColor.Value;
+                        data[i] = fillColor;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_WALL_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_WALL_LEFT].SetData(data, 0, 16 * 16);
 
             // grapple ceiling
@@ -362,13 +407,12 @@ namespace Velo
                 for (int x = 0; x < 16; x++)
                 {
                     if (y >= 16 - GrappleCeilingWidth.Value && TileUtil.FromLineStyle((ELineStyle)GrappleCeilingStyle.Value, x))
-                        data[i] = GrappleCeilingColor.Value;
+                        data[i] = grappleCeilColor;
                     else
-                        data[i] = FillColor.Value;
+                        data[i] = fillColor;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_GRAPPLE_CEIL] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_GRAPPLE_CEIL].SetData(data, 0, 16 * 16);
 
             // checkered
@@ -377,14 +421,13 @@ namespace Velo
                 for (int x = 0; x < 16; x++)
                 {
                     if ((x / 4 % 2 == 0) == (y / 4 % 2 == 0))
-                        data[i] = FillColor.Value;
+                        checkered[i] = fillColor;
                     else
-                        data[i] = Color.Transparent;
+                        checkered[i] = Color.Transparent;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_CHECKERED] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_CHECKERED].SetData(data, 0, 16 * 16);
+            tiles[TileUtil.TILE_CHECKERED].SetData(checkered, 0, 16 * 16);
 
             // slope ceiling right
             for (int y = 0, i = 0; y < 16; y++)
@@ -393,74 +436,27 @@ namespace Velo
                 {
                     if (x <= 15 - y)
                     {
-                        data[i] = FillColor.Value;
+                        slope[i] = fillColor;
                         if (SlopeAntiAliasing.Value && x == 15 - y)
-                            data[i].A = 127;
+                            slope[i] *= 0.5f;
                     }
                     else
-                        data[i] = Color.Transparent;
+                        slope[i] = Color.Transparent;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_SLOPE_CEIL_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_SLOPE_CEIL_RIGHT].SetData(data, 0, 16 * 16);
+            tiles[TileUtil.TILE_SLOPE_CEIL_RIGHT].SetData(slope, 0, 16 * 16);
 
-            // slope ceiling left
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= y)
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_SLOPE_CEIL_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_SLOPE_CEIL_LEFT].SetData(data, 0, 16 * 16);
+            slope.RotateCCW1();
+            tiles[TileUtil.TILE_SLOPE_FLOOR_RIGHT].SetData(slope, 0, 16 * 16);
 
-            // slope floor right
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x <= y)
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_SLOPE_FLOOR_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_SLOPE_FLOOR_RIGHT].SetData(data, 0, 16 * 16);
+            slope.RotateCCW1();
+            tiles[TileUtil.TILE_SLOPE_FLOOR_LEFT].SetData(slope, 0, 16 * 16);
 
-            // slope floor left
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= 15 - y)
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == 15 - y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_SLOPE_FLOOR_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_SLOPE_FLOOR_LEFT].SetData(data, 0, 16 * 16);
+            slope.RotateCCW1();
+            tiles[TileUtil.TILE_SLOPE_CEIL_LEFT].SetData(slope, 0, 16 * 16);
+
+            slope.RotateCCW1();
 
             int[] stairs_profile = { 8, 8, 9, 9, 9, 9, 9, 9, 0, 0, 1, 1, 1, 1, 1, 1 };
 
@@ -471,13 +467,12 @@ namespace Velo
                 {
                     if (16 - x > stairs_profile[y])
 
-                        data[i] = FillColor.Value;
+                        data[i] = fillColor;
                     else
                         data[i] = Color.Transparent;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_STAIRS_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_STAIRS_RIGHT].SetData(data, 0, 16 * 16);
 
             // stairs left
@@ -486,90 +481,28 @@ namespace Velo
                 for (int x = 0; x < 16; x++)
                 {
                     if (x >= stairs_profile[y])
-                        data[i] = FillColor.Value;
+                        data[i] = fillColor;
                     else
                         data[i] = Color.Transparent;
                     i++;
                 }
             }
-            tiles[TileUtil.TILE_STAIRS_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             tiles[TileUtil.TILE_STAIRS_LEFT].SetData(data, 0, 16 * 16);
 
-            // checkered slope ceiling right
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x <= 15 - y || (x / 4 % 2 == 0) == (y / 4 % 2 == 0))
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == 15 - y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_CHECKERED_SLOPE_CEIL_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            data.Overdraw(slope, checkered);
             tiles[TileUtil.TILE_CHECKERED_SLOPE_CEIL_RIGHT].SetData(data, 0, 16 * 16);
 
-            // checkered slope ceiling left
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= y || (x / 4 % 2 == 0) == (y / 4 % 2 == 0))
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_CHECKERED_SLOPE_CEIL_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            tiles[TileUtil.TILE_CHECKERED_SLOPE_CEIL_LEFT].SetData(data, 0, 16 * 16);
-
-            // checkered slope floor right
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x <= y || (x / 4 % 2 == 0) == (y / 4 % 2 == 0))
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_CHECKERED_SLOPE_FLOOR_RIGHT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            slope.RotateCCW1();
+            data.Overdraw(slope, checkered);
             tiles[TileUtil.TILE_CHECKERED_SLOPE_FLOOR_RIGHT].SetData(data, 0, 16 * 16);
 
-            // checkered slope floor left
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= 15 - y || (x / 4 % 2 == 0) == (y / 4 % 2 == 0))
-                    {
-                        data[i] = FillColor.Value;
-                        if (SlopeAntiAliasing.Value && x == 15 - y)
-                            data[i].A = 127;
-                    }
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            tiles[TileUtil.TILE_CHECKERED_SLOPE_FLOOR_LEFT] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
+            slope.RotateCCW1();
+            data.Overdraw(slope, checkered);
             tiles[TileUtil.TILE_CHECKERED_SLOPE_FLOOR_LEFT].SetData(data, 0, 16 * 16);
+
+            slope.RotateCCW1();
+            data.Overdraw(slope, checkered);
+            tiles[TileUtil.TILE_CHECKERED_SLOPE_CEIL_LEFT].SetData(data, 0, 16 * 16);
 
             // slope ceiling right outline
             for (int y = 0, i = 0; y < 16; y++)
@@ -583,53 +516,16 @@ namespace Velo
                     i++;
                 }
             }
-            slopeCeilRightOutline = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilRightOutline.SetData(data, 0, 16 * 16);
+            slopeOutline[0].SetData(data, 0, 16 * 16);
 
-            // slope ceiling left outline
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= y && x < y + slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeCeilLeftOutline = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilLeftOutline.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutline[1].SetData(data, 0, 16 * 16);
 
-            // slope floor right outline
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x <= y && x > y - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorRightOutline = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorRightOutline.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutline[2].SetData(data, 0, 16 * 16);
 
-            // slope floor left outline
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x >= 15 - y && x < 15 - y + slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorLeftOutline = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorLeftOutline.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutline[3].SetData(data, 0, 16 * 16);
 
             // slope ceiling right outline corner with both neightbors slopes
             for (int y = 0, i = 0; y < 16; y++)
@@ -643,8 +539,16 @@ namespace Velo
                     i++;
                 }
             }
-            slopeCeilRightOutlineCornerBoth = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilRightOutlineCornerBoth.SetData(data, 0, 16 * 16);
+            slopeOutlineCornerBoth[0].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerBoth[1].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerBoth[2].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerBoth[3].SetData(data, 0, 16 * 16);
 
             // slope ceiling right outline corner with below neightbor slope
             for (int y = 0, i = 0; y < 16; y++)
@@ -658,8 +562,16 @@ namespace Velo
                     i++;
                 }
             }
-            slopeCeilRightOutlineCornerBelow = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilRightOutlineCornerBelow.SetData(data, 0, 16 * 16);
+            slopeOutlineCornerCCW[0].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerCCW[1].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerCCW[2].SetData(data, 0, 16 * 16);
+
+            data.RotateCCW1();
+            slopeOutlineCornerCCW[3].SetData(data, 0, 16 * 16);
 
             // slope ceiling right outline corner with right neightbor slope
             for (int y = 0, i = 0; y < 16; y++)
@@ -673,143 +585,16 @@ namespace Velo
                     i++;
                 }
             }
-            slopeCeilRightOutlineCornerRight = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilRightOutlineCornerRight.SetData(data, 0, 16 * 16);
+            slopeOutlineCornerCW[0].SetData(data, 0, 16 * 16);
 
-            // slope ceiling left outline corner with both neightbors slopes
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + y >= 32 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeCeilLeftOutlineCornerBoth = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilLeftOutlineCornerBoth.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerCW[1].SetData(data, 0, 16 * 16);
 
-            // slope ceiling left outline corner with below neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + y >= 32 - slopeOutline_width && y >= 16 - outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeCeilLeftOutlineCornerBelow = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilLeftOutlineCornerBelow.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerCW[2].SetData(data, 0, 16 * 16);
 
-            // slope ceiling left outline corner with left neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + y >= 32 - slopeOutline_width && x < outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeCeilLeftOutlineCornerLeft = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilLeftOutlineCornerLeft.SetData(data, 0, 16 * 16);
-
-            // slope floor right outline corner with both neightbors slopes
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x + 15 - y >= 32 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorRightOutlineCornerBoth = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorRightOutlineCornerBoth.SetData(data, 0, 16 * 16);
-
-            // slope floor right outline corner with above neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x + 15 - y >= 32 - slopeOutline_width && y < outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorRightOutlineCornerAbove = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorRightOutlineCornerAbove.SetData(data, 0, 16 * 16);
-
-            // slope floor right outline corner with right neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x + 15 - y >= 32 - slopeOutline_width && x >= 16 - outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorRightOutlineCornerRight = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorRightOutlineCornerRight.SetData(data, 0, 16 * 16);
-
-            // slope floor left outline corner with both neightbors slopes
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + 15 - y >= 32 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorLeftOutlineCornerBoth = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorLeftOutlineCornerBoth.SetData(data, 0, 16 * 16);
-
-            // slope floor left outline corner with above neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + 15 - y >= 32 - slopeOutline_width && y < outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorLeftOutlineCornerAbove = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorLeftOutlineCornerAbove.SetData(data, 0, 16 * 16);
-
-            // slope floor left outline corner with left neightbor slope
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + 15 - y >= 32 - slopeOutline_width && x < outline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorLeftOutlineCornerLeft = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorLeftOutlineCornerLeft.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerCW[3].SetData(data, 0, 16 * 16);
 
             // slope ceiling right outline small corner
             for (int y = 0, i = 0; y < 16; y++)
@@ -823,53 +608,16 @@ namespace Velo
                     i++;
                 }
             }
-            slopeCeilRightOutlineCornerSmall = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilRightOutlineCornerSmall.SetData(data, 0, 16 * 16);
+            slopeOutlineCornerSmall[0].SetData(data, 0, 16 * 16);
 
-            // slope ceiling left outline small corner
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + y >= 48 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeCeilLeftOutlineCornerSmall = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeCeilLeftOutlineCornerSmall.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerSmall[1].SetData(data, 0, 16 * 16);
 
-            // slope floor right outline small corner
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (x + 15 - y >= 48 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorRightOutlineCornerSmall = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorRightOutlineCornerSmall.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerSmall[2].SetData(data, 0, 16 * 16);
 
-            // slope floor left outline small corner
-            for (int y = 0, i = 0; y < 16; y++)
-            {
-                for (int x = 0; x < 16; x++)
-                {
-                    if (15 - x + 15 - y >= 48 - slopeOutline_width)
-                        data[i] = SlopeOutlineColor.Value;
-                    else
-                        data[i] = Color.Transparent;
-                    i++;
-                }
-            }
-            slopeFloorLeftOutlineCornerSmall = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
-            slopeFloorLeftOutlineCornerSmall.SetData(data, 0, 16 * 16);
+            data.RotateCCW1();
+            slopeOutlineCornerSmall[3].SetData(data, 0, 16 * 16);
 
             texturesSetUp = true;
         }
@@ -881,6 +629,8 @@ namespace Velo
 
             if (!texturesSetUp)
                 return false;
+
+            Vector2i posi = new Vector2i(pos);
             
             int tileId = tilemap.GetTile(x, y);
             if (StairsReplaceWithSlopes.Value)
@@ -916,14 +666,16 @@ namespace Velo
             int outlineWidth = OutlineWidth.Value;
 
             int here = TileUtil.GetShape(tilemap, x, y);
-            int above = TileUtil.GetShape(tilemap, x, y - 1);
-            int below = TileUtil.GetShape(tilemap, x, y + 1);
-            int left = TileUtil.GetShape(tilemap, x - 1, y);
-            int right = TileUtil.GetShape(tilemap, x + 1, y);
-            int aboveLeft = TileUtil.GetShape(tilemap, x - 1, y - 1);
-            int belowLeft = TileUtil.GetShape(tilemap, x - 1, y + 1);
-            int aboveRight = TileUtil.GetShape(tilemap, x + 1, y - 1);
-            int belowRight = TileUtil.GetShape(tilemap, x + 1, y + 1);
+            int[] neigh = new int[4];
+            int[] diagNeigh = new int[4];
+            neigh[0] = TileUtil.GetShape(tilemap, x, y - 1);
+            neigh[1] = TileUtil.GetShape(tilemap, x - 1, y);
+            neigh[2] = TileUtil.GetShape(tilemap, x, y + 1);
+            neigh[3] = TileUtil.GetShape(tilemap, x + 1, y);
+            diagNeigh[0] = TileUtil.GetShape(tilemap, x - 1, y - 1);
+            diagNeigh[1] = TileUtil.GetShape(tilemap, x - 1, y + 1);
+            diagNeigh[2] = TileUtil.GetShape(tilemap, x + 1, y + 1);
+            diagNeigh[3] = TileUtil.GetShape(tilemap, x + 1, y - 1);
 
             if (here == TileUtil.SHAPE_AIR)
                 return true;
@@ -931,258 +683,98 @@ namespace Velo
             if (outlineWidth >= 16 && (tileId == TileUtil.TILE_GRAPPLE_CEIL || tileId == TileUtil.TILE_WALL_LEFT || tileId == TileUtil.TILE_WALL_RIGHT))
                 return true;
 
-            if (here == TileUtil.SHAPE_SQUARE && !TileUtil.BottomEdge(above))
+            int cornerWidth = here == TileUtil.SHAPE_SQUARE ? outlineWidth : Math.Min(outlineWidth, 8);
+            for (int i = 0; i < 4; i++)
             {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, outlineWidth),
-                    outlineCol);
+                if (
+                    here == TileUtil.SHAPE_SQUARE && !TileUtil.Edge(neigh[i], i + 2) &&
+                    (i != 2 || tileId != TileUtil.TILE_GRAPPLE_CEIL) &&
+                    (i != 1 || tileId != TileUtil.TILE_WALL_LEFT) &&
+                    (i != 3 || tileId != TileUtil.TILE_WALL_RIGHT))
+                {
+                    Velo.SpriteBatch.Draw(
+                        pixel,
+                        new Rectangle(0, 0, 16, outlineWidth).RotateCCW(i) + posi,
+                        outlineCol);
+                }
+
+                if (
+                    here.Corner(i) && !diagNeigh[i].Corner(i + 2) &&
+                    neigh[i].Corner(i + 1) && neigh[(i + 1) % 4].Corner(i + 3))
+                {
+                    Velo.SpriteBatch.Draw(
+                        pixel,
+                        new Rectangle(0, 0, cornerWidth, outlineWidth).RotateCCW(i) + posi,
+                        outlineCol);
+                }
+
+                if (here.Slope(i) && !neigh[i].Edge(i + 2))
+                {
+                    Velo.SpriteBatch.Draw(
+                        pixel,
+                        new Rectangle(0, 0, 16 - cornerWidth, outlineWidth).RotateCCW(i) + posi,
+                        outlineCol);
+                }
+
+                if (here.Slope(i) && !neigh[(i + 1) % 4].Edge(i + 3))
+                {
+                    Velo.SpriteBatch.Draw(
+                        pixel,
+                        new Rectangle(0, 0, outlineWidth, 16 - cornerWidth).RotateCCW(i) + posi,
+                        outlineCol);
+                }
             }
-            if (here == TileUtil.SHAPE_SQUARE && !TileUtil.TopEdge(below) && tileId != TileUtil.TILE_GRAPPLE_CEIL)
+
+            for (int i = 0; i < 4; i++)
             {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y + 16 - outlineWidth, 16, outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && !TileUtil.RightEdge(left) && tileId != TileUtil.TILE_WALL_LEFT)
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y, outlineWidth, 16),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && !TileUtil.LeftEdge(right) && tileId != TileUtil.TILE_WALL_RIGHT)
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + 16 - outlineWidth, (int)pos.Y, outlineWidth, 16),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_RIGHT)
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilRightOutline,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_LEFT)
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilLeftOutline,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT)
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorRightOutline,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_LEFT)
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorLeftOutline,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomRightCorner(here) && below == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && right == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilRightOutlineCornerBoth,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomRightCorner(here) && below == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && right != TileUtil.SHAPE_SLOPE_CEIL_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilRightOutlineCornerBelow,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomRightCorner(here) && below != TileUtil.SHAPE_SLOPE_CEIL_RIGHT && right == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilRightOutlineCornerRight,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomLeftCorner(here) && below == TileUtil.SHAPE_SLOPE_CEIL_LEFT && left == TileUtil.SHAPE_SLOPE_CEIL_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilLeftOutlineCornerBoth,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomLeftCorner(here) && below == TileUtil.SHAPE_SLOPE_CEIL_LEFT && left != TileUtil.SHAPE_SLOPE_CEIL_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilLeftOutlineCornerBelow,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.BottomLeftCorner(here) && below != TileUtil.SHAPE_SLOPE_CEIL_LEFT && left == TileUtil.SHAPE_SLOPE_CEIL_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeCeilLeftOutlineCornerLeft,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopRightCorner(here) && above == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && right == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorRightOutlineCornerBoth,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopRightCorner(here) && above == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && right != TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorRightOutlineCornerAbove,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopRightCorner(here) && above != TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && right == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorRightOutlineCornerRight,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopLeftCorner(here) && above == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && left == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorLeftOutlineCornerBoth,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopLeftCorner(here) && above == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && left != TileUtil.SHAPE_SLOPE_FLOOR_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorLeftOutlineCornerAbove,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            if (TileUtil.TopLeftCorner(here) && above != TileUtil.SHAPE_SLOPE_FLOOR_LEFT && left == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
-            {
-                Velo.SpriteBatch.Draw(
-                    slopeFloorLeftOutlineCornerLeft,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                    Color.White);
-            }
-            int corner_width = here == TileUtil.SHAPE_SQUARE ? outlineWidth : Math.Min(outlineWidth, 8);
-            if (TileUtil.TopLeftCorner(here) && TileUtil.TopRightCorner(left) && TileUtil.BottomLeftCorner(above) && !TileUtil.BottomRightCorner(aboveLeft))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y, corner_width, corner_width),
-                    outlineCol);
-            }
-            if (TileUtil.BottomLeftCorner(here) && TileUtil.BottomRightCorner(left) && TileUtil.TopLeftCorner(below) && !TileUtil.TopRightCorner(belowLeft))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y + 16 - corner_width, corner_width, corner_width),
-                    outlineCol);
-            }
-            if (TileUtil.TopRightCorner(here) && TileUtil.TopLeftCorner(right) && TileUtil.BottomRightCorner(above) && !TileUtil.BottomLeftCorner(aboveRight))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + 16 - corner_width, (int)pos.Y, corner_width, corner_width),
-                    outlineCol);
-            }
-            if (TileUtil.BottomRightCorner(here) && TileUtil.BottomLeftCorner(right) && TileUtil.TopRightCorner(below) && !TileUtil.TopLeftCorner(belowRight))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + 16 - corner_width, (int)pos.Y + 16 - corner_width, corner_width, corner_width),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && !TileUtil.BottomEdge(above))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y, 16 - outlineWidth, outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_RIGHT && !TileUtil.RightEdge(left))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y, outlineWidth, 16 - outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_LEFT && !TileUtil.BottomEdge(above))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + outlineWidth, (int)pos.Y, 16 - outlineWidth, outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_CEIL_LEFT && !TileUtil.LeftEdge(right))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + 16 - outlineWidth, (int)pos.Y, outlineWidth, 16 - outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && !TileUtil.TopEdge(below))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y + 16 - outlineWidth, 16 - outlineWidth, outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT && !TileUtil.RightEdge(left))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X, (int)pos.Y + outlineWidth, outlineWidth, 16 - outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && !TileUtil.TopEdge(below))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + outlineWidth, (int)pos.Y + 16 - outlineWidth, 16 - outlineWidth, outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SLOPE_FLOOR_LEFT && !TileUtil.LeftEdge(right))
-            {
-                Velo.SpriteBatch.Draw(
-                    pixel,
-                    new Rectangle((int)pos.X + 16 - outlineWidth, (int)pos.Y + outlineWidth, outlineWidth, 16 - outlineWidth),
-                    outlineCol);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && belowRight == TileUtil.SHAPE_SLOPE_CEIL_RIGHT)
-            {
-                Velo.SpriteBatch.Draw(
-                   slopeCeilRightOutlineCornerSmall,
-                   new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                   Color.White);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && belowLeft == TileUtil.SHAPE_SLOPE_CEIL_LEFT)
-            {
-                Velo.SpriteBatch.Draw(
-                   slopeCeilLeftOutlineCornerSmall,
-                   new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                   Color.White);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && aboveRight == TileUtil.SHAPE_SLOPE_FLOOR_RIGHT)
-            {
-                Velo.SpriteBatch.Draw(
-                   slopeFloorRightOutlineCornerSmall,
-                   new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                   Color.White);
-            }
-            if (here == TileUtil.SHAPE_SQUARE && aboveLeft == TileUtil.SHAPE_SLOPE_FLOOR_LEFT)
-            {
-                Velo.SpriteBatch.Draw(
-                   slopeFloorLeftOutlineCornerSmall,
-                   new Rectangle((int)pos.X, (int)pos.Y, 16, 16),
-                   Color.White);
+                if (here.Slope(i))
+                {
+                    Velo.SpriteBatch.Draw(
+                        slopeOutline[i],
+                        new Rectangle(0, 0, 16, 16) + posi,
+                        Color.White);
+                }
+
+                if (
+                    here.Corner(i + 2) && 
+                    neigh[(i + 2) % 4].Slope(i) && neigh[(i + 3) % 4].Slope(i) &&
+                    (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
+                {
+                    Velo.SpriteBatch.Draw(
+                        slopeOutlineCornerBoth[i],
+                        new Rectangle(0, 0, 16, 16) + posi,
+                        Color.White);
+                }
+
+                if (
+                    here.Corner(i + 2) &&
+                    neigh[(i + 2) % 4].Slope(i) && !neigh[(i + 3) % 4].Slope(i) &&
+                    (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
+                {
+                    Velo.SpriteBatch.Draw(
+                        slopeOutlineCornerCCW[i],
+                        new Rectangle(0, 0, 16, 16) + posi,
+                        Color.White);
+                }
+
+                if (
+                    here.Corner(i + 2) &&
+                    !neigh[(i + 2) % 4].Slope(i) && neigh[(i + 3) % 4].Slope(i) &&
+                    (here == TileUtil.SHAPE_SQUARE || outlineWidth <= 12))
+                {
+                    Velo.SpriteBatch.Draw(
+                        slopeOutlineCornerCW[i],
+                        new Rectangle(0, 0, 16, 16) + posi,
+                        Color.White);
+                }
+
+                if (here == TileUtil.SHAPE_SQUARE && diagNeigh[(i + 2) % 4].Slope(i))
+                {
+                    Velo.SpriteBatch.Draw(
+                        slopeOutlineCornerSmall[i],
+                        new Rectangle(0, 0, 16, 16) + posi,
+                        Color.White);
+                }
             }
 
             return true;

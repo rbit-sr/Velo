@@ -88,10 +88,10 @@ namespace Velo
 
     public class ColorTransition
     {
-        public int period = 500;
-        public int offset = 0;
-        public bool discrete = false;
-        public Color[] colors;
+        private int period = 500;
+        private int offset = 0;
+        private bool discrete = false;
+        private Color[] colors;
 
         public ColorTransition() { }
 
@@ -129,6 +129,9 @@ namespace Velo
             if (colors.Length == 1)
                 return Util.ApplyAlpha(colors[0]);
 
+            if (period == 0)
+                return colors[0];
+
             double index = repeat ?
                 ((x + offset) % period) / (double)period * colors.Length :
                 Math.Min(Math.Max(Math.Abs(x + offset), 0), period) / (double)period * (colors.Length - 1);
@@ -157,6 +160,9 @@ namespace Velo
 
             if (colors.Length == 1)
                 return Util.ApplyAlpha(colors[0]);
+
+            if (period == 0)
+                return colors[0];
 
             double index = repeat ?
                 ((x + offset) % period) / period * colors.Length :
