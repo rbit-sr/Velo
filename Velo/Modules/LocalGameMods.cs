@@ -1,11 +1,9 @@
 ﻿using CEngine.Graphics.Camera;
-using CEngine.Util.Draw;
 using Microsoft.Xna.Framework;
-using System;
 
 namespace Velo
 {
-    public class LocalGameModifications : Module
+    public class LocalGameMods : Module
     {
         public FloatSetting TimeScale;
         public FloatSetting CameraZoom;
@@ -18,15 +16,15 @@ namespace Velo
         public ToggleSetting FixGrappleGlitches;
         public BoolSetting EnableOldMoonwalk;
 
-        private LocalGameModifications() : base("Local Game Modifications")
+        private LocalGameMods() : base("Local Game Mods")
         {
             NewCategory("physics");
-            TimeScale = AddFloat("time scale", 1.0f, 0.0f, 10.0f);
-            MaxSpeed = AddFloat("max speed", 1500.0f, 0.0f, 10000.0f);
-            Gravity = AddVector("gravity", new Vector2(0.0f, 1000.0f), new Vector2(-10000.0f, -10000.0f), new Vector2(10000.0f, 10000.0f));
-            GrappleHookSpeed = AddFloat("grapple hook speed", 3000.0f, 0.0f, 20000.0f);
-            GrappleCooldown = AddFloat("grapple cooldown", 0.25f, 0.0f, 5.0f);
-            SlideCooldown = AddFloat("slide cooldown", 0.5f, 0.0f, 5.0f);
+            TimeScale = AddFloat("time scale", 1f, 0.1f, 5f);
+            MaxSpeed = AddFloat("max speed", 1500f, 100f, 10000f);
+            Gravity = AddVector("gravity", new Vector2(0f, 1000f), new Vector2(-5000f, -5000f), new Vector2(5000f, 5000f));
+            GrappleHookSpeed = AddFloat("grapple hook speed", 3000f, 100f, 20000f);
+            GrappleCooldown = AddFloat("grapple cooldown", 0.25f, 0f, 2f);
+            SlideCooldown = AddFloat("slide cooldown", 0.5f, 0f, 2f);
             FixGrappleGlitches = AddToggle("fix grapple glitches", new Toggle());
             EnableOldMoonwalk = AddBool("enable old moonwalk", false);
 
@@ -39,11 +37,14 @@ namespace Velo
                 "by hitting ceiling slopes from below.";
 
             NewCategory("camera");
-            CameraZoom = AddFloat("zoom", -1.0f, 0.0f, 10.0f);
-            CameraMaxSpeed = AddFloat("max speed", 1250.0f, 0.0f, 2000.0f);
+            CameraZoom = AddFloat("zoom", -1f, 0.1f, 10f);
+            CameraMaxSpeed = AddFloat("max speed", 1250f, 100f, 2000f);
+
+            CameraZoom.Tooltip =
+                "zoom (Set to -1 for no change)";
         }
 
-        public static LocalGameModifications Instance = new LocalGameModifications();
+        public static LocalGameMods Instance = new LocalGameMods();
 
         public bool IsModded()
         {

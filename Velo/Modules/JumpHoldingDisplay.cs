@@ -17,6 +17,8 @@ namespace Velo
 
         private TimeSpan releaseTime = new TimeSpan(0);
         private bool wasConnected = false;
+        private bool prevJumpPress = false;
+        private bool hasJumped = false;
         private TimeSpan miss;
 
         private string text = "";
@@ -33,7 +35,7 @@ namespace Velo
                 "-miss: time between the last jump release and subsequent grapple connection in milliseconds";
 
             AddStyleSettings();
-            Offset.SetValueAndDefault(new Vector2(7.0f, -90.0f));
+            Offset.SetValueAndDefault(new Vector2(7f, -90f));
             RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("0.001"));
         }
 
@@ -41,10 +43,15 @@ namespace Velo
 
         public override void Update()
         {
-            if (Velo.MainPlayer == null)
+            if (!Velo.Ingame)
                 return;
 
             bool missChanged = false;
+
+            if (Velo.MainPlayer.jumpPressed && !prevJumpPress)
+            {
+                hasJumped = true;
+            }
 
             if (Velo.MainPlayer.jumpPressed && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.MainPlayer.game_time.TotalGameTime)
             {
@@ -54,8 +61,12 @@ namespace Velo
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
             {
                 wasConnected = true;
-                miss = Velo.MainPlayer.game_time.TotalGameTime - releaseTime;
-                missChanged = true;
+                if (Velo.MainPlayer.actor.Velocity.Y < 0.0f && hasJumped)
+                {
+                    miss = Velo.MainPlayer.game_time.TotalGameTime - releaseTime;
+                    missChanged = true;
+                }
+                hasJumped = false;
             }
             if (!Velo.MainPlayer.grapple.connected)
             {
@@ -64,8 +75,10 @@ namespace Velo
 
             if (missChanged || text.Length == 0)
             {
-                text = Util.ToStringRounded((float)(miss.Ticks / (double)TimeSpan.TicksPerSecond), RoundingMultiplier.Value);
+                text = RoundingMultiplier.Value.ToStringRounded((float)(miss.Ticks / (double)TimeSpan.TicksPerSecond));
             }
+
+            prevJumpPress = Velo.MainPlayer.jumpPressed;
         }
 
         public override string GetText()

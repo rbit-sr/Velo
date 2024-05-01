@@ -32,12 +32,10 @@ namespace Velo
         private long lastUpdate = 0;
 
         private string text = "";
-        private float speed = 0.0f;
+        private float speed = 0f;
 
         private Speedometer() : base("Speedometer", true)
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F2));
-
             NewCategory("general");
             UpdateInterval = AddInt("update interval", 100, 0, 2000);
             SpeedType = AddEnum("speed type", ESpeedType.ABSOLUTE, SpeedTypeLabels);
@@ -103,7 +101,7 @@ namespace Velo
                 "-speed: player's speed in units per second";
 
             AddStyleSettings();
-            Offset.SetValueAndDefault(new Vector2(7.0f, -60.0f));
+            Offset.SetValueAndDefault(new Vector2(7f, -60f));
             RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("5"));
         }
 
@@ -116,7 +114,7 @@ namespace Velo
 
             Vector2 velocity = Velo.MainPlayer.actor.Velocity;
 
-            float speed = 0.0f;
+            float speed = 0f;
 
             switch (SpeedType.Value)
             {
@@ -141,7 +139,8 @@ namespace Velo
             if (milliseconds - lastUpdate >= UpdateInterval.Value)
             {
                 lastUpdate = milliseconds;
-                text = Util.ToStringRounded(speed, RoundingMultiplier.Value);
+                //text = RoundingMultiplier.Value.ToStringRounded(speed);
+                text = "" + TAS.Instance.recCurrent.Count + "\n" + TAS.Instance.recLast.Count;
                 this.speed = speed;
             }
         }

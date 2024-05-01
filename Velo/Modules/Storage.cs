@@ -5,19 +5,19 @@ using System.Linq;
 
 namespace Velo
 {
-    public class SaveFile : Module
+    public class Storage : Module
     {
-        private static readonly string VERSION = "1.8.0";
+        private static readonly string VERSION = "2.0.1";
 
         private readonly List<Setting> modified = new List<Setting>();
         private TimeSpan lastSave = TimeSpan.Zero;
 
-        private SaveFile() : base("Save File")
+        private Storage() : base("Storage")
         {
             ModuleManager.Instance.AddModifiedListener(modified.Add);
         }
 
-        public static SaveFile Instance = new SaveFile();
+        public static Storage Instance = new Storage();
 
         public override void PreUpdate()
         {
@@ -50,7 +50,9 @@ namespace Velo
 
             foreach (Module module in modules)
             {
-                JsonElement settings = module.ToJson(EToJsonType.FOR_SAVE_FILE);
+                if (!module.HasSettings())
+                    continue;
+                JsonElement settings = module.ToJson(ToJsonArgs.ForStorage);
                 (settings as JsonObject).AddString("Version", VERSION);
                 File.WriteAllText("Velo\\" + module.Name + ".json", settings.ToString(true));
             }

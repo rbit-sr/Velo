@@ -8,29 +8,6 @@ using System.Linq;
 
 namespace Velo
 {
-    public enum EToJsonType
-    {
-        FOR_UI_INIT, FOR_UI_UPDATE, FOR_SAVE_FILE
-    }
-
-    public static class EToJsonTypeExt
-    {
-        public static bool ForUIInit(this EToJsonType toJsonType)
-        {
-            return toJsonType == EToJsonType.FOR_UI_INIT;
-        }
-
-        public static bool ForUIUpdate(this EToJsonType toJsonType)
-        {
-            return toJsonType == EToJsonType.FOR_UI_UPDATE;
-        }
-
-        public static bool ForSaveFile(this EToJsonType toJsonType)
-        {
-            return toJsonType == EToJsonType.FOR_SAVE_FILE;
-        }
-    }
-
     public class ModuleManager
     {
         private readonly List<Module> modules = new List<Module>();
@@ -75,11 +52,6 @@ namespace Velo
             return nextId++;
         }
 
-        public void Add(Setting setting, int id)
-        {
-            idToSetting.Add(id, setting);
-        }
-
         public void AddModifiedListener(Action<Setting> listener)
         {
             modifiedListeners.Add(listener);
@@ -117,13 +89,13 @@ namespace Velo
                 module.PostRender();
         }
 
-        public JsonElement ToJson(EToJsonType toJsonType)
+        public JsonElement ToJson(ToJsonArgs args)
         {
             return new JsonObject(2).
                 AddDecimal("Count", modules.Sum(module => module.SettingsCount())).
                 AddArray("Modules", modules.
                     Where(module => module.HasSettings()).
-                    Select(module => module.ToJson(toJsonType)).ToList()
+                    Select(module => module.ToJson(args)).ToList()
                 );
         }
 
@@ -148,7 +120,7 @@ namespace Velo
                 JsonElement jsonId = ((JsonObject)item).Get("ID");
                 if (!(jsonId is JsonDecimal))
                     continue;
-                int id = jsonId.ToInt();
+                int id = jsonId.AsInt();
                 if (idToSetting.ContainsKey(id))
                 {
                     idToSetting[id].FromJson(item);
@@ -180,7 +152,7 @@ namespace Velo
             ModuleManager.Instance.Add(this);
         }
 
-        protected Setting Add(Setting setting)
+        private Setting Add(Setting setting)
         {
             if (currentCategory == null)
             {
@@ -259,14 +231,14 @@ namespace Velo
             return (EnumSetting<E>)Add(new EnumSetting<E>(this, name, defaultValue, labels));
         }
 
-        protected ColorSetting AddColor(string name, Color defaultValue, bool enableAlpha = true)
+        protected ColorSetting AddColor(string name, Color defaultValue)
         {
-            return (ColorSetting)Add(new ColorSetting(this, name, defaultValue, enableAlpha));
+            return (ColorSetting)Add(new ColorSetting(this, name, defaultValue));
         }
 
-        protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue, bool enableAlpha = true)
+        protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue)
         {
-            return (ColorTransitionSetting)Add(new ColorTransitionSetting(this, name, defaultValue, enableAlpha));
+            return (ColorTransitionSetting)Add(new ColorTransitionSetting(this, name, defaultValue));
         }
 
         protected InputBoxSetting AddInputBox(string name, InputBox defaultValue)
@@ -279,14 +251,14 @@ namespace Velo
             return settings.Sum(setting => setting is Category ? (setting as Category).Children.Count : 1);
         }
 
-        public JsonElement ToJson(EToJsonType toJsonType)
+        public JsonElement ToJson(ToJsonArgs args)
         {
             return new JsonObject(3).
                 AddString("Name", Name).
-                AddStringIf("Tooltip", Tooltip, toJsonType.ForUIInit()).
+                AddStringIf("Tooltip", Tooltip, args.Definition).
                 AddArray("Settings", settings.
-                    Where(setting => !setting.Hidden || toJsonType.ForSaveFile()).
-                    Select(setting => setting.ToJson(toJsonType)).ToList()
+                    Where(setting => !setting.Hidden || args.Hidden).
+                    Select(setting => setting.ToJson(args)).ToList()
                 );
         }
 
@@ -302,7 +274,7 @@ namespace Velo
                 JsonElement nameJson = ((JsonObject)setting).Get("Name");
                 if (!(nameJson is JsonString))
                     continue;
-                string name = FromJsonExt.ToString(nameJson);
+                string name = nameJson.AsString();
                 if (settingsLookup.ContainsKey(name))
                 {
                     settingsLookup[name].FromJson(setting);
@@ -551,7 +523,7 @@ namespace Velo
                 case EOrientation.TOP_LEFT:
                 case EOrientation.LEFT:
                 case EOrientation.BOTTOM_LEFT:
-                    origin.X = 0.0f;
+                    origin.X = 0f;
                     break;
                 case EOrientation.TOP_RIGHT:
                 case EOrientation.RIGHT:
@@ -561,7 +533,7 @@ namespace Velo
                 case EOrientation.TOP:
                 case EOrientation.CENTER:
                 case EOrientation.BOTTOM:
-                    origin.X = (screenWidth - width) / 2.0f;
+                    origin.X = (screenWidth - width) / 2f;
                     break;
             }
 
@@ -570,7 +542,7 @@ namespace Velo
                 case EOrientation.TOP_LEFT:
                 case EOrientation.TOP:
                 case EOrientation.TOP_RIGHT:
-                    origin.Y = 0.0f;
+                    origin.Y = 0f;
                     break;
                 case EOrientation.BOTTOM_LEFT:
                 case EOrientation.BOTTOM:
@@ -580,7 +552,7 @@ namespace Velo
                 case EOrientation.LEFT:
                 case EOrientation.CENTER:
                 case EOrientation.RIGHT:
-                    origin.Y = (screenHeight - height) / 2.0f;
+                    origin.Y = (screenHeight - height) / 2f;
                     break;
             }
 
@@ -611,14 +583,14 @@ namespace Velo
         protected void AddStyleSettings(bool roundingMultiplier = true, bool disablePopup = true)
         {
             NewCategory("style");
-            Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
+            Scale = AddFloat("scale", 1f, 0f, 10f);
             Orientation = AddEnum("orientation", EOrientation.PLAYER, 
                 Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
-            Offset = AddVector("offset", Vector2.Zero, new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
+            Offset = AddVector("offset", Vector2.Zero, new Vector2(-500f, -500f), new Vector2(500f, 500f));
             Font = AddString("font", "UI\\Font\\Souses.ttf");
             FontSize = AddInt("font size", 24, 1, 50);
-            Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
-            Rotation = AddFloat("rotation", -0.05f, 0.0f, (float)(2 * Math.PI));
+            Opacity = AddFloat("opacity", 1f, 0f, 1f);
+            Rotation = AddFloat("rotation", -0.05f, 0f, (float)(2 * Math.PI));
             if (roundingMultiplier)
                 RoundingMultiplier = AddRoundingMultiplier("rounding multiplier", new RoundingMultiplier("1"));
             if (disablePopup)
@@ -658,7 +630,7 @@ namespace Velo
 
             if (font == null)
             {
-                font = new CFont(Font.Value, FontSize.Value);
+                font = FontCache.Get(Font.Value, FontSize.Value);
                 Velo.ContentManager.Load(font, false);
             }
 
@@ -684,7 +656,7 @@ namespace Velo
             drawComp.Rotation = Rotation.Value;
             drawComp.StringText = GetText();
             drawComp.Color = GetColor();
-            drawComp.DropShadowColor *= drawComp.Color.A / 255.0f;
+            drawComp.DropShadowColor *= drawComp.Color.A / 255f;
             drawComp.Opacity = Opacity.Value;
             drawComp.UpdateBounds();
 

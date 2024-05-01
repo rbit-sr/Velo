@@ -23,7 +23,7 @@ namespace Velo
 
             if (font_watermark == null)
             {
-                font_watermark = new CFont("UI\\Font\\ariblk.ttf", 24);
+                font_watermark = FontCache.Get("UI\\Font\\ariblk.ttf", 24);
                 Velo.ContentManager.Load(font_watermark, false);
             }
 
@@ -36,24 +36,27 @@ namespace Velo
 
             string text = "";
 
-            if (Velo.get_time_scale() != 1.0f)
+            if (Velo.get_time_scale() != 1f)
                 text += "\nx" + Velo.get_time_scale();
            
-            if (LocalGameModifications.Instance.IsModded() || BlindrunSimulator.Instance.Enabled.Value.Enabled)
+            if (LocalGameMods.Instance.IsModded() || BlindrunSimulator.Instance.Enabled.Value.Enabled)
                 text += "\nmodded";
 
-            if (TAS.Instance.dtFixed)
+            if (TAS.Instance.DtFixed)
                 text += "\nTAS";
 
             long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
             if (milliseconds - Savestates.Instance.savestateLoadTime <= 500)
-                watermark.StringText += "\nload";
+                text += "\nload";
 
             if (text.Length > 0)
             {
                 text = text.Remove(0, 1);
                 watermark.StringText = text;
                 watermark.IsVisible = true;
+                watermark.HasDropShadow = true;
+                watermark.DropShadowColor = Color.Black;
+                watermark.DropShadowOffset = Vector2.One;
                 watermark.UpdateBounds();
             
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);

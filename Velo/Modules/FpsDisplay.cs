@@ -29,8 +29,8 @@ namespace Velo
         private FpsDisplay() : base("FPS Display", false)
         {
             NewCategory("general");
-            UpdateInterval = AddInt("update interval", 1000, 0, 10000);
-            MeasurementPeriod = AddInt("measurement period", 1000, 0, 10000);
+            UpdateInterval = AddInt("update interval", 1000, 0, 3000);
+            MeasurementPeriod = AddInt("measurement period", 1000, 0, 3000);
 
             UpdateInterval.Tooltip =
                 "update interval in milliseconds";
@@ -47,12 +47,12 @@ namespace Velo
                 "-framerate: frames per second";
 
             AddStyleSettings(false, false);
-            Scale.SetValueAndDefault(1.0f);
+            Scale.SetValueAndDefault(1f);
             Orientation.SetValueAndDefault(EOrientation.TOP_RIGHT);
-            Offset.SetValueAndDefault(new Vector2(-16.0f, 16.0f));
+            Offset.SetValueAndDefault(new Vector2(-16f, 16f));
             Font.SetValueAndDefault("UI\\Font\\GOTHIC.ttf");
             FontSize.SetValueAndDefault(18);
-            Rotation.SetValueAndDefault(0.0f);
+            Rotation.SetValueAndDefault(0f);
         }
 
         public static FpsDisplay Instance = new FpsDisplay();

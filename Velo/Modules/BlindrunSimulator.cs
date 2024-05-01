@@ -18,14 +18,12 @@ namespace Velo
 
         private BlindrunSimulator() : base("Blindrun Simulator")
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F5));
-
             NewCategory("general");
-            SlowSpeed = AddVector("slow speed", new Vector2(100, 200), new Vector2(0, 0), new Vector2(2000, 2000));
-            FastSpeed = AddVector("fast speed", new Vector2(1250, 1250), new Vector2(0, 0), new Vector2(2000, 2000));
-            SlowBorderOff = AddVector("slow border off", new Vector2(-100, -50), new Vector2(-500, -500), new Vector2(500, 500));
-            FastBorderOff = AddVector("fast border off", new Vector2(100, 50), new Vector2(-500, -500), new Vector2(500, 500));
-            MaxAcc = AddVector("max acc", new Vector2(3000, 6000), new Vector2(0, 0), new Vector2(20000, 20000));
+            SlowSpeed = AddVector("slow speed", new Vector2(100f, 200f), new Vector2(0f, 0f), new Vector2(1500f, 1500f));
+            FastSpeed = AddVector("fast speed", new Vector2(1250f, 1250f), new Vector2(0f, 0f), new Vector2(1500f, 1500f));
+            SlowBorderOff = AddVector("slow border off", new Vector2(-100f, -50f), new Vector2(-500, -300), new Vector2(500f, 300f));
+            FastBorderOff = AddVector("fast border off", new Vector2(100f, 50f), new Vector2(-500, -300), new Vector2(500f, 300f));
+            MaxAcc = AddVector("max acc", new Vector2(3000f, 6000f), new Vector2(0f, 0f), new Vector2(20000, 20000));
 
             CurrentCategory.Tooltip =
                 "The blindrun simulator has two different speed settings: slow and fast. " +
@@ -48,41 +46,70 @@ namespace Velo
 
         public static BlindrunSimulator Instance = new BlindrunSimulator();
 
+        public override void PostUpdate()
+        {
+            if (Velo.MainPlayerReset && Velo.Ingame)
+            {
+                camPos = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
+                camVel = Vector2.Zero;
+            }
+        }
+
         public void Update(ICCameraModifier cameraMod)
         {
             if (!Enabled.Value.Enabled)
                 return;
 
             Camera camera = (Camera)cameraMod;
-            
+
             if (Enabled.Modified())
             {
-                camPos = camera.player.actor.Position;
+                camPos = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
                 camVel = Vector2.Zero;
             }
-
-            Vector2 diff = camera.player.actor.Bounds.Center - camPos;
-            Vector2 slowSpeedBorder = (new Vector2(640.0f, 360.0f) + SlowBorderOff.Value) * camera.zoom1;
-            Vector2 fastSpeedBorder = (new Vector2(640.0f, 360.0f) + FastBorderOff.Value) * camera.zoom1;
+                
+            Vector2 diff = camera.player.actor.Bounds.Center + new Vector2(0f, -100f) - camPos;
+            Vector2 slowSpeedBorder = (new Vector2(640f, 360f) + SlowBorderOff.Value) * camera.zoom1;
+            Vector2 fastSpeedBorder = (new Vector2(640f, 360f) + FastBorderOff.Value) * camera.zoom1;
             Vector2 targetVel;
 
             if (Math.Abs(diff.X) < slowSpeedBorder.X)
-                targetVel.X = Math.Abs(diff.X) / slowSpeedBorder.X * SlowSpeed.Value.X;
+            {
+                targetVel.X = 
+                    Math.Abs(diff.X) / slowSpeedBorder.X * SlowSpeed.Value.X;
+            }
             else if (Math.Abs(diff.X) < fastSpeedBorder.X)
-                targetVel.X = SlowSpeed.Value.X + (Math.Abs(diff.X) - slowSpeedBorder.X) / (fastSpeedBorder.X - slowSpeedBorder.X) * (FastSpeed.Value.X - SlowSpeed.Value.X);
+            {
+                targetVel.X = 
+                    SlowSpeed.Value.X + 
+                    (Math.Abs(diff.X) - slowSpeedBorder.X) / (fastSpeedBorder.X - slowSpeedBorder.X) * (FastSpeed.Value.X - SlowSpeed.Value.X);
+            }
             else
-                targetVel.X = FastSpeed.Value.X;
+            {
+                targetVel.X = 
+                    FastSpeed.Value.X;
+            }
 
             if (Math.Abs(diff.Y) < slowSpeedBorder.Y)
-                targetVel.Y = Math.Abs(diff.Y) / slowSpeedBorder.Y * SlowSpeed.Value.Y;
+            {
+                targetVel.Y = 
+                    Math.Abs(diff.Y) / slowSpeedBorder.Y * SlowSpeed.Value.Y;
+            }
             else if (Math.Abs(diff.Y) < fastSpeedBorder.Y)
-                targetVel.Y = SlowSpeed.Value.Y + (Math.Abs(diff.Y) - slowSpeedBorder.Y) / (fastSpeedBorder.Y - slowSpeedBorder.Y) * (FastSpeed.Value.Y - SlowSpeed.Value.Y);
+            {
+                targetVel.Y = 
+                    SlowSpeed.Value.Y + 
+                    (Math.Abs(diff.Y) - slowSpeedBorder.Y) / (fastSpeedBorder.Y - slowSpeedBorder.Y) * (FastSpeed.Value.Y - SlowSpeed.Value.Y);
+            }
             else
-                targetVel.Y = FastSpeed.Value.Y;
+            {
+                targetVel.Y = 
+                    FastSpeed.Value.Y;
+            }
 
-            if (diff.X < 0.0f)
+            if (diff.X < 0f)
                 targetVel.X = -targetVel.X;
-            if (diff.Y < 0.0f)
+            if (diff.Y < 0f)
                 targetVel.Y = -targetVel.Y;
 
             Vector2 camVelDiff = targetVel - camVel;

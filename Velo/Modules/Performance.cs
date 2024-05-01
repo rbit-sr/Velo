@@ -5,8 +5,9 @@ using System.Threading;
 
 namespace Velo
 {
-    public class Performance : ToggleModule
+    public class Performance : Module
     {
+        public BoolSetting Enabled;
         public IntSetting Framelimit;
         public IntSetting FramelimitMethod;
         public BoolSetting DisableBubbles;
@@ -17,10 +18,10 @@ namespace Velo
 
         private Performance() : base("Performance")
         {
-            Enabled.SetValueAndDefault(new Toggle(true));
+            Enabled = AddBool("enabled", true);
 
             NewCategory("framerate");
-            Framelimit = AddInt("framelimit", -1, -1, 2500);
+            Framelimit = AddInt("framelimit", -1, -1, 2000);
             FramelimitMethod = AddInt("framelimit method", -1, -1, 3);
             LimitFramerateAfterRender = AddBool("limit framerate after render", false);
 
@@ -56,7 +57,7 @@ namespace Velo
                 "Might break controller inputs.";
 
             NewCategory("other");
-            MultithreadedNetwork = AddBool("multithreaded network", true);
+            MultithreadedNetwork = AddBool("multithreaded network", false);
             
             MultithreadedNetwork.Tooltip =
                 "[WARNING: Experimental] Starts a new thread to poll network packets. " +
@@ -84,7 +85,7 @@ namespace Velo
         public Velo.Message PollPacket(MessagePools pools, int channel)
         {
             if (
-                !(Enabled.Value.Enabled &&
+                !(Enabled.Value &&
                 MultithreadedNetwork.Value)
                 )
             {
@@ -139,7 +140,7 @@ namespace Velo
 
         public void RecyclePacket(NetIncomingMessage message, MessagePools pools)
         {
-            if (!(Enabled.Value.Enabled &&
+            if (!(Enabled.Value &&
                 MultithreadedNetwork.Value)
                 )
             {
@@ -157,7 +158,7 @@ namespace Velo
         {
             MessagePoller poller = (MessagePoller)pollerObj;
             while (
-                Enabled.Value.Enabled &&
+                Enabled.Value &&
                 MultithreadedNetwork.Value
                 )
             {

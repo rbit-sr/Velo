@@ -1,11 +1,41 @@
 ﻿using Microsoft.Xna.Framework;
-using Newtonsoft.Json.Linq;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace Velo
 {
+    public struct ToJsonArgs
+    {
+        public bool Name;
+        public bool Definition;
+        public bool ID;
+        public bool Hidden;
+
+        public static readonly ToJsonArgs ForUIInit = new ToJsonArgs
+        {
+            Name = true,
+            Definition = true,
+            ID = true,
+            Hidden = false
+        };
+
+        public static readonly ToJsonArgs ForUIUpdate = new ToJsonArgs
+        {
+            Name = false,
+            Definition = false,
+            ID = true,
+            Hidden = false
+        };
+
+        public static readonly ToJsonArgs ForStorage = new ToJsonArgs
+        {
+            Name = true,
+            Definition = false,
+            ID = false,
+            Hidden = true
+        };
+    }
+
     public abstract class Setting
     {
         private readonly Module module;
@@ -36,15 +66,6 @@ namespace Velo
             id = ModuleManager.Instance.Add(this);
         }
 
-        public Setting(Module module, string name, int id)
-        {
-            this.module = module;
-            this.name = name;
-            Tooltip = name;
-            modified = false;
-            this.id = id;
-        }
-
         public bool Modified()
         {
             bool value = modified;
@@ -54,12 +75,12 @@ namespace Velo
 
         public abstract bool IsDefault();
 
-        public virtual JsonElement ToJson(EToJsonType toJsonType)
+        public virtual JsonElement ToJson(ToJsonArgs args)
         {
             return new JsonObject(8).
-                AddStringIf("Name", Name, toJsonType.ForUIInit() || toJsonType.ForSaveFile()).
-                AddStringIf("Tooltip", Tooltip, toJsonType.ForUIInit()).
-                AddDecimalIf("ID", Id, toJsonType.ForUIInit() || toJsonType.ForUIUpdate());
+                AddStringIf("Name", Name, args.Name).
+                AddStringIf("Tooltip", Tooltip, args.Definition).
+                AddDecimalIf("ID", Id, args.ID);
         }
 
         public virtual void FromJson(JsonElement elem)
@@ -83,11 +104,11 @@ namespace Velo
             return true;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 14, toJsonType.ForUIInit()).
-                AddArray("Value", Children.Select(child => child.ToJson(toJsonType)).ToList());
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 14, args.Definition).
+                AddArray("Value", Children.Select(child => child.ToJson(args)).ToList());
         }
 
         public override void FromJson(JsonElement elem)
@@ -106,7 +127,7 @@ namespace Velo
                 JsonElement nameJson = ((JsonObject)setting).Get("Name");
                 if (!(nameJson is JsonString))
                     continue;
-                string name = FromJsonExt.ToString(nameJson);
+                string name = nameJson.AsString();
                 Setting match = Children.Find(child => child.Name == name);
                 if (match == null)
                     continue;
@@ -142,13 +163,6 @@ namespace Velo
             DefaultValue = defaultValue;
         }
 
-        public Setting(Module module, string name, T defaultValue, int id) :
-           base(module, name, id)
-        {
-            value = defaultValue;
-            DefaultValue = defaultValue;
-        }
-
         public void SetValueAndDefault(T value)
         {
             this.value = value;
@@ -173,13 +187,13 @@ namespace Velo
             Max = max;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 0, toJsonType.ForUIInit()).
-                AddDecimalIf("Default", DefaultValue, toJsonType.ForUIInit()).
-                AddDecimalIf("Min", Min, toJsonType.ForUIInit()).
-                AddDecimalIf("Max", Max, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 0, args.Definition).
+                AddDecimalIf("Default", DefaultValue, args.Definition).
+                AddDecimalIf("Min", Min, args.Definition).
+                AddDecimalIf("Max", Max, args.Definition).
                 AddDecimal("Value", Value);
         }
 
@@ -187,7 +201,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToInt()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsInt()));
         }
     }
 
@@ -203,13 +217,13 @@ namespace Velo
             Max = max;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 1, toJsonType.ForUIInit()).
-                AddDecimalIf("Default", DefaultValue, toJsonType.ForUIInit()).
-                AddDecimalIf("Min", Min, toJsonType.ForUIInit()).
-                AddDecimalIf("Max", Max, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 1, args.Definition).
+                AddDecimalIf("Default", DefaultValue, args.Definition).
+                AddDecimalIf("Min", Min, args.Definition).
+                AddDecimalIf("Max", Max, args.Definition).
                 AddDecimal("Value", Value);
         }
 
@@ -217,7 +231,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToFloat()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsFloat()));
         }
     }
 
@@ -227,11 +241,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 2, toJsonType.ForUIInit()).
-                AddBooleanIf("Default", DefaultValue, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 2, args.Definition).
+                AddBooleanIf("Default", DefaultValue, args.Definition).
                 AddBoolean("Value", Value);
         }
 
@@ -239,7 +253,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToBool()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsBool()));
         }
     }
 
@@ -269,11 +283,11 @@ namespace Velo
             return Value.Enabled == DefaultValue.Enabled;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 3, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 3, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -281,7 +295,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToToggle()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsToggle()));
         }
     }
 
@@ -291,11 +305,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 4, toJsonType.ForUIInit()).
-                AddDecimalIf("Default", DefaultValue, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 4, args.Definition).
+                AddDecimalIf("Default", DefaultValue, args.Definition).
                 AddDecimal("Value", Value);
         }
 
@@ -303,7 +317,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = (ushort)value.ToInt()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = (ushort)value.AsInt()));
 
         }
     }
@@ -320,13 +334,13 @@ namespace Velo
             Max = max;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 5, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
-                AddElementIf("Min", Min.ToJson(), toJsonType.ForUIInit()).
-                AddElementIf("Max", Max.ToJson(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 5, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
+                AddElementIf("Min", Min.ToJson(), args.Definition).
+                AddElementIf("Max", Max.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -334,7 +348,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToVector2()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsVector2()));
         }
     }
 
@@ -344,11 +358,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 6, toJsonType.ForUIInit()).
-                AddStringIf("Default", DefaultValue, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 6, args.Definition).
+                AddStringIf("Default", DefaultValue, args.Definition).
                 AddString("Value", Value);
         }
 
@@ -356,7 +370,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = FromJsonExt.ToString(value)));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsString()));
 
         }
     }
@@ -367,11 +381,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 7, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 7, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -379,7 +393,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToRoundingMultiplier()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsRoundingMultiplier()));
         }
     }
 
@@ -393,12 +407,12 @@ namespace Velo
             this.labels = labels;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 8, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
-                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 8, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
+                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -406,7 +420,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToBoolArr()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsBoolArr()));
         }
     }
 
@@ -416,11 +430,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 9, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 9, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -428,7 +442,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToStringArr()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsStringArr()));
         }
     }
 
@@ -442,12 +456,12 @@ namespace Velo
             this.labels = labels;
         }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 10, toJsonType.ForUIInit()).
-                AddDecimalIf("Default", (int)(object)DefaultValue, toJsonType.ForUIInit()).
-                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 10, args.Definition).
+                AddDecimalIf("Default", (int)(object)DefaultValue, args.Definition).
+                AddArrayIf("Identifiers", labels.Select(label => (JsonElement)new JsonString(label)).ToList(), args.Definition).
                 AddDecimal("Value", (int)(object)Value);
         }
 
@@ -455,26 +469,21 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = (E)(object)value.ToInt()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = (E)(object)value.AsInt()));
         }
     }
 
     public class ColorSetting : Setting<Color>
     {
-        public bool EnableAlpha;
-
-        public ColorSetting(Module module, string name, Color defaultValue, bool enableAlpha = true) :
+        public ColorSetting(Module module, string name, Color defaultValue) :
             base(module, name, defaultValue)
-        {
-            EnableAlpha = enableAlpha;
-        }
+        { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 11, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
-                AddBooleanIf("EnableAlpha", EnableAlpha, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 11, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -482,26 +491,21 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToColor()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsColor()));
         }
     }
 
     public class ColorTransitionSetting : Setting<ColorTransition>
     {
-        public bool EnableAlpha;
-
-        public ColorTransitionSetting(Module module, string name, ColorTransition defaultValue, bool enableAlpha = true) :
+        public ColorTransitionSetting(Module module, string name, ColorTransition defaultValue) :
             base(module, name, defaultValue)
-        {
-            EnableAlpha = enableAlpha;
-        }
+        { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 12, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
-                AddBooleanIf("EnableAlpha", EnableAlpha, toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 12, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -509,7 +513,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToColorTransition()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsColorTransition()));
         }
     }
 
@@ -519,11 +523,11 @@ namespace Velo
             base(module, name, defaultValue)
         { }
 
-        public override JsonElement ToJson(EToJsonType toJsonType)
+        public override JsonElement ToJson(ToJsonArgs args)
         {
-            return ((JsonObject)base.ToJson(toJsonType)).
-                AddDecimalIf("Type", 13, toJsonType.ForUIInit()).
-                AddElementIf("Default", DefaultValue.ToJson(), toJsonType.ForUIInit()).
+            return ((JsonObject)base.ToJson(args)).
+                AddDecimalIf("Type", 13, args.Definition).
+                AddElementIf("Default", DefaultValue.ToJson(), args.Definition).
                 AddElement("Value", Value.ToJson());
         }
 
@@ -531,7 +535,7 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValue("Value", value => Value = value.ToInputBox()));
+            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsInputBox()));
         }
     }
 }

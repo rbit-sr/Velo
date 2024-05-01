@@ -272,7 +272,7 @@ namespace Velo
                             }
                         }
 
-                        float err = totDiff / 64.0f;
+                        float err = totDiff / 64f;
 
                         if (Math.Abs(err) < Math.Abs(minErr))
                         {

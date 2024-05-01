@@ -78,9 +78,6 @@ namespace Velo
                 return;
             }
 
-            if (Velo.ContentManager == null)
-                return;
-
             foreach (var entry in Velo.ContentManager.dict)
             {
                 if (entry.Value == null) 
@@ -97,7 +94,6 @@ namespace Velo
                         return;
                     }
                 }
-
             }
         }
     }

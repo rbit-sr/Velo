@@ -31,7 +31,7 @@
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PlatformTarget>x86</PlatformTarget>
-    <NoWarn>IDE0038, IDE0018, IDE0034</NoWarn>
+    <NoWarn>IDE0018, IDE0034, IDE0038, IDE0039</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="CEngine">
@@ -74,7 +74,7 @@
   <ItemGroup>
     <Compile Include="AngleDisplay.cs" />
     <Compile Include="BlindrunSimulator.cs" />
-    <Compile Include="ColorsAndAppearance.cs" />
+    <Compile Include="Appearance.cs" />
     <Compile Include="HotReload.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="EventBypass.cs" />
@@ -84,12 +84,12 @@
     <Compile Include="Json.cs" />
     <Compile Include="JumpHoldingDisplay.cs" />
     <Compile Include="Keyboard.cs" />
-    <Compile Include="LocalGameModifications.cs" />
+    <Compile Include="LocalGameMods.cs" />
     <Compile Include="Module.cs" />
     <Compile Include="Performance.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RopeIndicators.cs" />
-    <Compile Include="SaveFile.cs" />
+    <Compile Include="Storage.cs" />
     <Compile Include="Savestate.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="SettingsUI.cs" />

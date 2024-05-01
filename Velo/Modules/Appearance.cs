@@ -7,7 +7,7 @@ using CEngine.Util.UI.Widget;
 
 namespace Velo
 {
-    public class ColorsAndAppearance : Module
+    public class Appearance : Module
     {
         public FloatSetting PopupScale;
         public FloatSetting PopupOpacity;
@@ -52,17 +52,17 @@ namespace Velo
         
         private readonly Dictionary<uint, ColorTransitionSetting> colorReplLookup;
 
-        private readonly ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
-        private readonly ConditionalWeakTable<CTextDrawComponent, ColorReplacement> uiTextShadowRepls = new ConditionalWeakTable<CTextDrawComponent, ColorReplacement>();
-        private readonly ConditionalWeakTable<CImageDrawComponent, ColorReplacement> uiImageRepls = new ConditionalWeakTable<CImageDrawComponent, ColorReplacement>();
-        private readonly ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement> uiSpriteRepls = new ConditionalWeakTable<CSpriteDrawComponent, ColorReplacement>();
+        private readonly ConditionalWeakTable<CTextDrawComponent, UIColorReplacement> uiTextRepls = new ConditionalWeakTable<CTextDrawComponent, UIColorReplacement>();
+        private readonly ConditionalWeakTable<CTextDrawComponent, UIColorReplacement> uiTextShadowRepls = new ConditionalWeakTable<CTextDrawComponent, UIColorReplacement>();
+        private readonly ConditionalWeakTable<CImageDrawComponent, UIColorReplacement> uiImageRepls = new ConditionalWeakTable<CImageDrawComponent, UIColorReplacement>();
+        private readonly ConditionalWeakTable<CSpriteDrawComponent, UIColorReplacement> uiSpriteRepls = new ConditionalWeakTable<CSpriteDrawComponent, UIColorReplacement>();
 
-        private ColorsAndAppearance() : base("Colors and Appearance")
+        private Appearance() : base("Appearance")
         {
             NewCategory("popup");
-            PopupScale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
-            PopupOpacity = AddFloat("opacity", 1.0f, 0.0f, 10.0f);
-            PopupOffset = AddVector("offset", new Vector2(7.0f, -60.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
+            PopupScale = AddFloat("scale", 1f, 0.5f, 2f);
+            PopupOpacity = AddFloat("opacity", 1f, 0f, 1f);
+            PopupOffset = AddVector("offset", new Vector2(7f, -60f), new Vector2(-200f, -200f), new Vector2(200f, 200f));
             PopupColor = AddColorTransition("color", new ColorTransition(Color.Yellow));
 
             CurrentCategory.Tooltip = 
@@ -88,13 +88,13 @@ namespace Velo
             
             NewCategory("lethal laser");
             LaserLethalInnerColor = AddColorTransition("inner color", new ColorTransition(new Color(255, 255, 0)));
-            LaserLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(191, 51, 191)));
-            LaserLethalParticleColor = AddColorTransition("particle color", new ColorTransition(new Color(255, 69, 255)));
+            LaserLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(255, 69, 0, 191)));
+            LaserLethalParticleColor = AddColorTransition("particle color", new ColorTransition(new Color(255, 69, 0)));
             LaserLethalSmokeColor = AddColorTransition("smoke color", new ColorTransition(new Color(255, 255, 0)));
             
             NewCategory("non lethal laser");
             LaserNonLethalInnerColor = AddColorTransition("inner color", new ColorTransition(new Color(255, 255, 255)));
-            LaserNonLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(191, 191, 0)));
+            LaserNonLethalOuterColor = AddColorTransition("outer color", new ColorTransition(new Color(255, 255, 0, 191)));
             LaserNonLethalParticleColor = AddColorTransition("particle color", new ColorTransition(new Color(255, 255, 255)));
             LaserNonLethalSmokeColor = AddColorTransition("smoke color", new ColorTransition(new Color(255, 255, 150)));
             
@@ -170,7 +170,7 @@ namespace Velo
             UIBlueColors = new ColorTransitionSetting[34];
             for (int i = 0; i < 34; i++)
             {
-                UIBlueColors[i] = AddColorTransition("UI blue tone " + i, new ColorTransition(blueTones[i]), true);
+                UIBlueColors[i] = AddColorTransition("UI blue tone " + i, new ColorTransition(blueTones[i]));
                 colorReplLookup.Add(blueTones[i].PackedValue, UIBlueColors[i]);
             }
 
@@ -219,7 +219,7 @@ namespace Velo
             UIBlueColors[33].Tooltip = "level editor info text";
         }
 
-        public static ColorsAndAppearance Instance = new ColorsAndAppearance();
+        public static Appearance Instance = new Appearance();
 
         public override void PreUpdate()
         {
@@ -278,8 +278,8 @@ namespace Velo
             }
             else
             {
-                grapple.spriteDrawComp1.Color = new Color(0, 252, 255);
-                grapple.animSpriteDrawComp1.Color = new Color(255, 255, 255);
+                grapple.spriteDrawComp1.Color = GrappleHookColor.DefaultValue.Get();
+                grapple.animSpriteDrawComp1.Color = GrappleHookBreakColor.DefaultValue.Get();
             }
         }
 
@@ -315,15 +315,15 @@ namespace Velo
                 }
                 else if (!rope.breaking)
                 {
-                    rope.line1.color = Color.Black;
-                    rope.line2.color = Color.Black;
+                    rope.line1.color = GrappleRopeColor.DefaultValue.Get();
+                    rope.line2.color = rope.line1.color;
                     rope.line1.thickness = 1;
                     rope.line2.thickness = 3;
                 }
                 else
                 {
-                    rope.line1.color = Color.White;
-                    rope.line2.color = Color.White;
+                    rope.line1.color = GrappleRopeBreakColor.DefaultValue.Get();
+                    rope.line2.color = rope.line1.color;
                     rope.line1.thickness = 1;
                     rope.line2.thickness = 3;
                 }
@@ -371,17 +371,17 @@ namespace Velo
             obj.Match<CEditableTextWidget>(editText => editText.Color = color.Value.Get());
         }
 
-        private class ColorReplacement
+        private class UIColorReplacement
         {
             public ColorTransitionSetting color;
             public Color originalColor;
             public float multiplier;
 
-            public ColorReplacement(ColorTransitionSetting color, Color originalColor)
+            public UIColorReplacement(ColorTransitionSetting color, Color originalColor)
             {
                 this.color = color;
                 this.originalColor = originalColor;
-                multiplier = 1.0f;
+                multiplier = 1f;
             }
         }
 
@@ -400,7 +400,7 @@ namespace Velo
 
             uint key = Util.FullAlpha(text.color).PackedValue;
             if (colorReplLookup.ContainsKey(key))
-                uiTextRepls.Add(text, new ColorReplacement(colorReplLookup[key], text.color));
+                uiTextRepls.Add(text, new UIColorReplacement(colorReplLookup[key], text.color));
         }
 
         public void TextShadowColorUpdated(CTextDrawComponent text)
@@ -412,7 +412,7 @@ namespace Velo
 
             uint key = Util.FullAlpha(text.shadow_color).PackedValue;
             if (colorReplLookup.ContainsKey(key))
-                uiTextShadowRepls.Add(text, new ColorReplacement(colorReplLookup[key], text.shadow_color));
+                uiTextShadowRepls.Add(text, new UIColorReplacement(colorReplLookup[key], text.shadow_color));
         }
 
         public void ImageColorUpdated(CImageDrawComponent image)
@@ -420,7 +420,9 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
+            // some UI elements fade in and out by multiplying all color components with an opacity value,
+            // which breaks the lookup, so try to detect this situation
+            UIColorReplacement colorReplacement;
             if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)image.color.A / (float)colorReplacement.originalColor.A);
@@ -448,7 +450,7 @@ namespace Velo
 
             uint key = Util.FullAlpha(image.color).PackedValue;
             if (colorReplLookup.ContainsKey(key))
-                uiImageRepls.Add(image, new ColorReplacement(colorReplLookup[key], image.color));
+                uiImageRepls.Add(image, new UIColorReplacement(colorReplLookup[key], image.color));
         }
 
         public void SpriteColorUpdated(CSpriteDrawComponent sprite)
@@ -456,7 +458,9 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
+            // some UI elements fade in and out by multiplying all color components with an opacity value,
+            // which breaks the lookup, so try to detect this situation
+            UIColorReplacement colorReplacement;
             if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
             {
                 Color compare = colorReplacement.originalColor * ((float)sprite.color.A / (float)colorReplacement.originalColor.A);
@@ -485,7 +489,7 @@ namespace Velo
 
             uint key = Util.FullAlpha(sprite.color).PackedValue;
             if (colorReplLookup.ContainsKey(key))
-                uiSpriteRepls.Add(sprite, new ColorReplacement(colorReplLookup[key], sprite.color));
+                uiSpriteRepls.Add(sprite, new UIColorReplacement(colorReplLookup[key], sprite.color));
         }
 
         public void UpdateTextColor(CTextDrawComponent text)
@@ -493,19 +497,19 @@ namespace Velo
             if (!text.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
+            UIColorReplacement colorReplacement;
             if (uiTextRepls.TryGetValue(text, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 text.color = PreserveAlpha(newColor, text.color);
-                text.color *= newColor.A / 255.0f * colorReplacement.multiplier;
+                text.color *= newColor.A / 255f * colorReplacement.multiplier;
             }
 
             if (uiTextShadowRepls.TryGetValue(text, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 text.shadow_color = PreserveAlpha(newColor, text.shadow_color);
-                text.shadow_color *= newColor.A / 255.0f * colorReplacement.multiplier;
+                text.shadow_color *= newColor.A / 255f * colorReplacement.multiplier;
             }
         }
 
@@ -514,12 +518,12 @@ namespace Velo
             if (!image.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
+            UIColorReplacement colorReplacement;
             if (uiImageRepls.TryGetValue(image, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 image.color = PreserveAlpha(newColor, image.color);
-                image.color *= newColor.A / 255.0f * colorReplacement.multiplier;
+                image.color *= newColor.A / 255f * colorReplacement.multiplier;
             }
         }
 
@@ -528,12 +532,12 @@ namespace Velo
             if (!sprite.color_replace || !EnableUIColorReplacements.Value)
                 return;
 
-            ColorReplacement colorReplacement;
+            UIColorReplacement colorReplacement;
             if (uiSpriteRepls.TryGetValue(sprite, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.color.Value.Get();
                 sprite.color = PreserveAlpha(newColor, sprite.color);
-                sprite.color *= newColor.A / 255.0f * colorReplacement.multiplier;
+                sprite.color *= newColor.A / 255f * colorReplacement.multiplier;
             }
         }
     }

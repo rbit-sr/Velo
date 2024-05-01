@@ -37,23 +37,6 @@ namespace Velo
             return array;
         }
 
-        public static string ToStringRounded(float value, RoundingMultiplier roundingMultiplier)
-        {
-            if (roundingMultiplier.Value == 0)
-                return value + "";
-
-            float s = value >= 0.0f ? 1.0f : -1.0f;
-
-            value = Math.Abs(value);
-
-            int c = (int)(value / roundingMultiplier.Value + 0.5f);
-
-            value = roundingMultiplier.Value * c;
-            value *= s;
-
-            return value.ToString("F" + roundingMultiplier.Precision);
-        }
-
         public static string LineBreaks(string s, int maxCharPerLine)
         {
             StringBuilder sb = new StringBuilder();
@@ -82,14 +65,89 @@ namespace Velo
             }
         }
 
+        public static string ApproxTime(long seconds)
+        {
+            string unit = "";
+            long value = 0;
+
+            if (seconds < 60)
+            {
+                value = seconds;
+                unit = "second";
+            }
+            else if (seconds < 60 * 60)
+            {
+                value =  seconds / 60;
+                unit = "minute";
+            }
+            else if (seconds < 60 * 60 * 24)
+            {
+                value = seconds / (60 * 60);
+                unit = "hour";
+            }
+            else if (seconds < 60 * 60 * 24 * 30)
+            {
+                value = seconds / (60 * 60 * 24);
+                unit = "day";
+            }
+            else if (seconds < 60 * 60 * 24 * 365)
+            {
+                value = seconds / (60 * 60 * 24 * 30);
+                unit = "month";
+            }
+            else
+            {
+                value = seconds / (60 * 60 * 24 * 365);
+                unit = "year";
+            }
+            return value + " " + unit + (value == 1 ? "" : "s");
+        }
+
+        public static string FormatTime(long millis)
+        {
+            byte[] text = new byte[12];
+            text[11] = (byte)'s';
+            text[10] = (byte)'m';
+            text[9] = (byte)((byte)'0' + millis % 10);
+            millis /= 10;
+            text[8] = (byte)((byte)'0' + millis % 10);
+            millis /= 10;
+            text[7] = (byte)((byte)'0' + millis % 10);
+            millis /= 10;
+            text[6] = (byte)' ';
+            text[5] = (byte)'s';
+            text[4] = (byte)((byte)'0' + millis % 10);
+            millis /= 10;
+            text[3] = (byte)((byte)'0' + millis % 6);
+            millis /= 6;
+            text[2] = (byte)' ';
+            text[1] = (byte)'m';
+            text[0] = (byte)((byte)'0' + millis % 10);
+            millis /= 10;
+            return Encoding.ASCII.GetString(text);
+        }
+
         public static Color ApplyAlpha(Color color)
         {
-            return new Color(color.R, color.G, color.B) * (color.A / 255.0f);
+            return new Color(color.R, color.G, color.B) * (color.A / 255f);
         }
 
         public static Color FullAlpha(Color color)
         {
             return new Color(color.R, color.G, color.B, 255);
+        }
+
+        public static void ReadExactly(this System.IO.Stream stream, byte[] buffer, int offset, int count)
+        {
+            int remaining = count;
+            while (remaining > 0)
+            {
+                int read = stream.Read(buffer, offset, remaining);
+                if (read == 0)
+                    throw new System.IO.EndOfStreamException();
+                offset += read;
+                remaining -= read;
+            }
         }
 
         [DllImport("Kernel32.dll", CallingConvention = CallingConvention.Winapi)]
@@ -137,6 +195,101 @@ namespace Velo
             }
 
             return minimized;
+        }
+    }
+
+    public class CircArray<T>
+    {
+        T[] arr;
+        int begin;
+        int end;
+
+        public CircArray()
+        {
+            arr = new T[1];
+            begin = 0;
+            end = 0;
+        }
+
+        public void PushBack(T elem)
+        {
+            arr[end] = elem;
+            end++;
+            if (end == arr.Length)
+                end = 0;
+
+            if (begin == end)
+            {
+                T[] newArr = new T[arr.Length * 2];
+                Array.Copy(arr, begin, newArr, 0, arr.Length - begin);
+                Array.Copy(arr, 0, newArr, arr.Length - begin, end);
+                begin = 0;
+                end = arr.Length;
+                arr = newArr;
+            }
+        }
+
+        public void PopFront()
+        { 
+            if (typeof(T).IsClass)
+                arr[begin] = default(T);
+            begin++;
+            if (begin == arr.Length)
+                begin = 0;
+        }
+
+        public T this[int i]
+        {
+            get 
+            {
+                i += begin;
+                if (i >= arr.Length)
+                    i -= arr.Length;
+                return arr[i]; 
+            }
+            set 
+            {
+                i += begin;
+                if (i >= arr.Length)
+                    i -= arr.Length;
+                arr[i] = value; 
+            }
+        }
+
+        public int Count
+        {
+            get
+            {
+                return
+                    end >= begin ?
+                    end - begin : arr.Length + end - begin;
+            }
+        }
+
+        public void Clear()
+        {
+            if (typeof(T).IsClass)
+            {
+                for (int i = begin; i != end; )
+                {
+                    arr[i] = default(T);
+                    i++;
+                    if (i == arr.Length)
+                        i = 0;
+                }
+            }
+            begin = 0;
+            end = 0;
+        }
+
+        public CircArray<T> Clone()
+        {
+            CircArray<T> clone = new CircArray<T>();
+            clone.begin = begin;
+            clone.end = end;
+            clone.arr = new T[arr.Length];
+            Array.Copy(arr, clone.arr, arr.Length);
+            return clone;
         }
     }
 }

@@ -67,6 +67,23 @@ namespace Velo
                 Precision = String.Length - String.IndexOf('.') - 1;
         }
 
+        public string ToStringRounded(float value)
+        {
+            if (Value == 0)
+                return value + "";
+
+            float s = value >= 0f ? 1f : -1f;
+
+            value = Math.Abs(value);
+
+            int c = (int)(value / Value + 0.5f);
+
+            value = Value * c;
+            value *= s;
+
+            return value.ToString("F" + Precision);
+        }
+
         public override bool Equals(object obj)
         {
             if (!(obj is RoundingMultiplier))
@@ -88,10 +105,10 @@ namespace Velo
 
     public class ColorTransition
     {
-        private int period = 500;
-        private int offset = 0;
-        private bool discrete = false;
-        private Color[] colors;
+        private readonly int period = 500;
+        private readonly int offset = 0;
+        private readonly bool discrete = false;
+        private readonly Color[] colors;
 
         public ColorTransition() { }
 
@@ -320,7 +337,7 @@ namespace Velo
 
     public static class FromJsonExt
     {
-        public static int ToInt(this JsonElement elem)
+        public static int AsInt(this JsonElement elem)
         {
             if (!(elem is JsonDecimal))
                 return default(int);
@@ -329,7 +346,7 @@ namespace Velo
             return value;
         }
 
-        public static float ToFloat(this JsonElement elem)
+        public static float AsFloat(this JsonElement elem)
         {
             if (!(elem is JsonDecimal))
                 return default(float);
@@ -338,110 +355,110 @@ namespace Velo
             return value;
         }
 
-        public static bool ToBool(this JsonElement elem)
+        public static bool AsBool(this JsonElement elem)
         {
             if (!(elem is JsonBoolean))
                 return default(bool);
             return (elem as JsonBoolean).value;
         }
 
-        public static string ToString(this JsonElement elem)
+        public static string AsString(this JsonElement elem)
         {
             if (!(elem is JsonString))
                 return "";
             return (elem as JsonString).value;
         }
 
-        public static Vector2 ToVector2(this JsonElement elem)
+        public static Vector2 AsVector2(this JsonElement elem)
         {
             if (!(elem is JsonObject))
                 return default(Vector2);
             JsonObject jsonObject = (JsonObject)elem;
             return new Vector2(
-                jsonObject.DoWithValue("X", value => value.ToFloat()),
-                jsonObject.DoWithValue("Y", value => value.ToFloat())
+                jsonObject.DoWithValueRet("X", AsFloat),
+                jsonObject.DoWithValueRet("Y", AsFloat)
                 );
         }
 
-        public static Color ToColor(this JsonElement elem)
+        public static Color AsColor(this JsonElement elem)
         {
             if (!(elem is JsonObject))
                 return default(Color);
             JsonObject jsonObject = (JsonObject)elem;
             return new Color(
-                jsonObject.DoWithValue("R", value => value.ToInt()),
-                jsonObject.DoWithValue("G", value => value.ToInt()),
-                jsonObject.DoWithValue("B", value => value.ToInt()),
-                jsonObject.DoWithValue("A", value => value.ToInt())
+                jsonObject.DoWithValueRet("R", AsInt),
+                jsonObject.DoWithValueRet("G", AsInt),
+                jsonObject.DoWithValueRet("B", AsInt),
+                jsonObject.DoWithValueRet("A", AsInt)
                 );
         }
 
-        public static bool[] ToBoolArr(this JsonElement elem)
+        public static bool[] AsBoolArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
                 return new bool[0];
-            return ((JsonArray)elem).value.Select(jsonBool => jsonBool.ToBool()).ToArray();
+            return ((JsonArray)elem).value.Select(AsBool).ToArray();
         }
 
-        public static string[] ToStringArr(this JsonElement elem)
+        public static string[] AsStringArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
                 return new string[0];
-            return ((JsonArray)elem).value.Select(jsonString => ToString(jsonString)).ToArray();
+            return ((JsonArray)elem).value.Select(AsString).ToArray();
         }
 
-        public static Color[] ToColorArr(this JsonElement elem)
+        public static Color[] AsColorArr(this JsonElement elem)
         {
             if (!(elem is JsonArray))
                 return new Color[0];
-            return ((JsonArray)elem).value.Select(jsonColor => jsonColor.ToColor()).ToArray();
+            return ((JsonArray)elem).value.Select(AsColor).ToArray();
         }
 
-        public static Toggle ToToggle(this JsonElement elem)
+        public static Toggle AsToggle(this JsonElement elem)
         {
             if (!(elem is JsonObject))
                 return new Toggle();
             JsonObject jsonObject = (JsonObject)elem;
             return new Toggle(
-                jsonObject.DoWithValue("State", value => value.ToBool()),
-                jsonObject.DoWithValue("Hotkey", value => (ushort)value.ToInt())
+                jsonObject.DoWithValueRet("State", AsBool),
+                jsonObject.DoWithValueRet("Hotkey", value => (ushort)value.AsInt())
                 );
         }
 
-        public static RoundingMultiplier ToRoundingMultiplier(this JsonElement elem)
+        public static RoundingMultiplier AsRoundingMultiplier(this JsonElement elem)
         {
             if (!(elem is JsonString))
                 return new RoundingMultiplier("1");
-            return new RoundingMultiplier(ToString(elem));
+            return new RoundingMultiplier(AsString(elem));
         }
 
-        public static ColorTransition ToColorTransition(this JsonElement elem)
+        public static ColorTransition AsColorTransition(this JsonElement elem)
         {
             if (!(elem is JsonObject))
                 return new ColorTransition(Color.White);
             JsonObject jsonObject = (JsonObject)elem;
             return new ColorTransition(
-                jsonObject.DoWithValue("Period", value => value.ToInt()),
-                jsonObject.DoWithValue("Offset", value => value.ToInt()),
-                jsonObject.DoWithValue("Discrete", value => value.ToBool()),
-                jsonObject.DoWithValue("Colors", value => value.ToColorArr())
+                jsonObject.DoWithValueRet("Period", AsInt),
+                jsonObject.DoWithValueRet("Offset", AsInt),
+                jsonObject.DoWithValueRet("Discrete", AsBool),
+                jsonObject.DoWithValueRet("Colors", AsColorArr)
                 );
         }
 
-        public static InputBox ToInputBox(this JsonElement elem)
+        public static InputBox AsInputBox(this JsonElement elem)
         {
             if (!(elem is JsonObject))
                 return new InputBox();
             JsonObject jsonObject = (JsonObject)elem;
             return new InputBox(
-                jsonObject.DoWithValue("Label", value => ToString(value)),
+                jsonObject.DoWithValueRet("Label", AsString),
                 new Vector2(
-                    jsonObject.DoWithValue("X", value => value.ToInt()),
-                    jsonObject.DoWithValue("Y", value => value.ToInt())
+                    jsonObject.DoWithValueRet("X", AsInt),
+                    jsonObject.DoWithValueRet("Y", AsInt)
                 ),
                 new Vector2(
-                    jsonObject.DoWithValue("W", value => value.ToInt()),
-                    jsonObject.DoWithValue("H", value => value.ToInt())
+                    jsonObject.DoWithValueRet("W", AsInt),
+                    jsonObject.DoWithValueRet("H", AsInt)
                 ));
         }
     }

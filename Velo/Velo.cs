@@ -9,6 +9,9 @@ using CEngine.World.Actor;
 using CEngine.Graphics.Layer;
 using Lidgren.Network;
 using SDL2;
+using System.Windows.Forms;
+using System.Collections.Generic;
+using System.IO;
 
 namespace Velo
 {
@@ -17,9 +20,20 @@ namespace Velo
         public static SpriteBatch SpriteBatch;
         public static CContentBundleManager ContentManager;
         public static Player MainPlayer = null;
+        public static Player Ghost = null;
+        public static ModuleSolo ModuleSolo = null;
         public static bool Ingame = false;
+        public static bool IngamePrev = false;
         public static bool Online = false;
+        public static bool MainPlayerReset = false;
+        public static bool LapFinish = false;
+        public static float TimerPrev = 0.0f;
+        public static float Timer = 0.0f;
         public static Vector2 PlayerPos = Vector2.Zero;
+        private static List<Action> OnPreUpdate = new List<Action>();
+        private static List<Action> OnPostUpdate = new List<Action>();
+        private static List<Action> OnPreRender = new List<Action>();
+        private static List<Action> OnPostRender = new List<Action>();
 
         public static Player GetMainPlayer()
         {
@@ -33,6 +47,25 @@ namespace Velo
                 {
                     Player player = controller as Player;
                     if (player.actor.localPlayer)
+                        return player;
+                }
+            }
+
+            return null;
+        }
+
+        public static Player GetGhost()
+        {
+            CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
+
+            for (int i = 0; i < collisionEngine.ActorCount; i++)
+            {
+                CActor actor = collisionEngine.GetActor(i);
+                ICActorController controller = actor.controller;
+                if (controller is Player)
+                {
+                    Player player = controller as Player;
+                    if (!player.actor.localPlayer)
                         return player;
                 }
             }
@@ -59,6 +92,18 @@ namespace Velo
             return false;
         }
 
+        public static ModuleSolo GetModuleSolo()
+        {
+            if (Main.game.stack.gameInfo == null)
+                return null;
+
+            foreach (var module in Main.game.stack.modules)
+                if (module is ModuleSolo)
+                    return module as ModuleSolo;
+
+            return default(ModuleSolo);
+        }
+
 #if !VELO_OLD
 #pragma warning disable IDE1006
 #pragma warning disable IDE0060
@@ -74,7 +119,7 @@ namespace Velo
             ContentManager = CEngine.CEngine.Instance.ContentBundleManager;
 
             ModuleManager.Instance.Init();
-            SaveFile.Instance.Load();
+            Storage.Instance.Load();
             SettingsUI.Instance.Enabled.Disable();
             Keyboard.Init();
         }
@@ -88,20 +133,44 @@ namespace Velo
                 Keyboard.Pressed.Fill(false);
             }
 
+            lock (OnPreUpdate)
+            {
+                foreach (Action action in OnPreUpdate)
+                    action();
+                OnPreUpdate.Clear();
+            }
             ModuleManager.Instance.PreUpdate();
+            MainPlayerReset = false;
+            LapFinish = false;
 
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
-
+           
             // cache a few commonly needed values
             MainPlayer = GetMainPlayer();
+            Ghost = GetGhost();
+            ModuleSolo = GetModuleSolo();
+            IngamePrev = Ingame;
             Ingame = MainPlayer != null;
             Online = IsOnline();
+            TimerPrev = Timer;
+            if (Ingame)
+            {
+                ICActorController timerAct = CEngine.CEngine.Instance.World.CollisionEngine.FindActorOfType(typeof(Timer));
+                if (timerAct != null)
+                    Timer = (timerAct as Timer).current;
+            }
             PlayerPos = MainPlayer != null ? MainPlayer.actor.Position : Vector2.Zero;
 
+            lock (OnPostUpdate)
+            {
+                foreach (Action action in OnPostUpdate)
+                    action();
+                OnPostUpdate.Clear();
+            }
             ModuleManager.Instance.PostUpdate();
 
             if (
-                !(Performance.Instance.Enabled.Value.Enabled &&
+                !(Performance.Instance.Enabled.Value &&
                 Performance.Instance.LimitFramerateAfterRender.Value) ||
                 Util.IsMinimized() // call when minimized to prevent crashing
                 )
@@ -112,14 +181,26 @@ namespace Velo
 
         public static void game_draw(GameTime gameTime)
         {
+            lock (OnPreRender)
+            {
+                foreach (Action action in OnPreRender)
+                    action();
+                OnPreRender.Clear();
+            }
             ModuleManager.Instance.PreRender();
 
             Main.game.GameDraw(gameTime);
 
+            lock (OnPostRender)
+            {
+                foreach (Action action in OnPostRender)
+                    action();
+                OnPostRender.Clear();
+            }
             ModuleManager.Instance.PostRender();
 
             if (
-                Performance.Instance.Enabled.Value.Enabled &&
+                Performance.Instance.Enabled.Value &&
                 Performance.Instance.LimitFramerateAfterRender.Value
                 )
             {
@@ -127,6 +208,38 @@ namespace Velo
             }
 
             Keyboard.Pressed.Fill(false);
+        }
+
+        public static void AddOnPreUpdate(Action action)
+        {
+            lock (OnPreUpdate)
+            {
+                OnPreUpdate.Add(action);
+            }
+        }
+
+        public static void AddOnPostUpdate(Action action)
+        {
+            lock (OnPostUpdate)
+            {
+                OnPostUpdate.Add(action);
+            }
+        }
+
+        public static void AddOnPreRender(Action action)
+        {
+            lock (OnPreRender)
+            {
+                OnPreRender.Add(action);
+            }
+        }
+
+        public static void AddOnPostRender(Action action)
+        {
+            lock (OnPostRender)
+            {
+                OnPostRender.Add(action);
+            }
         }
 
         // called in Main.game.Delay()
@@ -160,123 +273,120 @@ namespace Velo
             if (!Online && Ingame)
             {
                 if (Savestates.Instance.savestateLoadTime == 0 || Savestates.Instance.LoadHaltDuration.Value == 0)
-                    return LocalGameModifications.Instance.TimeScale.Value;
+                    return LocalGameMods.Instance.TimeScale.Value;
 
                 long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 float ratio = (float)Math.Min(milliseconds - Savestates.Instance.savestateLoadTime, Savestates.Instance.LoadHaltDuration.Value) / Savestates.Instance.savestateLoadTime;
 
-                return LocalGameModifications.Instance.TimeScale.Value * ratio;
+                return LocalGameMods.Instance.TimeScale.Value * ratio;
             }
 
-            return 1.0f;
+            return 1f;
         }
 
-        
-
+#if !VELO_OLD
         public static void sdl_poll(ref SDL.SDL_Event sdl_event)
         {
             SettingsUI.Instance.SdlPoll(ref sdl_event);
+        }
+#endif
+
+        public static void player_reset(Player player)
+        {
+            if (player == MainPlayer)
+                MainPlayerReset = true;
+        }
+
+        public static void lap_finish()
+        {
+            LapFinish = true;
         }
 
         public static float get_camera_max_speed(ICCameraModifier camera)
         {
             if (Online)
-                return LocalGameModifications.Instance.CameraMaxSpeed.DefaultValue;
+                return LocalGameMods.Instance.CameraMaxSpeed.DefaultValue;
 
-            return LocalGameModifications.Instance.CameraMaxSpeed.Value;
+            return LocalGameMods.Instance.CameraMaxSpeed.Value;
         }
 
         public static float get_max_speed()
         {
             if (Online)
-                return LocalGameModifications.Instance.MaxSpeed.DefaultValue;
+                return LocalGameMods.Instance.MaxSpeed.DefaultValue;
 
-            return LocalGameModifications.Instance.MaxSpeed.Value;
+            return LocalGameMods.Instance.MaxSpeed.Value;
         }
 
         public static Vector2 get_gravity()
         {
             if (Online)
-                return LocalGameModifications.Instance.Gravity.DefaultValue;
+                return LocalGameMods.Instance.Gravity.DefaultValue;
 
-            return LocalGameModifications.Instance.Gravity.Value;
+            return LocalGameMods.Instance.Gravity.Value;
         }
 
         public static float get_grapple_hook_speed()
         {
             if (Online)
-                return LocalGameModifications.Instance.GrappleHookSpeed.DefaultValue;
+                return LocalGameMods.Instance.GrappleHookSpeed.DefaultValue;
 
-            return LocalGameModifications.Instance.GrappleHookSpeed.Value;
+            return LocalGameMods.Instance.GrappleHookSpeed.Value;
         }
 
         public static float get_grapple_cooldown()
         {
             if (Online)
-                return LocalGameModifications.Instance.GrappleCooldown.DefaultValue;
+                return LocalGameMods.Instance.GrappleCooldown.DefaultValue;
 
-            return LocalGameModifications.Instance.GrappleCooldown.Value;
+            return LocalGameMods.Instance.GrappleCooldown.Value;
         }
 
         public static float get_slide_cooldown()
         {
             if (Online)
-                return LocalGameModifications.Instance.SlideCooldown.DefaultValue;
+                return LocalGameMods.Instance.SlideCooldown.DefaultValue;
 
-            return LocalGameModifications.Instance.SlideCooldown.Value;
+            return LocalGameMods.Instance.SlideCooldown.Value;
         }
 
         public static bool get_fix_grapple_glitches()
         {
             if (Online)
-                return LocalGameModifications.Instance.FixGrappleGlitches.DefaultValue.Enabled;
+                return LocalGameMods.Instance.FixGrappleGlitches.DefaultValue.Enabled;
 
             return
-                LocalGameModifications.Instance.FixGrappleGlitches.Value.Enabled &&
-                !Keyboard.Held[LocalGameModifications.Instance.FixGrappleGlitches.Value.Hotkey];
+                LocalGameMods.Instance.FixGrappleGlitches.Value.Enabled &&
+                !Keyboard.Held[LocalGameMods.Instance.FixGrappleGlitches.Value.Hotkey];
         }
 
         public static bool get_enable_old_moonwalk()
         {
             if (Online)
-                return LocalGameModifications.Instance.EnableOldMoonwalk.DefaultValue;
+                return LocalGameMods.Instance.EnableOldMoonwalk.DefaultValue;
 
-            return LocalGameModifications.Instance.EnableOldMoonwalk.Value;
+            return LocalGameMods.Instance.EnableOldMoonwalk.Value;
         }
 
         // called in CEngine
         public static bool dt_fixed()
         {
-            return TAS.Instance.dtFixed;
+            return TAS.Instance.DtFixed;
         }
 
-        // called in CEngine
-        public static long delta()
+        public static bool set_inputs()
         {
-            return TAS.Instance.delta;
+            return TAS.Instance.SetInputs();
         }
 
-        // called in CEngine
-        public static void set_delta(long delta)
+        public static bool skip_if_ghost()
         {
-            TAS.Instance.delta = delta;
-        }
-
-        // called in CEngine
-        public static long time()
-        {
-            return TAS.Instance.time;
-        }
-
-        // called in CEngine
-        public static void set_time(long time)
-        {
-            TAS.Instance.time = time;
+            return TAS.Instance.SkipIfGhost();
         }
 
         public static void update_camera(ICCameraModifier cameraMod)
         {
-            LocalGameModifications.Instance.UpdateCamera(cameraMod);
+            LocalGameMods.Instance.UpdateCamera(cameraMod);
         }
 
         public static void update_cam_pos(ICCameraModifier cameraMod)
@@ -311,97 +421,97 @@ namespace Velo
 
         public static void update_popup(Player player)
         {
-            ColorsAndAppearance.Instance.UpdatePopup(player);
+            Appearance.Instance.UpdatePopup(player);
         }
 
         public static float popup_opacity()
         {
-            return ColorsAndAppearance.Instance.PopupColor.Value.Get().A / 255.0f;
+            return Appearance.Instance.PopupColor.Value.Get().A / 255f;
         }
 
         public static float popup_scale()
         {
-            return ColorsAndAppearance.Instance.PopupScale.Value;
+            return Appearance.Instance.PopupScale.Value;
         }
 
         public static void update_grapple_color(Grapple grapple)
         {
-            ColorsAndAppearance.Instance.UpdateGrappleColor(grapple);
+            Appearance.Instance.UpdateGrappleColor(grapple);
         }
 
         public static void update_golden_hook_color(GoldenHook goldenHook)
         {
-            ColorsAndAppearance.Instance.UpdateGoldenHookColor(goldenHook);
+            Appearance.Instance.UpdateGoldenHookColor(goldenHook);
         }
 
         public static void update_rope_color(Rope rope)
         {
-            ColorsAndAppearance.Instance.UpdateRopeColor(rope);
+            Appearance.Instance.UpdateRopeColor(rope);
         }
 
         public static Color get_popup_color()
         {
-            return ColorsAndAppearance.Instance.PopupColor.Value.Get();
+            return Appearance.Instance.PopupColor.Value.Get();
         }
 
         public static Color get_player_color()
         {
-            return ColorsAndAppearance.Instance.PlayerColor.Value.Get();
+            return Appearance.Instance.PlayerColor.Value.Get();
         }
 
         public static Color get_win_star_color()
         {
-            return ColorsAndAppearance.Instance.WinStarColor.Value.Get();
+            return Appearance.Instance.WinStarColor.Value.Get();
         }
 
         public static Color get_bubble_color()
         {
-            return ColorsAndAppearance.Instance.BubbleColor.Value.Get();
+            return Appearance.Instance.BubbleColor.Value.Get();
         }
 
         public static Color get_saw_color()
         {
-            return ColorsAndAppearance.Instance.SawColor.Value.Get();
+            return Appearance.Instance.SawColor.Value.Get();
         }
 
         public static Color get_laser_lethal_inner_color()
         {
-            return ColorsAndAppearance.Instance.LaserLethalInnerColor.Value.Get();
+            return Appearance.Instance.LaserLethalInnerColor.Value.Get();
         }
 
         public static Color get_laser_lethal_outer_color()
         {
-            return ColorsAndAppearance.Instance.LaserLethalOuterColor.Value.Get();
+            return Appearance.Instance.LaserLethalOuterColor.Value.Get();
         }
 
         public static Color get_laser_lethal_particle_color()
         {
-            return ColorsAndAppearance.Instance.LaserLethalParticleColor.Value.Get();
+            return Appearance.Instance.LaserLethalParticleColor.Value.Get();
         }
 
         public static Color get_laser_lethal_smoke_color()
         {
-            return ColorsAndAppearance.Instance.LaserLethalSmokeColor.Value.Get();
+            return Appearance.Instance.LaserLethalSmokeColor.Value.Get();
         }
 
         public static Color get_laser_non_lethal_inner_color()
         {
-            return ColorsAndAppearance.Instance.LaserNonLethalInnerColor.Value.Get();
+            return Appearance.Instance.LaserNonLethalInnerColor.Value.Get();
         }
 
         public static Color get_laser_non_lethal_outer_color()
         {
-            return ColorsAndAppearance.Instance.LaserNonLethalOuterColor.Value.Get();
+            return Appearance.Instance.LaserNonLethalOuterColor.Value.Get();
         }
 
         public static Color get_laser_non_lethal_particle_color()
         {
-            return ColorsAndAppearance.Instance.LaserNonLethalParticleColor.Value.Get();
+            return Appearance.Instance.LaserNonLethalParticleColor.Value.Get();
         }
 
         public static Color get_laser_non_lethal_smoke_color()
         {
-            return ColorsAndAppearance.Instance.LaserNonLethalSmokeColor.Value.Get();
+            return Appearance.Instance.LaserNonLethalSmokeColor.Value.Get();
         }
 
         public static Color get_tile_map_color(ICLayer layer)
@@ -415,7 +525,7 @@ namespace Velo
         {
             if (layer.Id != "BackgroundLayer0")
                 return color;
-            return new Color(color.ToVector4() * ColorsAndAppearance.Instance.BackgroundColor.Value.Get().ToVector4());
+            return new Color(color.ToVector4() * Appearance.Instance.BackgroundColor.Value.Get().ToVector4());
         }
 
         public static bool draw_chunk(CBufferedTileMapLayer tilemap, Vector2 pos, int x, int y)
@@ -425,70 +535,79 @@ namespace Velo
 
         public static void text_color_updated(CTextDrawComponent text)
         {
-            ColorsAndAppearance.Instance.TextColorUpdated(text);
+            Appearance.Instance.TextColorUpdated(text);
         }
 
         public static void text_shadow_color_updated(CTextDrawComponent text)
         {
-            ColorsAndAppearance.Instance.TextShadowColorUpdated(text);
+            Appearance.Instance.TextShadowColorUpdated(text);
         }
 
         public static void image_color_updated(CImageDrawComponent image)
         {
-            ColorsAndAppearance.Instance.ImageColorUpdated(image);
+            Appearance.Instance.ImageColorUpdated(image);
         }
 
         public static void sprite_color_updated(CSpriteDrawComponent sprite)
         {
-            ColorsAndAppearance.Instance.SpriteColorUpdated(sprite);
+            Appearance.Instance.SpriteColorUpdated(sprite);
         }
 
         public static void update_text_color(CTextDrawComponent text)
         {
-            ColorsAndAppearance.Instance.UpdateTextColor(text);
+            Appearance.Instance.UpdateTextColor(text);
         }
 
         public static void update_image_color(CImageDrawComponent image)
         {
-            ColorsAndAppearance.Instance.UpdateImageColor(image);
+            Appearance.Instance.UpdateImageColor(image);
         }
 
         public static void update_sprite_color(CSpriteDrawComponent sprite)
         {
-            ColorsAndAppearance.Instance.UpdateSpriteColor(sprite);
+            Appearance.Instance.UpdateSpriteColor(sprite);
         }
 
         public static void add_chat_comp(object obj, string type)
         {
-            ColorsAndAppearance.Instance.AddChatComp(obj, type);
+            Appearance.Instance.AddChatComp(obj, type);
         }
 
         public static void update_chat_color(object obj)
         {
-            ColorsAndAppearance.Instance.UpdateChatColor(obj);
+            Appearance.Instance.UpdateChatColor(obj);
         }
 
         public static bool disable_bubbles()
         {
             return
-                Performance.Instance.Enabled.Value.Enabled &&
+                Performance.Instance.Enabled.Value &&
                 Performance.Instance.DisableBubbles.Value;
         }
 
         public static bool disable_steam_input_api()
         {
             return
-                Performance.Instance.Enabled.Value.Enabled &&
+                Performance.Instance.Enabled.Value &&
                 Performance.Instance.DisableSteamInputApi.Value;
         }
 
         public static bool skip_input(int controller_id)
         {
             return
-                Performance.Instance.Enabled.Value.Enabled &&
+                Performance.Instance.Enabled.Value &&
                 Performance.Instance.EnableControllerId.Value != -1 &&
                 Performance.Instance.EnableControllerId.Value != controller_id;
         }
+
+#if VELO_OLD
+        public static bool skip_all_key_input()
+        {
+            return
+                SettingsUI.Instance.Enabled.Value.Enabled &&
+                SettingsUI.Instance.DisableKeyInput.Value;
+        }
+#endif
 
         public class Message
         {

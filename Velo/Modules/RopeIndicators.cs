@@ -17,7 +17,7 @@ namespace Velo
         public bool wasConnected = false;
         public int connectedFrames = 0;
 
-        private RopeIndicators() : base("Rope Release Indicators", true)
+        private RopeIndicators() : base("Rope Indicators", true)
         {
             NewCategory("general");
             MaxCount = AddInt("max count", 50, 1, 500);

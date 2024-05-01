@@ -8,10 +8,10 @@ namespace Velo
     {
         public enum EVariable
         {
-            GLOBAL_TIME, ANGLE
+            GLOBAL_TIME, ANGLE_OFFSET
         }
 
-        private static readonly string[] VariableLabels = new[] { "global time", "angle" };
+        private static readonly string[] VariableLabels = new[] { "global time", "angle offset" };
 
         public EnumSetting<EVariable> Variable;
         public ColorTransitionSetting Color;
@@ -21,23 +21,21 @@ namespace Velo
         public int connectedFrames = 0;
 
         private string text = "";
-        private double angle = 0.0f;
+        private double angle = 0f;
 
         private AngleDisplay() : base("Angle Display", true)
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F6));
-
             NewCategory("color");
-            Variable = AddEnum("variable", EVariable.ANGLE, VariableLabels);
+            Variable = AddEnum("variable", EVariable.ANGLE_OFFSET, VariableLabels);
             Color = AddColorTransition("color", new ColorTransition(50, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
 
             Variable.Tooltip =
                 "Set the variable to which the color transition should be bound to:\n" +
                 "-global time: global time in milliseconds\n" +
-                "-angle: last grapple release angle in degrees";
+                "-angle offset: last grapple release angle in degrees minus 90";
 
             AddStyleSettings();
-            Offset.SetValueAndDefault(new Vector2(7.0f, -30.0f));
+            Offset.SetValueAndDefault(new Vector2(7f, -30f));
             RoundingMultiplier.SetValueAndDefault(new RoundingMultiplier("0.1"));
         }
 
@@ -64,7 +62,7 @@ namespace Velo
 
             if (angleChanged || text.Length == 0)
             {
-                text = Util.ToStringRounded((float)angle, RoundingMultiplier.Value);
+                text = RoundingMultiplier.Value.ToStringRounded((float)angle);
             }
 
             positionPrev = Velo.MainPlayer.actor.Position + new Vector2(12.5f, 22.5f);
@@ -85,7 +83,7 @@ namespace Velo
             {
                 return Color.Value.Get();
             }
-            else if (Variable.Value == EVariable.ANGLE)
+            else if (Variable.Value == EVariable.ANGLE_OFFSET)
             {
                 return Color.Value.Get(angle - 90.0, false);
             }

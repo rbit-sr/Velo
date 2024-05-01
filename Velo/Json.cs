@@ -504,7 +504,7 @@ namespace Velo
                 action(value);
         }
 
-        public T DoWithValue<T>(string key, Func<JsonElement, T> func)
+        public T DoWithValueRet<T>(string key, Func<JsonElement, T> func)
         {
             JsonElement value = Get(key);
             if (value != null)

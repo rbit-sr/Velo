@@ -38,37 +38,35 @@ namespace Velo
         
         private InputDisplay() : base("Input Display", true)
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F3));
-
             NewCategory("style");
-            Scale = AddFloat("scale", 1.0f, 0.0f, 10.0f);
+            Scale = AddFloat("scale", 1f, 0.25f, 4f);
             Orientation = AddEnum("orientation", EOrientation.BOTTOM_RIGHT,
                 Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
-            Offset = AddVector("offset", new Vector2(-64.0f, -64.0f), new Vector2(-500.0f, -500.0f), new Vector2(500.0f, 500.0f));
+            Offset = AddVector("offset", new Vector2(-64f, -64f), new Vector2(-500f, -500f), new Vector2(500f, 500f));
             Font = AddString("font", "CEngine\\Debug\\FreeMonoBold.ttf");
-            FontSize = AddInt("font size", 18, 1, 100);
-            Opacity = AddFloat("opacity", 1.0f, 0.0f, 1.0f);
+            FontSize = AddInt("font size", 18, 1, 50);
+            Opacity = AddFloat("opacity", 1f, 0f, 1f);
 
             NewCategory("pressed");
-            PressedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(255, 100, 100, 175)), true);
-            PressedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black), true);
-            PressedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent), true);
+            PressedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(255, 100, 100, 175)));
+            PressedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black));
+            PressedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent));
             PressedOutlineWidth = AddInt("outline width", 0, 0, 10);
             
             NewCategory("released");
-            ReleasedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(160, 160, 160, 175)), true);
-            ReleasedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black), true);
-            ReleasedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent), true);
+            ReleasedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(160, 160, 160, 175)));
+            ReleasedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black));
+            ReleasedOutlineColor = AddColorTransition("outline color", new ColorTransition(Color.Transparent));
             ReleasedOutlineWidth = AddInt("outline width", 0, 0, 10);
             
             NewCategory("boxes");
-            LeftBox = AddInputBox("left box", new InputBox("<", new Vector2(0.0f, 64.0f), new Vector2(64.0f, 64.0f)));
-            RightBox = AddInputBox("right box", new InputBox(">", new Vector2(64.0f, 64.0f), new Vector2(64.0f, 64.0f)));
-            JumpBox = AddInputBox("jump box", new InputBox("jump", new Vector2(64.0f, 0.0f), new Vector2(64.0f, 64.0f)));
-            GrappleBox = AddInputBox("grapple box", new InputBox("grap", new Vector2(0.0f, 0.0f), new Vector2(64.0f, 64.0f)));
-            SlideBox = AddInputBox("slide box", new InputBox("slid", new Vector2(128.0f, 0.0f), new Vector2(64.0f, 64.0f)));
-            BoostBox = AddInputBox("boost box", new InputBox("bst", new Vector2(128.0f, 64.0f), new Vector2(64.0f, 64.0f)));
-            ItemBox = AddInputBox("item box", new InputBox("item", new Vector2(192.0f, 64.0f), new Vector2(64.0f, 64.0f)));
+            LeftBox = AddInputBox("left box", new InputBox("<", new Vector2(0f, 64f), new Vector2(64f, 64f)));
+            RightBox = AddInputBox("right box", new InputBox(">", new Vector2(64f, 64f), new Vector2(64f, 64f)));
+            JumpBox = AddInputBox("jump box", new InputBox("jump", new Vector2(64f, 0f), new Vector2(64f, 64f)));
+            GrappleBox = AddInputBox("grapple box", new InputBox("grap", new Vector2(0f, 0f), new Vector2(64f, 64f)));
+            SlideBox = AddInputBox("slide box", new InputBox("slid", new Vector2(128f, 0f), new Vector2(64f, 64f)));
+            BoostBox = AddInputBox("boost box", new InputBox("bst", new Vector2(128f, 64f), new Vector2(64f, 64f)));
+            ItemBox = AddInputBox("item box", new InputBox("item", new Vector2(192f, 64f), new Vector2(64f, 64f)));
         }
 
         public static InputDisplay Instance = new InputDisplay();
@@ -89,7 +87,7 @@ namespace Velo
 
             if (font == null)
             {
-                font = new CFont(Font.Value, (int)(FontSize.Value * Scale.Value));
+                font = FontCache.Get(Font.Value, (int)(FontSize.Value * Scale.Value));
                 Velo.ContentManager.Load(font, false);
             }
 
@@ -103,7 +101,7 @@ namespace Velo
                 boxComps = new CRectangleDrawComponent[7];
                 for (int j = 0; j < 7; j++)
                 {
-                    boxComps[j] = new CRectangleDrawComponent(0.0f, 0.0f, 0.0f, 0.0f)
+                    boxComps[j] = new CRectangleDrawComponent(0f, 0f, 0f, 0f)
                     {
                         IsVisible = true,
                         FillEnabled = true,
@@ -191,7 +189,7 @@ namespace Velo
                 textComps[i].Color = isPressed ? pressedTextColor : releasedTextColor;
                 textComps[i].Opacity = Opacity.Value;
                 textComps[i].UpdateBounds();
-                textComps[i].Position = origin + inputBoxes[i].position * Scale.Value + (inputBoxes[i].size * Scale.Value - textComps[i].Bounds.Size) / 2.0f;
+                textComps[i].Position = origin + inputBoxes[i].position * Scale.Value + (inputBoxes[i].size * Scale.Value - textComps[i].Bounds.Size) / 2f;
             }
         }
     }

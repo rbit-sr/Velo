@@ -43,8 +43,6 @@ namespace Velo
 
         private HitboxIndicator() : base("Hitbox Indicator", true)
         {
-            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F4));
-
             NewCategory("general");
             IdList = AddBoolList("actor list", new[]
                 {
@@ -92,10 +90,10 @@ namespace Velo
             IdList.Tooltip =
                 "List of actors to show the hitboxes of";
 
-            NewCategory("style");
-            LocalPlayersColor = AddColorTransition("local players color", new ColorTransition(new Color(0, 255, 0, 128)));
-            RemotePlayersColor = AddColorTransition("remote players color", new ColorTransition(new Color(0, 0, 255, 128)));
-            ObjectsColor = AddColorTransition("objects color", new ColorTransition(new Color(255, 0, 0, 128)));
+            NewCategory("color");
+            LocalPlayersColor = AddColorTransition("local players", new ColorTransition(new Color(0, 255, 0, 128)));
+            RemotePlayersColor = AddColorTransition("remote players", new ColorTransition(new Color(0, 0, 255, 128)));
+            ObjectsColor = AddColorTransition("objects", new ColorTransition(new Color(255, 0, 0, 128)));
         }
 
         public static HitboxIndicator Instance = new HitboxIndicator();
@@ -168,7 +166,7 @@ namespace Velo
 
                 if (useRect)
                 {
-                    CAABB rect = collision.Match<CAABB>(actor.Bounds);
+                    CAABB rect = collision is CAABB ? (CAABB)collision : actor.Bounds;
 
                     if (hitbox == null)
                     {
