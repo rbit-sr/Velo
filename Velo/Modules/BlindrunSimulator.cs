@@ -46,13 +46,18 @@ namespace Velo
 
         public static BlindrunSimulator Instance = new BlindrunSimulator();
 
-        public override void PostUpdate()
+        public override void Init()
         {
-            if (Velo.MainPlayerReset && Velo.Ingame)
+            base.Init();
+
+            Velo.OnMainPlayerReset.Add(() =>
             {
-                camPos = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
-                camVel = Vector2.Zero;
-            }
+                if (Velo.Ingame)
+                {
+                    camPos = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
+                    camVel = Vector2.Zero;
+                }
+            });
         }
 
         public void Update(ICCameraModifier cameraMod)

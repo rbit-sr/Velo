@@ -43,7 +43,7 @@ namespace Velo
 
         public override void Update()
         {
-            if (!Velo.Ingame)
+            if (Velo.MainPlayer == null || Velo.MainPlayer.grapple == null)
                 return;
 
             bool missChanged = false;

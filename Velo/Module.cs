@@ -110,14 +110,14 @@ namespace Velo
         {
             if (!(elem is JsonObject))
                 return;
-            JsonElement changes = ((JsonObject)elem).Get("Changes");
+            JsonElement changes = (elem as JsonObject).Get("Changes");
             if (!(changes is JsonArray))
                 return;
-            foreach (JsonElement item in ((JsonArray)changes).value)
+            foreach (JsonElement item in (changes as JsonArray).value)
             {
                 if (!(item is JsonObject)) 
                     continue;
-                JsonElement jsonId = ((JsonObject)item).Get("ID");
+                JsonElement jsonId = (item as JsonObject).Get("ID");
                 if (!(jsonId is JsonDecimal))
                     continue;
                 int id = jsonId.AsInt();
@@ -266,12 +266,12 @@ namespace Velo
         {
             if (!(elem is JsonObject))
                 return;
-            JsonElement settings = ((JsonObject)elem).Get("Settings");
+            JsonElement settings = (elem as JsonObject).Get("Settings");
             if (!(settings is JsonArray))
                 return;
-            foreach (JsonElement setting in ((JsonArray)settings).value)
+            foreach (JsonElement setting in (settings as JsonArray).value)
             {
-                JsonElement nameJson = ((JsonObject)setting).Get("Name");
+                JsonElement nameJson = (setting as JsonObject).Get("Name");
                 if (!(nameJson is JsonString))
                     continue;
                 string name = nameJson.AsString();
@@ -480,7 +480,7 @@ namespace Velo
         PLAYER, TOP_LEFT, TOP_RIGHT, BOTTOM_LEFT, BOTTOM_RIGHT, TOP, BOTTOM, LEFT, RIGHT, CENTER
     }
 
-    public static class EnumExt
+    public static class OrientationExt
     {
         public static string Label(this EOrientation orientation)
         {
@@ -572,7 +572,7 @@ namespace Velo
         public RoundingMultiplierSetting RoundingMultiplier;
         public BoolSetting DisablePopup;
 
-        protected CFont font;
+        protected CachedFont font;
         protected CTextDrawComponent drawComp = null;
 
         public StatDisplayModule(string name, bool ingameOnly) : base(name, ingameOnly)
@@ -621,18 +621,7 @@ namespace Velo
 
         public override void UpdateComponent()
         {
-            if (Font.Modified() || FontSize.Modified())
-            {
-                if (font != null)
-                    Velo.ContentManager.Release(font);
-                font = null;
-            }
-
-            if (font == null)
-            {
-                font = FontCache.Get(Font.Value, FontSize.Value);
-                Velo.ContentManager.Load(font, false);
-            }
+            FontCache.Get(ref font, Font.Value, FontSize.Value);
 
             Update();
 
@@ -644,7 +633,7 @@ namespace Velo
             
             drawComp.color_replace = false;
             drawComp.IsVisible = true;
-            drawComp.Font = font;
+            drawComp.Font = font.Font;
             drawComp.Align = Orientation.Value == EOrientation.PLAYER ?
                 0.5f * Vector2.One : Vector2.Zero;
             drawComp.Offset = Offset.Value;
@@ -666,7 +655,7 @@ namespace Velo
             float width = drawComp.Bounds.Width;
             float height = drawComp.Bounds.Height;
 
-            drawComp.Position = Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
+            drawComp.Position = Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.MainPlayer != null ? Velo.MainPlayer.actor.Position : Vector2.Zero);
 
             drawComp.UpdateBounds();
         }

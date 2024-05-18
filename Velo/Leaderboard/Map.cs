@@ -1,9 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CEngine.World.Actor;
 
 namespace Velo
 {
@@ -19,7 +15,7 @@ namespace Velo
             { "Plaza", 3 },
             { "Factory", 4 },
             { "Theme Park", 5 },
-            { "Powerplant", 6 },
+            { "powerplant", 6 },
             { "Silo", 7 },
             { "Library", 8 },
             { "Nightclub", 9 },
@@ -29,35 +25,35 @@ namespace Velo
             { "Festival", 13 },
             { "Resort", 14 },
             { "Airport", 15 },
-            { "Laboratory", 16 },
-            { "Citadel|Bensen", 17 },
-            { "City Run R2|JM-Anime", 18 },
-            { "Club House|SixthHeaven", 19 },
-            { "Club V|Derp", 20 },
-            { "Coastline|DistinctMadness", 21 },
-            { "Dance Hall|Derp and Robin", 22 },
-            { "Dash the night|Touki", 23 },
-            { "Disco Lounge|Redz", 24 },
-            { "Dragon City|Decard Cain", 25 },
-            { "Genetics|Bunii", 26 },
-            { "Gift Store|DistinctMadness", 27 },
-            { "Granary|DistinctMadness", 28 },
-            { "Lunar Colony|Derpiculous", 29 },
-            { "Minery|Incursio", 30 },
-            { "New Age City|Decard Cain", 31 },
-            { "Oasis|Retro36", 32 },
-            { "Oasis - Abyss|Retro36 and AmazingPineapple", 33 },
-            { "Oceanslide|Plastic Bleach & Faith", 34 },
-            { "Pitfall|KChadowsky, ZombieWizzard and Plastic Shiplord", 35 },
-            { "Plantation|Plastic Bleach", 36 },
-            { "Shore Enuff|Flaccid Cucumber", 37 },
-            { "Snowed In|Plastic Shiplord, Glyme & DistinctMadness", 38 },
-            { "Sound Shiver|GraphiqueNez2", 39 },
-            { "SpeedCity Nights|JM-Anime", 40 },
-            { "Surfing in the oasis|Retro36", 41 },
-            { "Terminal|Redz", 42 },
-            { "Texas Run'em|TaTa", 43 },
-            { "Void|Qwerty", 44 }
+            { "Lab v2", 16 },
+            { "Citadel", 17 },
+            { "City Run R2", 18 },
+            { "Club House", 19 },
+            { "Club V", 20 },
+            { "Coastline", 21 },
+            { "Dance Hall", 22 },
+            { "Dash the night", 23 },
+            { "Disco Lounge", 24 },
+            { "Dragon City", 25 },
+            { "Genetics", 26 },
+            { "Gift Store", 27 },
+            { "Granary", 28 },
+            { "Lunar Colony", 29 },
+            { "Minery", 30 },
+            { "New Age City", 31 },
+            { "Oasis", 32 },
+            { "Oasis - Abyss", 33 },
+            { "Oceanslide", 34 },
+            { "Pitfall", 35 },
+            { "Plantation", 36 },
+            { "Shore Enuff", 37 },
+            { "Snowed In", 38 },
+            { "Sound Shiver", 39 },
+            { "SpeedCity Nights", 40 },
+            { "Surfing in the oasis", 41 },
+            { "Terminal", 42 },
+            { "Texas Run'em", 43 },
+            { "Void", 44 }
         };
 
         public static string[] MapIdToName = new Func<string[]>(() =>
@@ -71,6 +67,8 @@ namespace Velo
                     else
                         names[pair.Value] = pair.Key.Substring(0, delim);
                 }
+                names[6] = "Powerplant";
+                names[16] = "Laboratory";
                 return names;
             })();
 
@@ -78,16 +76,47 @@ namespace Velo
         {
             if (Velo.ModuleSolo == null)
                 return -1;
+            if (Velo.ModuleSolo.LevelData == null)
+                return -1;
 
             string mapName = Velo.ModuleSolo.LevelData.name;
             string mapAuthor = Velo.ModuleSolo.LevelData.author;
-            if (mapAuthor != "")
-                mapName += "|" + mapAuthor.Substring("by ".Length);
+            if (mapAuthor != "Casper van Est" && mapAuthor != "Gert-Jan Stolk" && mapAuthor != "dd_workshop")
+                return -1;
             int mapId = -1;
-            if (Map.AllowedMaps.ContainsKey(mapName))
-                mapId = Map.AllowedMaps[mapName];
+            if (AllowedMaps.ContainsKey(mapName))
+                mapId = AllowedMaps[mapName];
 
             return mapId;
+        }
+
+        public static bool HasBoostaCoke(int mapId)
+        {
+            return
+                mapId == 16;
+        }
+
+        public static bool HasMovingLaser(int mapId)
+        {
+            return
+                mapId == 6 || mapId == 8;
+        }
+
+        public static bool HasSkip(int mapId)
+        {
+            return
+                mapId == 0 ||
+                mapId == 1 ||
+                mapId == 3 ||
+                mapId == 4 ||
+                mapId == 5 ||
+                mapId == 8 ||
+                mapId == 10 ||
+                mapId == 13 ||
+                mapId == 20 ||
+                mapId == 23 ||
+                mapId == 26 ||
+                mapId == 44;
         }
     }
 }

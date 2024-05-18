@@ -1,16 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace Velo
 {
     public class SteamCache
     {
-        private static Dictionary<ulong, string> names = new Dictionary<ulong, string>();
-        private static Dictionary<ulong, Texture2D> avatars = new Dictionary<ulong, Texture2D>();
+        private static readonly Dictionary<ulong, string> names = new Dictionary<ulong, string>();
+        private static readonly Dictionary<ulong, Texture2D> avatars = new Dictionary<ulong, Texture2D>();
 
         public static string GetName(ulong id)
         {
@@ -18,6 +14,7 @@ namespace Velo
             {
                 if (names[id] == "[unknown]")
                     names[id] = Steamworks.SteamFriends.GetFriendPersonaName(new Steamworks.CSteamID(id));
+
                 return names[id];
             }
 
@@ -32,7 +29,7 @@ namespace Velo
         private static Texture2D AvatarToTexture(int id)
         {
             Texture2D texture;
-            if (id != 0)
+            if (id > 2)
             {
                 uint width, height;
                 Steamworks.SteamUtils.GetImageSize(id, out width, out height);
@@ -51,11 +48,11 @@ namespace Velo
             if (avatars.ContainsKey(id))
             {
                 if (avatars[id] == CEngine.CEngine.Instance.WhitePixel)
-                    avatars[id] = AvatarToTexture(Steamworks.SteamFriends.GetMediumFriendAvatar(new Steamworks.CSteamID(id)));
+                    avatars[id] = AvatarToTexture(Steamworks.SteamFriends.GetLargeFriendAvatar(new Steamworks.CSteamID(id)));
                 return avatars[id];
             }
 
-            Texture2D avatar = AvatarToTexture(Steamworks.SteamFriends.GetMediumFriendAvatar(new Steamworks.CSteamID(id)));
+            Texture2D avatar = AvatarToTexture(Steamworks.SteamFriends.GetLargeFriendAvatar(new Steamworks.CSteamID(id)));
             avatars.Add(id, avatar);
 
             if (avatar == CEngine.CEngine.Instance.WhitePixel)

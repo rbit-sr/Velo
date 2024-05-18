@@ -12,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Text;
-using System.Windows.Forms;
 using XNATweener;
 
 namespace Velo
@@ -48,11 +47,13 @@ namespace Velo
     public class Chunk
     {
         public byte[] Data;
-        public int index;
+        public int Index;
+        public int Size;
 
         public Chunk() {
             Data = new byte[0x1000];
-            index = 0;
+            Index = 0;
+            Size = 0;
         }
 
         private void Ensure(int size)
@@ -61,17 +62,18 @@ namespace Velo
                 Array.Resize(ref Data, Data.Length * 2);
         }
 
-        public void Start() { index = 0; }
+        public void Start() { Index = 0; }
 
         public unsafe void Write(object src, int off, int data_size)
         {
-            Ensure(index + data_size);
+            Ensure(Index + data_size);
             void* data_src = (byte*)MemUtil.GetPtr(src) + off;
             fixed(byte* data_dst = Data)
             {
-                Buffer.MemoryCopy(data_src, data_dst + index, data_size, data_size);
+                Buffer.MemoryCopy(data_src, data_dst + Index, data_size, data_size);
             }
-            index += data_size;
+            Index += data_size;
+            Size = Index;
         }
 
         public unsafe void Read(object dst, int off, int data_size)
@@ -79,19 +81,20 @@ namespace Velo
             void* data_dst = (byte*)MemUtil.GetPtr(dst) + off;
             fixed (byte* data_src = Data)
             {
-                Buffer.MemoryCopy(data_src + index, data_dst, data_size, data_size);
+                Buffer.MemoryCopy(data_src + Index, data_dst, data_size, data_size);
             }
-            index += data_size;
+            Index += data_size;
         }
 
         public unsafe void WriteInt(int value)
         {
-            Ensure(index + 4);
+            Ensure(Index + 4);
             fixed (byte* data_dst = Data)
             {
-                *(int*)(data_dst + index) = value;
+                *(int*)(data_dst + Index) = value;
             }
-            index += 4;
+            Index += 4;
+            Size = Index;
         }
 
         public unsafe int ReadInt()
@@ -99,20 +102,21 @@ namespace Velo
             int value;
             fixed (byte* data_src = Data)
             {
-                value = *(int*)(data_src + index);
+                value = *(int*)(data_src + Index);
             }
-            index += 4;
+            Index += 4;
             return value;
         }
 
         public unsafe void WriteLong(long value)
         {
-            Ensure(index + 8);
+            Ensure(Index + 8);
             fixed (byte* data_dst = Data)
             {
-                *(long*)(data_dst + index) = value;
+                *(long*)(data_dst + Index) = value;
             }
-            index += 8;
+            Index += 8;
+            Size = Index;
         }
 
         public unsafe long ReadLong()
@@ -120,30 +124,31 @@ namespace Velo
             long value;
             fixed (byte* data_src = Data)
             {
-                value = *(long*)(data_src + index);
+                value = *(long*)(data_src + Index);
             }
-            index += 8;
+            Index += 8;
             return value;
         }
 
         public unsafe void WriteBytes(byte* bytes, int size)
         {
-            Ensure(index + size);
+            Ensure(Index + size);
 
             fixed (byte* data_dst = Data)
             {
-                Buffer.MemoryCopy(bytes, data_dst + index, size, size);
+                Buffer.MemoryCopy(bytes, data_dst + Index, size, size);
             }
-            index += size;
+            Index += size;
+            Size = Index;
         }
 
         public unsafe void ReadBytes(byte* bytes, int size)
         {
             fixed (byte* data_src = Data)
             {
-                Buffer.MemoryCopy(data_src + index, bytes, size, size);
+                Buffer.MemoryCopy(data_src + Index, bytes, size, size);
             }
-            index += size;
+            Index += size;
         }
 
         public unsafe void WriteByteArr(byte[] arr)
@@ -344,7 +349,15 @@ namespace Velo
 
         private static unsafe void Read(Chunk chunk, CAnimatedSpriteDrawComponent obj)
         {
+            Color color = obj.Color;
+            Vector2 offset = obj.Offset;
+            Vector2 size = obj.Size;
+            Vector2 origin = obj.Origin;
             chunk.Read(obj, 0x2C, 0x84);
+            obj.Color = color;
+            obj.Offset = offset;
+            obj.Size = size;
+            obj.Origin = origin;
             Read(chunk, obj.bounds);
             obj.nextAnimation = chunk.ReadStr();
             obj.timeSpan1 = new TimeSpan(obj.timeSpan1.Ticks + dt);
@@ -594,6 +607,7 @@ namespace Velo
             Read(chunk, obj.actor);
             Read(chunk, obj.spriteDrawComp);
             Read(chunk, obj.bounds);
+            obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = chunk.ReadInt();
             int targetId = chunk.ReadInt();
@@ -1277,7 +1291,10 @@ namespace Velo
         {
             chunk.Read(obj, 0x1D4, 0x214);
             Read(chunk, obj.actor);
-            Read(chunk, obj.slot);
+            if (!ghostOnly)
+                Read(chunk, obj.slot);
+            else
+                chunk.Index += 0x3C;
             Read(chunk, obj.random);
             Read(chunk, obj.groupDrawComp1);
             Read(chunk, obj.animSpriteDrawComp1);
@@ -1315,7 +1332,6 @@ namespace Velo
             obj.timespan14 = new TimeSpan(obj.timespan14.Ticks + dt);
             contrLookup.Add(obj.actor.Id, obj);
             
-
             int grappleId = chunk.ReadInt();
             applyPtr.Add(() => obj.grapple = (Grapple)contrLookup[grappleId]);
             int ropeId = chunk.ReadInt();
@@ -1554,6 +1570,7 @@ namespace Velo
         private readonly Chunk chunk;
 
         private static long dt;
+        private static bool ghostOnly;
         private static bool[] include = new bool[actorTypes.Count];
         private static readonly NullSafeDict<int, ICActorController> contrLookup = new NullSafeDict<int, ICActorController>();
         private static readonly List<Action> applyPtr = new List<Action>();
@@ -1563,6 +1580,7 @@ namespace Velo
         public Savestate()
         {
             chunk = new Chunk();
+            chunk.WriteInt(-1);
         }
 
         public Chunk Chunk { get { return chunk; } }
@@ -1590,8 +1608,8 @@ namespace Velo
 
         private class ActorType<A> : ActorType
         {
-            private Action<Chunk, A> write;
-            private Action<Chunk, A> read;
+            private readonly Action<Chunk, A> write;
+            private readonly Action<Chunk, A> read;
 
             public ActorType(Action<Chunk, A> write, Action<Chunk, A> read) :
                 base(typeof(A), null) 
@@ -1618,7 +1636,7 @@ namespace Velo
 
         private class ActorType<A, D> : ActorType<A> where D : CEngine.Definition.Actor.ICActorDef
         {
-            Func<D> createDef;
+            readonly Func<D> createDef;
 
             public ActorType(Action<Chunk, A> write, Action<Chunk, A> read, Func<D> createDef) :
                 base(write, read)
@@ -1637,7 +1655,7 @@ namespace Velo
             EXCLUDE, INCLUDE
         }
 
-        public void Save(List<ActorType> actors, EListMode listMode)
+        public void Save(List<ActorType> actors, EListMode listMode, bool saveModule = true)
         {
             if (!Velo.Ingame || Velo.Online)
                 return;
@@ -1648,8 +1666,14 @@ namespace Velo
 
             int count = collisionEngine.ActorCount;
 
+            int playerOffset = 0;
+            int grappleOffset = 0;
+            int ropeOffset = 0;
+
             chunk.Start();
 
+            chunk.WriteInt(1);
+            chunk.WriteStr(Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author);
             chunk.WriteLong(CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks);
 
             if (listMode == EListMode.EXCLUDE)
@@ -1682,6 +1706,8 @@ namespace Velo
                     if (!include[Player.Id]) continue;
                     chunk.WriteInt(Player.Id);
                     chunk.WriteInt(player.slot.Index);
+                    if (player == Velo.MainPlayer)
+                        playerOffset = chunk.Index;
                     Player.Write(chunk, player);
                 } 
                 else if (controller is PlayerBot)
@@ -1698,11 +1724,14 @@ namespace Velo
                 {
                     foreach (ActorType type in actorTypes)
                     {
-                    
                         if (controller.GetType() == type.Type)
                         {
                             if (!include[type.Id]) continue;
                             chunk.WriteInt(type.Id);
+                            if (controller == Velo.MainPlayer.grapple)
+                                grappleOffset = chunk.Index;
+                            if (controller == Velo.MainPlayer.rope)
+                                ropeOffset = chunk.Index;
                             type.Write(chunk, controller);
                             break;
                         }
@@ -1712,16 +1741,25 @@ namespace Velo
 
             chunk.WriteInt(-1);
 
-            foreach (var module in stack.modules)
+            if (saveModule)
             {
-                module.Match<ModuleSolo>(moduleSolo => Write(chunk, moduleSolo));
-                module.Match<ModuleMP>(moduleMP => Write(chunk, moduleMP));
+                chunk.WriteInt(1);
+                foreach (var module in stack.modules)
+                {
+                    module.Match<ModuleSolo>(moduleSolo => Write(chunk, moduleSolo));
+                    module.Match<ModuleMP>(moduleMP => Write(chunk, moduleMP));
+                }
             }
+            else
+            {
+                chunk.WriteInt(-1);
+            }
+
+            chunk.WriteInt(playerOffset);
+            chunk.WriteInt(grappleOffset);
+            chunk.WriteInt(ropeOffset);
         }
 
-#if !VELO_OLD
-#pragma warning disable IDE0034
-#endif
         private CActor GetOfType(Type type, int n, Func<CActor, bool> func = null)
         {
             CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
@@ -1741,9 +1779,6 @@ namespace Velo
 
             return default(CActor);
         }
-#if !VELO_OLD
-#pragma warning restore IDE0034
-#endif
 
         public void DestroyAllAfter(Type type, int n)
         {
@@ -1754,6 +1789,8 @@ namespace Velo
             for (int i = 0; i < collisionEngine.ActorCount; i++)
             {
                 CActor actor = collisionEngine.GetActor(i);
+                if (actor == null || actor.controller == null)
+                    continue;
                 if (actor.controller.GetType() == type && !actor.ghostOwnedItem)
                 {
                     if (c >= n)
@@ -1829,19 +1866,36 @@ namespace Velo
 #pragma warning restore IDE1006
 #endif
 
-        public bool Load(bool setGlobalTime)
+        public bool Load(bool setGlobalTime, bool ghostOnly = false)
         {
             if (!Velo.Ingame || Velo.Online)
                 return false;
+
+            Savestate.ghostOnly = ghostOnly;
 
             CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
             CWorld world = CEngine.CEngine.Instance.World;
             Stack stack = Main.game.stack;
 
-            Savestates.Instance.savestateLoadTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-            stack = Main.game.stack;
-
             chunk.Start();
+
+            int valid = chunk.ReadInt();
+            if (valid == -1)
+                return false;
+
+            int prevIndex = chunk.Index;
+            chunk.Index = chunk.Size - 12;
+            int playerOffset = chunk.ReadInt();
+            int grappleOffset = chunk.ReadInt();
+            int RopeOffset = chunk.ReadInt();
+            chunk.Index = prevIndex;
+
+            string nameAuthor = chunk.ReadStr();
+            if (nameAuthor != Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author)
+                return false;
+
+            LocalGameMods.Instance.savestateLoadTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            stack = Main.game.stack;
 
             long time = chunk.ReadLong();
             if (setGlobalTime)
@@ -1854,9 +1908,23 @@ namespace Velo
                 dt = CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks - time;
             }
 
-            include = chunk.ReadBoolArr();
-
             contrLookup.Add(-1, null);
+
+            include = chunk.ReadBoolArr();
+            if (ghostOnly)
+            {
+                chunk.Index = playerOffset;
+                int ghostId = Velo.Ghost.actor.id;
+                Player.Read(chunk, Velo.Ghost.actor.Controller);
+                Velo.Ghost.actor.id = ghostId;
+                /*chunk.Index = grappleOffset;
+                Grapple.Read(chunk, Velo.Ghost.grapple.actor.Controller);
+                Velo.Ghost.grapple.actor.ghostOwnedItem = true;
+                chunk.Index = RopeOffset;
+                Rope.Read(chunk, Velo.Ghost.rope.actor.Controller);
+                Velo.Ghost.rope.actor.ghostOwnedItem = true;*/
+                goto cleanup;
+            }
 
             int[] counts = new int[actorTypes.Count];
 
@@ -1869,16 +1937,16 @@ namespace Velo
 
                 if (id == Player.Id)
                 {
-                    int index = chunk.ReadInt();
-                    CActor actor = GetOfType(Player.Type, 0, (check) => (check.Controller as Player).slot.Index == index);
+                    int slotIndex = chunk.ReadInt();
+                    CActor actor = GetOfType(Player.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
                     Player.Read(chunk, actor.Controller);
                     fixedIdActors.Add(actor);
                     fixedIds.Add(actor.id);
                 }
                 else if (id == PlayerBot.Id)
                 {
-                    int index = chunk.ReadInt();
-                    CActor actor = GetOfType(PlayerBot.Type, 0, (check) => (check.Controller as Player).slot.Index == index);
+                    int slotIndex = chunk.ReadInt();
+                    CActor actor = GetOfType(PlayerBot.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
                     PlayerBot.Read(chunk, actor.Controller);
                     fixedIdActors.Add(actor);
                     fixedIds.Add(actor.id);
@@ -1920,10 +1988,14 @@ namespace Velo
                     DestroyAllAfter(type.Type, counts[type.Id]);
             }
 
-            foreach (var module in stack.modules)
+            int loadModule = chunk.ReadInt();
+            if (loadModule != -1)
             {
-                module.Match<ModuleSolo>(moduleSolo => Read(chunk, moduleSolo));
-                module.Match<ModuleMP>(moduleMP => Read(chunk, moduleMP));
+                foreach (var module in stack.modules)
+                {
+                    module.Match<ModuleSolo>(moduleSolo => Read(chunk, moduleSolo));
+                    module.Match<ModuleMP>(moduleMP => Read(chunk, moduleMP));
+                }
             }
 
             foreach (Action action in applyPtr)
@@ -1954,62 +2026,13 @@ namespace Velo
 
             collisionEngine.actors.Sort((actor1, actor2) => actor1.Id.CompareTo(actor2.Id));
 
+        cleanup:
             contrLookup.Clear();
             applyPtr.Clear();
             fixedIdActors.Clear();
             fixedIds.Clear();
 
             return true;
-        }
-    }
-
-    public class Savestates : Module
-    {
-        public HotkeySetting SaveKey;
-        public HotkeySetting LoadKey;
-        public IntSetting LoadHaltDuration;
-        public BoolSetting StoreAIVolumes;
-
-        private readonly Savestate savestate;
-        public long savestateLoadTime = 0;
-
-        private Savestates()
-            : base("Savestates")
-        {
-            NewCategory("general");
-            SaveKey = AddHotkey("save key", 0x97);
-            LoadKey = AddHotkey("load key", 0x97);
-            LoadHaltDuration = AddInt("load halt duration", 0, 0, 2000);
-            StoreAIVolumes = AddBool("store AI volumes", false);
-
-            LoadHaltDuration.Tooltip =
-                "Duration in milliseconds the game will run in slow motion after loading a savestate.";
-            StoreAIVolumes.Tooltip =
-                "Whether to store AI volumes or not. " +
-                "Storing them should be unnecessary in most circumstances.";
-
-            savestate = new Savestate();
-        }
-
-        public static Savestates Instance = new Savestates();
-
-        public override void PreUpdate()
-        {
-            base.PreUpdate();
-
-            if (Keyboard.Pressed[SaveKey.Value])
-            {
-                if (StoreAIVolumes.Value)
-                    savestate.Save(new List<Savestate.ActorType>{ Savestate.AIVolume }, Savestate.EListMode.EXCLUDE);
-                else
-                    savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
-            }
-
-            if (Keyboard.Pressed[LoadKey.Value])
-            {
-                if (savestate.Load(TAS.Instance.DtFixed))
-                    savestateLoadTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-            }
         }
     }
 }

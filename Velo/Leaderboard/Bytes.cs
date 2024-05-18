@@ -1,14 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 
 namespace Velo
 {
     public class Bytes
     {
+        public static void Write(short value, byte[] buffer, ref int off)
+        {
+            buffer[off] = (byte)(value);
+            buffer[off + 1] = (byte)(value >> 8);
+            off += 2;
+        }
+
+        public static void Read(ref short value, byte[] buffer, ref int off)
+        {
+            value = (short)(
+                buffer[off] |
+                buffer[off + 1] << 8);
+            off += 2;
+        }
+
         public static void Write(int value, byte[] buffer, ref int off)
         {
             buffer[off]     = (byte)(value);
@@ -21,10 +31,10 @@ namespace Velo
         public static void Read(ref int value, byte[] buffer, ref int off)
         {
             value =
-                (int)buffer[off] |
-                (int)buffer[off + 1] << 8 |
-                (int)buffer[off + 2] << 16 |
-                (int)buffer[off + 3] << 24;
+                buffer[off] |
+                buffer[off + 1] << 8 |
+                buffer[off + 2] << 16 |
+                buffer[off + 3] << 24;
             off += 4;
         }
 

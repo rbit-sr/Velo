@@ -31,7 +31,7 @@ namespace Velo
         public InputBoxSetting BoostBox;
         public InputBoxSetting ItemBox;
 
-        private CFont font;
+        private CachedFont font;
 
         private CRectangleDrawComponent[] boxComps;
         private CTextDrawComponent[] textComps;
@@ -78,18 +78,7 @@ namespace Velo
 
         public override void UpdateComponents()
         {
-            if (Font.Modified() || FontSize.Modified() || Scale.Modified())
-            {
-                if (font != null)
-                    Velo.ContentManager.Release(font);
-                font = null;
-            }
-
-            if (font == null)
-            {
-                font = FontCache.Get(Font.Value, (int)(FontSize.Value * Scale.Value));
-                Velo.ContentManager.Load(font, false);
-            }
+            FontCache.Get(ref font, Font.Value, (int)(FontSize.Value * Scale.Value));
 
             Player player = Velo.MainPlayer;
 
@@ -116,7 +105,7 @@ namespace Velo
                 textComps = new CTextDrawComponent[7];
                 for (int j = 0; j < 7; j++)
                 {
-                    textComps[j] = new CTextDrawComponent("", font, Vector2.Zero)
+                    textComps[j] = new CTextDrawComponent("", font.Font, Vector2.Zero)
                     {
                         color_replace = false,
                         IsVisible = true
@@ -173,7 +162,7 @@ namespace Velo
             float height = (maxY - minY) * Scale.Value;
 
             Vector2 origin = 
-                Offset.Value + Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.PlayerPos);
+                Offset.Value + Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, player.actor.Position);
 
             for (int i = 0; i < 7; i++)
             {
@@ -185,7 +174,7 @@ namespace Velo
                 boxComps[i].SetPositionSize(origin + inputBoxes[i].position * Scale.Value, inputBoxes[i].size * Scale.Value);
 
                 textComps[i].StringText = inputBoxes[i].text;
-                textComps[i].Font = font;
+                textComps[i].Font = font.Font;
                 textComps[i].Color = isPressed ? pressedTextColor : releasedTextColor;
                 textComps[i].Opacity = Opacity.Value;
                 textComps[i].UpdateBounds();

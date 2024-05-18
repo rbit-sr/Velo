@@ -1,25 +1,22 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using CEngine.Graphics.Library;
+﻿using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using System.Buffers.Binary;
 
 namespace Velo
 {
     public class LeaderboardFonts
     {
-        public CFont FontSmall;
-        public CFont FontMedium;
-        public CFont FontLarge;
+        public CachedFont FontSmall;
+        public CachedFont FontMedium;
+        public CachedFont FontLarge;
     }
 
     public class Leaderboard : ToggleModule
     {
+        public BoolSetting EnableSubmissions;
+        public HotkeySetting StopPlayback; 
+
         private bool initialized = false;
 
         private CRectangleDrawComponent dimRecDraw;
@@ -31,31 +28,44 @@ namespace Velo
 
         private Leaderboard() : base("Leaderboard")
         {
-            
+            NewCategory("general");
+            EnableSubmissions = AddBool("enable submissions", true);
+            EnableSubmissions.Tooltip = "Disabling this will stop the automatic submission of new PB runs.";
+
+            NewCategory("playback");
+            StopPlayback = AddHotkey("stop playback", 0x97);
         }
 
         public static Leaderboard Instance = new Leaderboard();
 
         private void Initialize()
         {
-            dimRecDraw = new CRectangleDrawComponent(0, 0, 1920, 1080);
-            dimRecDraw.IsVisible = true;
-            dimRecDraw.OutlineEnabled = false;
-            dimRecDraw.OutlineThickness = 0;
-            dimRecDraw.FillEnabled = true;
-            dimRecDraw.FillColor = new Color(0, 0, 0, 127);
-
-            fonts = new LeaderboardFonts
+            dimRecDraw = new CRectangleDrawComponent(0, 0, 1920, 1080)
             {
-                FontSmall = FontCache.Get("UI\\Font\\NotoSans-Regular.ttf", 12),
-                FontMedium = FontCache.Get("UI\\Font\\NotoSans-Regular.ttf", 18),
-                FontLarge = FontCache.Get("UI\\Font\\Souses.ttf", 42)
+                IsVisible = true,
+                OutlineEnabled = false,
+                OutlineThickness = 0,
+                FillEnabled = true,
+                FillColor = new Color(0, 0, 0, 127)
             };
-            Velo.ContentManager.Load(fonts.FontSmall, false);
-            Velo.ContentManager.Load(fonts.FontMedium, false);
-            Velo.ContentManager.Load(fonts.FontLarge, false);
 
+            fonts = new LeaderboardFonts();
+
+            FontCache.Get(ref fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf", 12);
+            FontCache.Get(ref fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf", 18);
+            FontCache.Get(ref fonts.FontLarge, "UI\\Font\\Souses.ttf", 42);
+            
             initialized = true;
+        }
+
+        public override void PreUpdate()
+        {
+            base.PreUpdate();
+
+            if (Keyboard.Pressed[StopPlayback.Value])
+            {
+                LocalGameMods.Instance.StopPlayback();
+            }
         }
 
         public override void PostRender()

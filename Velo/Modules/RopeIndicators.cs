@@ -47,7 +47,7 @@ namespace Velo
 
         public override void UpdateComponent()
         {
-            if (Velo.MainPlayer == null)
+            if (Velo.MainPlayer == null || Velo.MainPlayer.grapple == null)
                 return;
 
             if (Enabled.Modified())

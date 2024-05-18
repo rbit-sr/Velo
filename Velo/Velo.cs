@@ -9,9 +9,7 @@ using CEngine.World.Actor;
 using CEngine.Graphics.Layer;
 using Lidgren.Network;
 using SDL2;
-using System.Windows.Forms;
 using System.Collections.Generic;
-using System.IO;
 
 namespace Velo
 {
@@ -25,15 +23,24 @@ namespace Velo
         public static bool Ingame = false;
         public static bool IngamePrev = false;
         public static bool Online = false;
-        public static bool MainPlayerReset = false;
-        public static bool LapFinish = false;
         public static float TimerPrev = 0.0f;
         public static float Timer = 0.0f;
-        public static Vector2 PlayerPos = Vector2.Zero;
-        private static List<Action> OnPreUpdate = new List<Action>();
-        private static List<Action> OnPostUpdate = new List<Action>();
-        private static List<Action> OnPreRender = new List<Action>();
-        private static List<Action> OnPostRender = new List<Action>();
+        public static bool BoostaCokeModified = false;
+        public static bool GhostLaserCollision = false;
+
+        public static List<Action> OnMainPlayerReset = new List<Action>();
+        public static List<Action> OnLapFinish = new List<Action>();
+
+        private static readonly List<Action> onPreUpdate = new List<Action>();
+        private static readonly List<Action> onPostUpdate = new List<Action>();
+        private static readonly List<Action> onPreRender = new List<Action>();
+        private static readonly List<Action> onPostRender = new List<Action>();
+
+        // thread-safe
+        private static readonly List<Action> onPreUpdateTS = new List<Action>();
+        private static readonly List<Action> onPostUpdateTS = new List<Action>();
+        private static readonly List<Action> onPreRenderTS = new List<Action>();
+        private static readonly List<Action> onPostRenderTS = new List<Action>();
 
         public static Player GetMainPlayer()
         {
@@ -120,7 +127,9 @@ namespace Velo
 
             ModuleManager.Instance.Init();
             Storage.Instance.Load();
+            SettingsUI.Instance.SendUpdates = false;
             SettingsUI.Instance.Enabled.Disable();
+            SettingsUI.Instance.SendUpdates = true;
             Keyboard.Init();
         }
 
@@ -133,15 +142,18 @@ namespace Velo
                 Keyboard.Pressed.Fill(false);
             }
 
-            lock (OnPreUpdate)
+            foreach (Action action in onPreUpdate)
+                action();
+            onPreUpdate.Clear();
+            lock (onPreUpdateTS)
             {
-                foreach (Action action in OnPreUpdate)
+                foreach (Action action in onPreUpdateTS)
                     action();
-                OnPreUpdate.Clear();
+                onPreUpdateTS.Clear();
             }
             ModuleManager.Instance.PreUpdate();
-            MainPlayerReset = false;
-            LapFinish = false;
+            BoostaCokeModified = false;
+            GhostLaserCollision = false;
 
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
            
@@ -159,13 +171,15 @@ namespace Velo
                 if (timerAct != null)
                     Timer = (timerAct as Timer).current;
             }
-            PlayerPos = MainPlayer != null ? MainPlayer.actor.Position : Vector2.Zero;
 
-            lock (OnPostUpdate)
+            foreach (Action action in onPostUpdate)
+                action();
+            onPostUpdate.Clear();
+            lock (onPostUpdateTS)
             {
-                foreach (Action action in OnPostUpdate)
+                foreach (Action action in onPostUpdateTS)
                     action();
-                OnPostUpdate.Clear();
+                onPostUpdateTS.Clear();
             }
             ModuleManager.Instance.PostUpdate();
 
@@ -181,21 +195,27 @@ namespace Velo
 
         public static void game_draw(GameTime gameTime)
         {
-            lock (OnPreRender)
+            foreach (Action action in onPreRender)
+                action();
+            onPreRender.Clear();
+            lock (onPreRenderTS)
             {
-                foreach (Action action in OnPreRender)
+                foreach (Action action in onPreRenderTS)
                     action();
-                OnPreRender.Clear();
+                onPreRenderTS.Clear();
             }
             ModuleManager.Instance.PreRender();
 
             Main.game.GameDraw(gameTime);
 
-            lock (OnPostRender)
+            foreach (Action action in onPostRender)
+                action();
+            onPostRender.Clear();
+            lock (onPostRenderTS)
             {
-                foreach (Action action in OnPostRender)
+                foreach (Action action in onPostRenderTS)
                     action();
-                OnPostRender.Clear();
+                onPostRenderTS.Clear();
             }
             ModuleManager.Instance.PostRender();
 
@@ -212,33 +232,33 @@ namespace Velo
 
         public static void AddOnPreUpdate(Action action)
         {
-            lock (OnPreUpdate)
+            lock (onPreUpdateTS)
             {
-                OnPreUpdate.Add(action);
+                onPreUpdateTS.Add(action);
             }
         }
 
         public static void AddOnPostUpdate(Action action)
         {
-            lock (OnPostUpdate)
+            lock (onPostUpdateTS)
             {
-                OnPostUpdate.Add(action);
+                onPostUpdateTS.Add(action);
             }
         }
 
         public static void AddOnPreRender(Action action)
         {
-            lock (OnPreRender)
+            lock (onPreRenderTS)
             {
-                OnPreRender.Add(action);
+                onPreRenderTS.Add(action);
             }
         }
 
         public static void AddOnPostRender(Action action)
         {
-            lock (OnPostRender)
+            lock (onPostRenderTS)
             {
-                OnPostRender.Add(action);
+                onPostRenderTS.Add(action);
             }
         }
 
@@ -270,18 +290,7 @@ namespace Velo
         // called in CEngine's update method
         public static float get_time_scale()
         {
-            if (!Online && Ingame)
-            {
-                if (Savestates.Instance.savestateLoadTime == 0 || Savestates.Instance.LoadHaltDuration.Value == 0)
-                    return LocalGameMods.Instance.TimeScale.Value;
-
-                long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-                float ratio = (float)Math.Min(milliseconds - Savestates.Instance.savestateLoadTime, Savestates.Instance.LoadHaltDuration.Value) / Savestates.Instance.savestateLoadTime;
-
-                return LocalGameMods.Instance.TimeScale.Value * ratio;
-            }
-
-            return 1f;
+            return LocalGameMods.Instance.TimeScaleVal;
         }
 
 #if !VELO_OLD
@@ -294,12 +303,26 @@ namespace Velo
         public static void player_reset(Player player)
         {
             if (player == MainPlayer)
-                MainPlayerReset = true;
+            {
+                foreach (Action action in OnMainPlayerReset)
+                    onPreUpdate.Add(action);
+            }
         }
 
         public static void lap_finish()
         {
-            LapFinish = true;
+            foreach (Action action in OnLapFinish)
+                onPreUpdate.Add(action);
+        }
+
+        public static void boostacoke_add()
+        {
+            BoostaCokeModified = true;
+        }
+
+        public static void boostacoke_remove()
+        {
+            BoostaCokeModified = true;
         }
 
         public static float get_camera_max_speed(ICCameraModifier camera)
@@ -368,20 +391,58 @@ namespace Velo
             return LocalGameMods.Instance.EnableOldMoonwalk.Value;
         }
 
+        private static bool isLaserTraceLine = false;
+
+        public static void set_is_laser_trace_line(bool value)
+        {
+            isLaserTraceLine = value;
+        }
+
+        public static bool enable_trace_line(ICCollidable collidable)
+        {
+            if (!isLaserTraceLine)
+                return true;
+            if (collidable == null || !(collidable is CActor))
+                return true;
+            if (Online)
+                return true;
+            if ((collidable as CActor).Controller == Ghost)
+                return !LocalGameMods.Instance.DisableGhostLaserInteraction.Value;
+            return true;
+        }
+
+        public static void player_laser_collide(ICCollidable collidable)
+        {
+            if ((collidable as CActor).Controller == Ghost)
+            {
+                GhostLaserCollision = true;
+            }
+        }
+
         // called in CEngine
         public static bool dt_fixed()
         {
-            return TAS.Instance.DtFixed;
+            return LocalGameMods.Instance.DtFixed;
         }
 
         public static bool set_inputs()
         {
-            return TAS.Instance.SetInputs();
+            return LocalGameMods.Instance.SetInputs();
         }
 
         public static bool skip_if_ghost()
         {
-            return TAS.Instance.SkipIfGhost();
+            return LocalGameMods.Instance.SkipIfGhost();
+        }
+
+        public static bool skip_if_ghost(Player player)
+        {
+            return LocalGameMods.Instance.SkipIfGhost() && player == Ghost;
+        }
+
+        public static bool skip_update_sprite(Player player)
+        {
+            return LocalGameMods.Instance.SkipUpdateSprite(player);
         }
 
         public static void update_camera(ICCameraModifier cameraMod)
@@ -426,7 +487,7 @@ namespace Velo
 
         public static float popup_opacity()
         {
-            return Appearance.Instance.PopupColor.Value.Get().A / 255f;
+            return Appearance.Instance.PopupColor.Value.Get().A / 255f * Appearance.Instance.PopupOpacity.Value;
         }
 
         public static float popup_scale()

@@ -1,7 +1,6 @@
 ﻿using System.Threading.Tasks;
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
 namespace Velo
@@ -10,9 +9,9 @@ namespace Velo
     {
         private class SubmitRequest
         {
-            private RequestHandler<NewPbInfo> handler;
-            private Task writeFileTask;
-            private string path;
+            private readonly RequestHandler<NewPbInfo> handler;
+            private readonly Task writeFileTask;
+            private readonly string path;
             private RunInfo tempInfo;
 
             public SubmitRequest(Recording recording, string path)
@@ -20,7 +19,7 @@ namespace Velo
                 this.path = path;
                 if (this.path == "")
                 {
-                    string id = System.Guid.NewGuid().ToString();
+                    string id = Guid.NewGuid().ToString();
                     this.path = "Velo\\pending\\" + id + ".temp";
 
                     writeFileTask = Task.Run(() =>
@@ -31,22 +30,8 @@ namespace Velo
                                 Directory.CreateDirectory("Velo\\pending");
 
                             using (FileStream stream = new FileStream(this.path, FileMode.Create, FileAccess.Write))
-                            using (BinaryWriter writer = new BinaryWriter(stream, System.Text.Encoding.ASCII))
                             {
-                                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                                RunInfo.GetBytes(recording.Info, buffer);
-                                writer.Write(buffer);
-
-                                writer.Write(recording.Count * Marshal.SizeOf<Frame>());
-                                buffer = new byte[Marshal.SizeOf<Frame>()];
-                                for (int i = 0; i < recording.Count; i++)
-                                {
-                                    Frame.GetBytes(recording[i], buffer);
-                                    writer.Write(buffer);
-                                }
-
-                                writer.Write(recording.Savestates[0].Chunk.Data.Length);
-                                writer.Write(recording.Savestates[0].Chunk.Data);
+                                recording.Write(stream);
                             }
                         }
                         catch (Exception e)
@@ -58,12 +43,12 @@ namespace Velo
 
                 handler = new RequestHandler<NewPbInfo>(int.MaxValue, (i) =>
                 {
-                    if (i < 5)
+                    if (i < 3)
                         return 0;
-                    else if (i < 10)
-                        return 5000;
+                    else if (i < 6)
+                        return 20 * 1000;
                     else
-                        return 60000;
+                        return 5 * 60 * 1000;
                 });
                 tempInfo = recording.Info;
                 RunsDatabase.Instance.AddPending(ref tempInfo);
@@ -92,12 +77,17 @@ namespace Velo
 
             public void DeleteFile()
             {
-                if (File.Exists(path))
-                    File.Delete(path);
+                Task.Run(() =>
+                {
+                    if (writeFileTask != null)
+                        writeFileTask.Wait();
+                    if (File.Exists(path))
+                        File.Delete(path);
+                });
             }
         }
 
-        private List<SubmitRequest> requests = new List<SubmitRequest>();
+        private readonly List<SubmitRequest> requests = new List<SubmitRequest>();
 
         public RecordingSubmitter() : base("Recording Submitter")
         {
@@ -127,8 +117,8 @@ namespace Velo
                     RunsDatabase.Instance.Remove(request.TempInfo.Id);
                     if (result.TimeSave != -1)
                     {
-                        RunsDatabase.Instance.Add(new List<RunInfo> { result.RunInfo });
-                        string message = "";
+                        RunsDatabase.Instance.Add(new[] { result.RunInfo });
+                        string message;
                         if (result.NewWr)
                             message = "New WR!";
                         else
@@ -159,28 +149,8 @@ namespace Velo
                     Recording recording = new Recording();
 
                     using (FileStream stream = new FileStream(pendingPath, FileMode.Open, FileAccess.Read))
-                    using (BinaryReader reader = new BinaryReader(stream, System.Text.Encoding.ASCII))
                     {
-                        byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                        stream.ReadExactly(buffer, 0, buffer.Length);
-                        recording.Info = RunInfo.FromBytes(buffer);
-
-                        buffer = new byte[Marshal.SizeOf<Frame>()];
-                        int count = reader.ReadInt32() / Marshal.SizeOf<Frame>();
-                        if (count > 100000)
-                            throw new Exception();
-                        for (int i = 0; i < count; i++)
-                        {
-                            stream.ReadExactly(buffer, 0, buffer.Length);
-                            recording.PushBack(Frame.FromBytes(buffer), null);
-                        }
-
-                        int size = reader.ReadInt32();
-                        if (size > 1000000)
-                            throw new Exception();
-                        recording.Savestates[0] = new Savestate();
-                        recording.Savestates[0].Chunk.Data = new byte[size];
-                        stream.ReadExactly(recording.Savestates[0].Chunk.Data, 0, size);
+                        recording.Read(stream);
                     }
 
                     Submit(recording, pendingPath);
@@ -203,21 +173,7 @@ namespace Velo
                 return;
 
             string message = "Submitting as ";
-            switch ((ECategory)recording.Info.Category)
-            {
-                case ECategory.NEW_LAP:
-                    message += "New lap";
-                    break;
-                case ECategory.ONE_LAP:
-                    message += "1 lap";
-                    break;
-                case ECategory.NEW_LAP_SKIPS:
-                    message += "New lap (Skip)";
-                    break;
-                case ECategory.ONE_LAP_SKIPS:
-                    message += "1 lap (Skip)";
-                    break;
-            }
+            message += ((ECategory)recording.Info.Category).Label();
             message += "...";
             Notifications.Instance.PushNotification(message);
 

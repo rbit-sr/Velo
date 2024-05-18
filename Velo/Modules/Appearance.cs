@@ -258,7 +258,7 @@ namespace Velo
         public void UpdatePopup(Player player)
         {
             player.popup.Offset = PopupOffset.Value;
-            player.popup.Color = PopupColor.Value.Get();
+            player.popup.Color = Util.FullAlpha(PopupColor.Value.Get());
             if (!PopupEnabled())
             {
                 player.popup.IsVisible = false;
@@ -342,6 +342,8 @@ namespace Velo
                 rope.line1.thickness = GoldenHookRopeThickness.Value;
                 rope.line2.thickness = GoldenHookRopeThickness.Value + 2;
             }
+
+            rope.line2.color.A = 128;
         }
 
         public void AddChatComp(object obj, string type)

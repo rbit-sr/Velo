@@ -31,9 +31,13 @@
     <WarningLevel>4</WarningLevel>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PlatformTarget>x86</PlatformTarget>
-    <NoWarn>IDE0018, IDE0034, IDE0038, IDE0039</NoWarn>
+    <NoWarn>IDE0018, IDE0020, IDE0031, IDE0034, IDE0038, IDE0039</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="7zip, Version=1.0.0.0, Culture=neutral, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Velo new\7zip.dll</HintPath>
+    </Reference>
     <Reference Include="CEngine">
       <HintPath>..\..\..\..\..\..\Program Files (x86)\Steam\steamapps\common\Velo new\CEngine.dll</HintPath>
     </Reference>
@@ -72,38 +76,49 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AngleDisplay.cs" />
-    <Compile Include="BlindrunSimulator.cs" />
-    <Compile Include="Appearance.cs" />
-    <Compile Include="HotReload.cs" />
     <Compile Include="Debug.cs" />
-    <Compile Include="EventBypass.cs" />
-    <Compile Include="FpsDisplay.cs" />
-    <Compile Include="HitboxIndicator.cs" />
-    <Compile Include="InputDisplay.cs" />
+    <Compile Include="FontCache.cs" />
     <Compile Include="Json.cs" />
-    <Compile Include="JumpHoldingDisplay.cs" />
     <Compile Include="Keyboard.cs" />
-    <Compile Include="LocalGameMods.cs" />
+    <Compile Include="Leaderboard\Bytes.cs" />
+    <Compile Include="Leaderboard\Client.cs" />
+    <Compile Include="Leaderboard\Leaderboard.cs" />
+    <Compile Include="Leaderboard\LeaderboardMenus.cs" />
+    <Compile Include="Leaderboard\Map.cs" />
+    <Compile Include="Leaderboard\Notification.cs" />
+    <Compile Include="Leaderboard\Recording.cs" />
+    <Compile Include="Leaderboard\RecordingSubmitter.cs" />
+    <Compile Include="Leaderboard\Request.cs" />
+    <Compile Include="Leaderboard\RulesChecker.cs" />
+    <Compile Include="Leaderboard\RunsDatabase.cs" />
+    <Compile Include="Leaderboard\SteamCache.cs" />
+    <Compile Include="Leaderboard\Widget.cs" />
     <Compile Include="Module.cs" />
-    <Compile Include="Performance.cs" />
+    <Compile Include="Modules\AngleDisplay.cs" />
+    <Compile Include="Modules\Appearance.cs" />
+    <Compile Include="Modules\BlindrunSimulator.cs" />
+    <Compile Include="Modules\EventBypass.cs" />
+    <Compile Include="Modules\FpsDisplay.cs" />
+    <Compile Include="Modules\HitboxIndicator.cs" />
+    <Compile Include="Modules\HotReload.cs" />
+    <Compile Include="Modules\InputDisplay.cs" />
+    <Compile Include="Modules\JumpHoldingDisplay.cs" />
+    <Compile Include="Modules\LocalGameMods.cs" />
+    <Compile Include="Modules\Performance.cs" />
+    <Compile Include="Modules\RopeIndicators.cs" />
+    <Compile Include="Modules\Savestate.cs" />
+    <Compile Include="Modules\SettingsUI.cs" />
+    <Compile Include="Modules\Speedometer.cs" />
+    <Compile Include="Modules\Storage.cs" />
+    <Compile Include="Modules\TileMap.cs" />
+    <Compile Include="Modules\Watermark.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
-    <Compile Include="RopeIndicators.cs" />
-    <Compile Include="Storage.cs" />
-    <Compile Include="Savestate.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="SettingsUI.cs" />
-    <Compile Include="Speedometer.cs" />
-    <Compile Include="TAS.cs" />
     <Compile Include="Test.cs" />
-    <Compile Include="TileMap.cs" />
     <Compile Include="Types.cs" />
     <Compile Include="Util.cs" />
     <Compile Include="Velo.cs" />
-    <Compile Include="Watermark.cs" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="packages.config" />
-  </ItemGroup>
+  <ItemGroup />
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

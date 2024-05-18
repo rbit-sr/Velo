@@ -1,8 +1,4 @@
-﻿using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System;
 using System.Text;
 using System.Threading.Tasks;
 using System.Net.Sockets;
@@ -11,6 +7,24 @@ using System.Threading;
 
 namespace Velo
 {    
+    public class CrcException : Exception
+    {
+        public CrcException() :
+            base("CRC-check failed!") { }
+    }
+
+    public class VerifyException : Exception
+    {
+        public VerifyException() :
+            base("Request failure!") { }
+    }
+
+    public class TimedOutException : Exception
+    {
+        public TimedOutException(string message) :
+            base(message) { }
+    }
+
     public class Client
     {
         private static readonly uint[] crctab =
@@ -89,11 +103,18 @@ namespace Velo
             socket.SendTimeout = 5000;
 
             Task task = socket.ConnectAsync(localEndPoint);
-            task.Wait(5000, cancel);
+            try
+            {
+                task.Wait(5000, cancel);
+            }
+            catch (Exception e)
+            {
+                throw e.InnerException;
+            }
 
             if (!socket.Connected)
             {
-                throw new SocketException();
+                throw new TimedOutException("Timed out while trying to establish a connection!");
             }
         }
 
@@ -124,7 +145,7 @@ namespace Velo
             uint crc2 = this.crc;
             Receive(ref crc1);
             if (crc1 != crc2)
-                throw new Exception();
+                throw new CrcException();
             this.crc = 0;
         }
 
@@ -134,9 +155,20 @@ namespace Velo
             while (size > 0)
             {
                 Task<int> task = socket.SendAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
-                if (!task.Wait(5000, cancel))
-                    throw new SocketException();
-               
+                try
+                {
+                    if (!task.Wait(5000, cancel))
+                        throw new TimedOutException("Timed out while trying to send a packet!");
+                }
+                catch (TimedOutException e)
+                {
+                    throw e;
+                }
+                catch (Exception e)
+                {
+                    throw e.InnerException;
+                }
+
                 int sent = task.Result;
                 size -= sent;
                 off += sent;
@@ -150,8 +182,19 @@ namespace Velo
             while (size > 0)
             {
                 Task<int> task = socket.ReceiveAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
-                if (!task.Wait(5000, cancel))
-                    throw new SocketException();
+                try
+                {
+                    if (!task.Wait(5000, cancel))
+                        throw new TimedOutException("Timed out while trying to receive a packet!");
+                }
+                catch(TimedOutException e)
+                {
+                    throw e;
+                }
+                catch (Exception e)
+                {
+                    throw e.InnerException;
+                }
 
                 int received = task.Result;
                 size -= received;
@@ -160,11 +203,12 @@ namespace Velo
             UpdateCrc(data);
         }
 
-        public bool ReceiveSuccess()
+        public void ReceiveSuccess()
         {
-            long success = long.MinValue;
+            int success = 0;
             Receive(ref success);
-            return success == long.MaxValue;
+            if (success != int.MaxValue)
+                throw new VerifyException();
         }
 
         public void Send(int data)

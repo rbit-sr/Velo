@@ -30,10 +30,10 @@ namespace Velo
         private string selectedDriver = "";
         private bool unsupportedWarned = false;
         private TimeSpan unsupportedWarningTime = TimeSpan.Zero;
-        private CFont unsupportedWarningFont = null;
+        private CachedFont unsupportedWarningFont;
 #endif
 
-        private bool sendUpdates = false;
+        public bool SendUpdates = false;
 
         private SettingsUI() : base("UI")
         {
@@ -104,8 +104,14 @@ namespace Velo
             if (Enabled.Modified())
             {
                 CEngine.CEngine.Instance.Game.IsMouseVisible = Enabled.Value.Enabled;
-                if (!Enabled.Value.Enabled)
+                if (!Enabled.Value.Enabled && initialized)
                     unfocusAll();
+#if !VELO_OLD
+                if (Enabled.Value.Enabled)
+                    TextInputEXT.StartTextInput();
+                else
+                    TextInputEXT.StopTextInput();
+#endif
             }
 
             if (!Enabled.Value.Enabled)
@@ -129,7 +135,7 @@ namespace Velo
                         LoadProgram((IntPtr)bytes, json.Length);
                 }
                 initialized = true;
-                sendUpdates = true;
+                SendUpdates = true;
                 ModuleManager.Instance.AddModifiedListener(SettingUpdate);
             }
 
@@ -143,9 +149,9 @@ namespace Velo
                         GetJsonUpdates((IntPtr)bytes);
                 }
                 string json = Encoding.ASCII.GetString(change);
-                sendUpdates = false;
+                SendUpdates = false;
                 ModuleManager.Instance.CommitChanges(JsonElement.FromString(json));
-                sendUpdates = true;
+                SendUpdates = true;
             }
 
             MouseState mouse = Mouse.GetState();
@@ -181,7 +187,7 @@ namespace Velo
 
         public void SettingUpdate(Setting setting)
         {
-            if (!initialized || !sendUpdates || setting.Hidden)
+            if (!initialized || !SendUpdates || setting.Hidden)
                 return;
             JsonObject jsonObj = new JsonObject(2).
                 AddElement("Changes", new JsonArray(1).
@@ -236,11 +242,11 @@ namespace Velo
                 il.Emit(OpCodes.Add);
                 il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::GLDevice : FNA3D_Device*
                 il.Emit(OpCodes.Conv_I);
-                il.Emit(OpCodes.Ldc_I4, 0x128);
+                il.Emit(OpCodes.Ldc_I4, 0x12C);
                 il.Emit(OpCodes.Add);
                 il.Emit(OpCodes.Ldind_I4); // load FNA3D_Device::driverData : FNA3D_Renderer* (D3D11Renderer*)
                 il.Emit(OpCodes.Conv_I);
-                il.Emit(OpCodes.Ldc_I4, 0x24);
+                il.Emit(OpCodes.Ldc_I4, 0x28);
                 il.Emit(OpCodes.Add);
                 il.Emit(OpCodes.Ldind_I4); // load D3D11Renderer::swapchainDatas : D3D11SwapChainData**
                 il.Emit(OpCodes.Conv_I);
@@ -291,7 +297,6 @@ namespace Velo
 #if !VELO_OLD
         public void SdlPoll(ref SDL.SDL_Event sdl_event)
         {
-
             if (!initialized || !Enabled.Value.Enabled)
                 return;
 
@@ -324,19 +329,12 @@ namespace Velo
                     new TimeSpan(DateTime.Now.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10)
                     )
             {
-                if (unsupportedWarningFont != null)
-                {
-                    Velo.ContentManager.Release(unsupportedWarningFont);
-                    unsupportedWarningFont = null;
-                }
+                FontCache.Release(ref unsupportedWarningFont);
                 return;
             }
-            if (unsupportedWarningFont == null)
-            {
-                unsupportedWarningFont = FontCache.Get("UI\\Font\\ariblk.ttf", 24);
-                Velo.ContentManager.Load(unsupportedWarningFont, false);
-            }
-            CTextDrawComponent warning = new CTextDrawComponent("", unsupportedWarningFont, Vector2.Zero)
+            FontCache.Get(ref unsupportedWarningFont, "UI\\Font\\ariblk.ttf", 24);
+
+            CTextDrawComponent warning = new CTextDrawComponent("", unsupportedWarningFont.Font, Vector2.Zero)
             {
                 StringText =
                 "WARNING: Cannot open UI, unsupported driver \"" + selectedDriver + "\"!\n" +

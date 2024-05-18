@@ -139,8 +139,8 @@ namespace Velo
             if (milliseconds - lastUpdate >= UpdateInterval.Value)
             {
                 lastUpdate = milliseconds;
-                //text = RoundingMultiplier.Value.ToStringRounded(speed);
-                text = "" + TAS.Instance.recCurrent.Count + "\n" + TAS.Instance.recLast.Count;
+                text = RoundingMultiplier.Value.ToStringRounded(speed);
+                //text = "" + Velo.PlayerPos.X + "\n" + Velo.PlayerPos.Y;
                 this.speed = speed;
             }
         }

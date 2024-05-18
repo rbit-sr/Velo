@@ -32,8 +32,8 @@ namespace Velo
                 "-1: default\n" +
                 "0: calls Thread.Yield() repeatedly\n" +
                 "1: calls Thread.Sleep(0) repeatedly\n" +
-                "2: calls nothing, basically a spin wait\n" +
-                "3: calls Thread.Sleep(1) repeatedly";
+                "2: calls Thread.Sleep(1) repeatedly\n" +
+                "3: calls nothing, basically a spin wait";
             LimitFramerateAfterRender.Tooltip =
                 "Makes the game render its current frame before waiting to limit the framerate. " +
                 "Might reduce input lag.";

@@ -8,7 +8,7 @@ namespace Velo
 {
     public class Watermark : Module
     {
-        public CFont font_watermark;
+        private CachedFont font;
 
         private Watermark() : base("Watermark") { }
 
@@ -21,13 +21,9 @@ namespace Velo
             if (!Velo.Ingame || Velo.Online)
                 return;
 
-            if (font_watermark == null)
-            {
-                font_watermark = FontCache.Get("UI\\Font\\ariblk.ttf", 24);
-                Velo.ContentManager.Load(font_watermark, false);
-            }
+            FontCache.Get(ref font, "UI\\Font\\ariblk.ttf", 24);
 
-            CTextDrawComponent watermark = new CTextDrawComponent("", font_watermark, new Vector2(32, 32))
+            CTextDrawComponent watermark = new CTextDrawComponent("", font.Font, new Vector2(32, 32))
             {
                 color_replace = false,
                 Color = Color.Red,
@@ -36,18 +32,25 @@ namespace Velo
 
             string text = "";
 
-            if (Velo.get_time_scale() != 1f)
-                text += "\nx" + Velo.get_time_scale();
-           
-            if (LocalGameMods.Instance.IsModded() || BlindrunSimulator.Instance.Enabled.Value.Enabled)
-                text += "\nmodded";
+            if (!LocalGameMods.Instance.IsPlaybackRunning())
+            {
+                if (Velo.get_time_scale() != 1f)
+                    text += "\nx" + Velo.get_time_scale();
 
-            if (TAS.Instance.DtFixed)
-                text += "\nTAS";
+                if (LocalGameMods.Instance.IsModded() || BlindrunSimulator.Instance.Enabled.Value.Enabled)
+                    text += "\nmodded";
 
-            long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
-            if (milliseconds - Savestates.Instance.savestateLoadTime <= 500)
-                text += "\nload";
+                if (LocalGameMods.Instance.DtFixed)
+                    text += "\nTAS";
+
+                long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                if (milliseconds - LocalGameMods.Instance.savestateLoadTime <= 500)
+                    text += "\nload";
+            }
+            else
+            {
+                text = "\nplayback";
+            }
 
             if (text.Length > 0)
             {

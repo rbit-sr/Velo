@@ -1,15 +1,21 @@
 ﻿using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
+using System.IO;
 
 namespace Velo
 {
+    public class OutdatedVersionException : Exception
+    {
+        public OutdatedVersionException() :
+            base("Outdated Client! Please update Velo to the latest version!") { }
+    }
+
     public enum ERequestType : uint
     {
-        GET_PBS_FOR_MAP_CAT, GET_PLAYER_PBS, GET_WRS, SUBMIT_RUN, GET_RECORDING, SEND_PLAYER_NAME
+        GET_PBS_FOR_MAP_CAT, GET_PLAYER_PBS, GET_WRS, GET_RECENT, SUBMIT_RUN, GET_RECORDING, SEND_PLAYER_NAME
     }
 
     public enum ERequestStatus
@@ -17,22 +23,40 @@ namespace Velo
         NONE, PENDING, SUCCESS, FAILURE
     }
 
-    public class RequestHandler<T> where T : class
+    public class Result<T>
     {
-        private Task<T> task;
+        public T Value;
+        public Exception Error;
+
+        public Result(T value)
+        {
+            Value = value;
+        }
+
+        public Result(Exception error)
+        {
+            Error = error;
+        }
+    }
+
+    public class RequestHandler<T>
+    {
+        public static readonly uint VERSION = 0;
+
+        private Task<Result<T>> task;
         private CancellationTokenSource cancel;
         private bool statusChanged = false;
 
-        private int maxAttempts;
-        private Func<int, int> attemptWaitTimes;
+        private readonly int maxAttempts;
+        private readonly Func<int, int> attemptWaitTimes;
 
-        public RequestHandler(int maxAttempts = 5, Func<int, int> attemptWaitTimes = null)
+        public RequestHandler(int maxAttempts = 3, Func<int, int> attemptWaitTimes = null)
         {
             this.maxAttempts = maxAttempts;
             this.attemptWaitTimes = attemptWaitTimes;
         }
 
-        public void Run(IRequest<T> request)
+        public void Run(IRequest<T> request, Action<T> onSuccess = null, Action<Exception> onFailure = null)
         {
             Cancel();
 
@@ -41,35 +65,58 @@ namespace Velo
 
             task = Task.Run(() =>
             {
+                Result<T> result = null;
                 for (int i = 0; i < maxAttempts; i++)
                 {
-                    T result = null;
                     Client client = new Client(cancel.Token);
                     try
                     {
                         client.Connect();
-                        result = request.Run(client);
+                        client.Send(request.RequestType() | (VERSION << 16));
+                        client.SendCrc();
+                        int success = 0;
+                        client.Receive(ref success);
+                        client.VerifyCrc();
+                        if (success != int.MaxValue)
+                            throw new OutdatedVersionException();
+
+                        result = new Result<T>(request.Run(client));
+                        client.ReceiveSuccess();
                     }
                     catch (Exception e)
                     {
-                        Console.WriteLine(e);
+                        result = new Result<T>(e);
                     }
                     finally
                     {
                         client.Close();
                     }
-                    if (result != null)
+                    if (result.Value != null)
                     {
+                        if (onSuccess != null)
+                        {
+                            Velo.AddOnPreUpdate(() =>
+                            {
+                                onSuccess(result.Value);
+                            });
+                        }
                         return result;
                     }
 
                     if (attemptWaitTimes != null && i + 1 < maxAttempts)
                     {
                         int millis = attemptWaitTimes(i);
-                        Task.Delay(millis);
+                        Task.Delay(millis).Wait();
                     }
                 }
-                return null;
+                if (onFailure != null)
+                {
+                    Velo.AddOnPreUpdate(() =>
+                    {
+                        onFailure(result.Error);
+                    });
+                }
+                return result;
             });
         }
 
@@ -91,7 +138,7 @@ namespace Velo
                     return ERequestStatus.NONE;
                 if (!task.IsCompleted)
                     return ERequestStatus.PENDING;
-                if (task.Result != null)
+                if (task.Result.Error == null)
                     return ERequestStatus.SUCCESS;
                 else
                     return ERequestStatus.FAILURE;
@@ -111,19 +158,25 @@ namespace Velo
 
         public T Result
         {
-            get { return task.Result; }
+            get { return task.Result.Value; }
+        }
+
+        public Exception Error
+        {
+            get { return task.Result.Error; }
         }
     }
 
-    public interface IRequest<T> where T : class
+    public interface IRequest<T>
     {
         T Run(Client client);
+        uint RequestType();
     }
 
     public class GetPBsForMapCatRequest : IRequest<List<RunInfo>>
     {
-        private int mapId;
-        private ECategory category;
+        private readonly int mapId;
+        private readonly ECategory category;
 
         public GetPBsForMapCatRequest(int mapId, ECategory category)
         {
@@ -133,7 +186,6 @@ namespace Velo
 
         public List<RunInfo> Run(Client client)
         {
-            client.Send((uint)ERequestType.GET_PBS_FOR_MAP_CAT);
             client.Send(mapId);
             client.Send((int)category);
             client.SendCrc();
@@ -151,16 +203,18 @@ namespace Velo
 
             client.VerifyCrc();
 
-            if (!client.ReceiveSuccess())
-                return null;
-
             return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_PBS_FOR_MAP_CAT;
         }
     }
 
     public class GetPlayerPBs : IRequest<List<RunInfo>>
     {
-        private ulong playerId;
+        private readonly ulong playerId;
 
         public GetPlayerPBs(ulong playerId)
         {
@@ -169,7 +223,6 @@ namespace Velo
 
         public List<RunInfo> Run(Client client)
         {
-            client.Send((uint)ERequestType.GET_PLAYER_PBS);
             client.Send(playerId);
             client.SendCrc();
 
@@ -186,10 +239,12 @@ namespace Velo
 
             client.VerifyCrc();
 
-            if (!client.ReceiveSuccess())
-                return null;
-
             return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_PLAYER_PBS;
         }
     }
 
@@ -202,9 +257,6 @@ namespace Velo
 
         public List<RunInfo> Run(Client client)
         {
-            client.Send((uint)ERequestType.GET_WRS);
-            client.SendCrc();
-
             List<RunInfo> result = new List<RunInfo>();
             while (true)
             {
@@ -218,10 +270,43 @@ namespace Velo
 
             client.VerifyCrc();
 
-            if (!client.ReceiveSuccess())
-                return null;
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_WRS;
+        }
+    }
+
+    public class GetRecentRequest : IRequest<List<RunInfo>>
+    {
+        public GetRecentRequest()
+        {
+
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
+                client.Receive(buffer, buffer.Length);
+                RunInfo current = RunInfo.FromBytes(buffer);
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
 
             return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_RECENT;
         }
     }
 
@@ -234,7 +319,7 @@ namespace Velo
 
     public class SubmitRunRequest : IRequest<NewPbInfo>
     {
-        private Recording recording;
+        private readonly Recording recording;
 
         public SubmitRunRequest(Recording recording)
         {
@@ -243,32 +328,30 @@ namespace Velo
 
         public NewPbInfo Run(Client client)
         {
-            client.Send((uint)ERequestType.SUBMIT_RUN);
-
             byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
             RunInfo.GetBytes(recording.Info, buffer);
             client.Send(buffer, buffer.Length);
+            client.SendCrc();
 
             int timeSave = 0;
             int newWr = 0;
             client.Receive(ref timeSave);
-            client.Receive(ref newWr);
-
+            
             if (timeSave == -1)
             {
+                client.VerifyCrc();
                 return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
             }
 
-            client.Send(recording.Count * Marshal.SizeOf<Frame>());
-            buffer = new byte[Marshal.SizeOf<Frame>()];
-            for (int i = 0; i < recording.Count; i++)
-            {
-                Frame.GetBytes(recording[i], buffer);
-                client.Send(buffer, buffer.Length);
-            }
+            client.Receive(ref newWr);
+            client.VerifyCrc();
 
-            client.Send(recording.Savestates[0].Chunk.Data.Length);
-            client.Send(recording.Savestates[0].Chunk.Data, recording.Savestates[0].Chunk.Data.Length);
+            MemoryStream dataStream = new MemoryStream();
+            recording.Write(dataStream);
+
+            byte[] bytes = dataStream.ToArray();
+            client.Send(bytes.Length);
+            client.Send(bytes, bytes.Length);
 
             client.SendCrc();
 
@@ -277,9 +360,6 @@ namespace Velo
             client.VerifyCrc();
             RunInfo result = RunInfo.FromBytes(buffer);
 
-            if (!client.ReceiveSuccess())
-                return null;
-
             return new NewPbInfo 
             { 
                 RunInfo = result, 
@@ -287,11 +367,16 @@ namespace Velo
                 NewWr = newWr != 0
             };
         }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.SUBMIT_RUN;
+        }
     }
 
     public class GetRecordingRequest : IRequest<Recording>
     {
-        private int id;
+        private readonly int id;
 
         public GetRecordingRequest(int id)
         {
@@ -300,33 +385,53 @@ namespace Velo
 
         public Recording Run(Client client)
         {
-            client.Send((uint)ERequestType.GET_RECORDING);
             client.Send(id);
             client.SendCrc();
 
             Recording result = new Recording();
+
             int size = 0;
             client.Receive(ref size);
-            result.Frames.Clear();
-            byte[] buffer = new byte[Marshal.SizeOf<Frame>()];
-            int frameCount = size / buffer.Length;
-            for (int i = 0; i < frameCount; i++)
-            {
-                client.Receive(buffer, buffer.Length);
-                result.PushBack(Frame.FromBytes(buffer), null);
-            }
+            byte[] data = new byte[size];
+            client.Receive(data, size);
 
-            client.Receive(ref size);
-            result.Savestates[0] = new Savestate();
-            result.Savestates[0].Chunk.Data = new byte[size];
-            client.Receive(result.Savestates[0].Chunk.Data, size);
+            MemoryStream dataStream = new MemoryStream(data)
+            {
+                Position = 0
+            };
+            result.Read(dataStream);
 
             client.VerifyCrc();
 
-            if (!client.ReceiveSuccess())
-                return null;
-
             return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_RECORDING;
+        }
+    }
+
+    public class SendPlayerNameRequest : IRequest<string>
+    {
+        public SendPlayerNameRequest()
+        {
+
+        }
+
+        public string Run(Client client)
+        {
+            ulong steamId = Steamworks.SteamUser.GetSteamID().m_SteamID;
+            client.Send(steamId);
+            client.Send(SteamCache.GetName(steamId));
+            client.SendCrc();
+
+            return "";
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.SEND_PLAYER_NAME;
         }
     }
 }

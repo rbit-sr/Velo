@@ -6,6 +6,42 @@ using Microsoft.Xna.Framework;
 
 namespace Velo
 {
+    public enum EItem : byte
+    {
+        NONE,
+        GOLDEN_HOOK,
+        BOX,
+        DRILL,
+        ROCKET,
+        BOMB,
+        TRIGGER,
+        TRIPLE_JUMP,
+        TWO_BOXES,
+        THREE_BOXES,
+        SUNGLASSES,
+        ONE_ROCKET,
+        TWO_ROCKETS,
+        THREE_ROCKETS,
+        SHOCKWAVE,
+        FIREBALL,
+        FREEZE,
+        SMILEY
+    }
+
+    public enum EGameOptions : int
+    {
+        LETHAL_SPIKES,
+        SPEEDHOOKERS,
+        SRENNUR_DEEPS,
+        ROCKETRUNNERS,
+        SUPER_SPEED_RUNNERS,
+        SPEED_RAPTURE,
+        NO_ITEMS,
+        ROULETTE_WHEEL,
+        SUDDEN_DEATH,
+        DESTRUCTIBLE_ENVIRONMENT
+    }
+
     public static class Util
     {
         public static void Match<T>(this object o, Action<T> act)
@@ -67,8 +103,8 @@ namespace Velo
 
         public static string ApproxTime(long seconds)
         {
-            string unit = "";
-            long value = 0;
+            string unit;
+            long value;
 
             if (seconds < 60)
             {
@@ -105,26 +141,32 @@ namespace Velo
 
         public static string FormatTime(long millis)
         {
-            byte[] text = new byte[12];
-            text[11] = (byte)'s';
-            text[10] = (byte)'m';
-            text[9] = (byte)((byte)'0' + millis % 10);
-            millis /= 10;
-            text[8] = (byte)((byte)'0' + millis % 10);
-            millis /= 10;
-            text[7] = (byte)((byte)'0' + millis % 10);
-            millis /= 10;
-            text[6] = (byte)' ';
-            text[5] = (byte)'s';
-            text[4] = (byte)((byte)'0' + millis % 10);
-            millis /= 10;
-            text[3] = (byte)((byte)'0' + millis % 6);
-            millis /= 6;
-            text[2] = (byte)' ';
-            text[1] = (byte)'m';
-            text[0] = (byte)((byte)'0' + millis % 10);
-            millis /= 10;
-            return Encoding.ASCII.GetString(text);
+            string text = "";
+            bool hasUnit = false;
+            if (millis >= 1000 * 60)
+            {
+	            long minutes = millis / (1000 * 60);
+                text = minutes.ToString() + "m ";
+	            millis -= minutes * 1000 * 60;
+	            hasUnit = true;
+            }
+            if (millis >= 1000 || hasUnit)
+            {
+	            long seconds = millis / 1000;
+	            if (hasUnit)
+		            text += seconds.ToString("00");
+                else
+                    text += seconds.ToString();
+                text += "s ";
+	            millis -= seconds * 1000;
+	            hasUnit = true;
+            }
+            if (hasUnit)
+                text += millis.ToString("000");
+            else
+                text += millis.ToString();
+            text += "ms";
+            return text;
         }
 
         public static Color ApplyAlpha(Color color)
@@ -284,10 +326,12 @@ namespace Velo
 
         public CircArray<T> Clone()
         {
-            CircArray<T> clone = new CircArray<T>();
-            clone.begin = begin;
-            clone.end = end;
-            clone.arr = new T[arr.Length];
+            CircArray<T> clone = new CircArray<T>
+            {
+                begin = begin,
+                end = end,
+                arr = new T[arr.Length]
+            };
             Array.Copy(arr, clone.arr, arr.Length);
             return clone;
         }

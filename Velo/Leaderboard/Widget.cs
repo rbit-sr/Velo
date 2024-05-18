@@ -1,14 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using CEngine.Util.Input;
+#if !VELO_OLD
+using Microsoft.Xna.Framework.Input;
+#endif
+#if VELO_OLD
 using CEngine.Util.Input.SDLInput;
+#endif
 
 namespace Velo
 {
@@ -44,9 +46,9 @@ namespace Velo
 
     public class WidgetContainer
     {
-        private Widget root;
-        private Rectangle crop;
-        private Events events;
+        private readonly Widget root;
+        private readonly Rectangle crop;
+        private readonly Events events;
 
         public WidgetContainer(Widget root, Rectangle rec)
         {
@@ -59,8 +61,12 @@ namespace Velo
 
         public void Draw()
         {
+            GraphicsDevice graphicsDevice = CEngine.CEngine.Instance.GraphicsDevice;
+            int vHeight = graphicsDevice.Viewport.Height;
+            float scale = vHeight / 1080f;
+
             CInputManager input = CEngine.CEngine.Instance.input_manager;
-            Vector2 mousePos = new Vector2(input.mouse_state2.X, input.mouse_state2.Y);
+            Vector2 mousePos = new Vector2(input.mouse_state2.X, input.mouse_state2.Y) / scale;
 
             if (events.OnClick != null)
             {
@@ -84,7 +90,7 @@ namespace Velo
             root.Update(true, events, crop);
 
             Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            root.Draw(events.Hovered);
+            root.Draw(events.Hovered, scale);
             Velo.SpriteBatch.End();
         }
     }
@@ -106,14 +112,16 @@ namespace Velo
         {
             return
                 new Rectangle((int)Position.X, (int)Position.Y, (int)Size.X, (int)Size.Y).
-                Contains(CEngine.CEngine.Instance.input_manager.mouse_state2.X, CEngine.CEngine.Instance.input_manager.mouse_state2.Y);
+                Contains((int)mousePos.X, (int)mousePos.Y);
         }
 
         public Widget()
         {
             Visible = true;
-            recDraw = new CRectangleDrawComponent(0, 0, 0, 0);
-            recDraw.IsVisible = true;
+            recDraw = new CRectangleDrawComponent(0, 0, 0, 0)
+            {
+                IsVisible = true
+            };
         }
 
         public bool MouseInside { get; set; }
@@ -144,7 +152,7 @@ namespace Velo
                 events.OnClick = OnClick;
             }
 
-            if (MouseInside && Hoverable)
+            if (MouseInside && mouseInsideParent && Hoverable)
             {
                 events.Hovered = this;
             }
@@ -152,30 +160,41 @@ namespace Velo
             this.crop = crop;
         }
 
-        public virtual void Draw(Widget hovered)
+        public virtual void Draw(Widget hovered, float scale)
         {
             if (!Visible)
                 return;
 
             GraphicsDevice graphicsDevice = CEngine.CEngine.Instance.GraphicsDevice;
-            if (graphicsDevice.ScissorRectangle != crop)
+            int vWidth = graphicsDevice.Viewport.Width;
+            int vHeight = graphicsDevice.Viewport.Height;
+            Rectangle scaledCrop = new Rectangle(
+                (int)(crop.X * scale), 
+                (int)(crop.Y * scale), 
+                (int)(crop.Width * scale), 
+                (int)(crop.Height * scale)
+            );
+            scaledCrop = Rectangle.Intersect(scaledCrop, new Rectangle(0, 0, vWidth, vHeight));
+            if (graphicsDevice.ScissorRectangle != scaledCrop)
             {
                 Velo.SpriteBatch.End();
 
-                RasterizerState state = new RasterizerState();
-                state.CullMode = RasterizerState.CullCounterClockwise.CullMode;
-                state.DepthBias = RasterizerState.CullCounterClockwise.DepthBias;
-                state.FillMode = RasterizerState.CullCounterClockwise.FillMode;
-                state.MultiSampleAntiAlias = RasterizerState.CullCounterClockwise.MultiSampleAntiAlias;
-                state.ScissorTestEnable = true;
-                state.SlopeScaleDepthBias = RasterizerState.CullCounterClockwise.SlopeScaleDepthBias;
+                RasterizerState state = new RasterizerState
+                {
+                    CullMode = RasterizerState.CullCounterClockwise.CullMode,
+                    DepthBias = RasterizerState.CullCounterClockwise.DepthBias,
+                    FillMode = RasterizerState.CullCounterClockwise.FillMode,
+                    MultiSampleAntiAlias = RasterizerState.CullCounterClockwise.MultiSampleAntiAlias,
+                    ScissorTestEnable = true,
+                    SlopeScaleDepthBias = RasterizerState.CullCounterClockwise.SlopeScaleDepthBias
+                };
 
-                graphicsDevice.ScissorRectangle = crop;
+                graphicsDevice.ScissorRectangle = scaledCrop;
 
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, state, CEffect.None.Effect);
             }
 
-            recDraw.SetPositionSize(Position + Offset, Size);
+            recDraw.SetPositionSize((Position + Offset) * scale, Size * scale);
 
             if (!Hoverable || this != hovered)
             {
@@ -220,8 +239,8 @@ namespace Velo
 
         public static readonly float FILL = -1;
 
-        private EOrientation orientation;
-        private List<LayoutChild> children;
+        private readonly EOrientation orientation;
+        private readonly List<LayoutChild> children;
         private int fillChild = -1;
 
         public LayoutW(EOrientation orientation)
@@ -298,9 +317,9 @@ namespace Velo
             }
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
 
              if (!Visible)
                 return;
@@ -310,14 +329,14 @@ namespace Velo
                 if (child.Widget == null)
                     continue;
 
-                child.Widget.Draw(hovered);
+                child.Widget.Draw(hovered, scale);
             }
         }
     }
 
     public class ScrollW : Widget
     {
-        private Widget root;
+        private readonly Widget root;
         private float scroll = 0;
         private float targetScroll = 0;
         private TimeSpan lastFrameTime = TimeSpan.Zero;
@@ -365,14 +384,14 @@ namespace Velo
             root.Update(MouseInside && mouseInsideParent, events, Rectangle.Intersect(crop, new Rectangle((int)Position.X, (int)Position.Y, (int)Size.X, (int)Size.Y)));
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
 
             if (!Visible)
                 return;
 
-            root.Draw(hovered);
+            root.Draw(hovered, scale);
         }
     }
 
@@ -384,9 +403,9 @@ namespace Velo
 
     public class ListW : Widget
     {
-        private IListEntryFactory factory;
+        private readonly IListEntryFactory factory;
         private int firstEntry;
-        private List<Widget> entries;
+        private readonly List<Widget> entries;
         public int EntryCount { get; set; }
 
         public ListW(int entryCount, IListEntryFactory factory)
@@ -476,9 +495,9 @@ namespace Velo
             Size = new Vector2(Size.X, y - Position.Y);
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
 
             if (!Visible)
                 return;
@@ -497,7 +516,7 @@ namespace Velo
                 widget.Hoverable = EntryHoverable;
                 widget.BackgroundVisibleHovered = true;
                 widget.BackgroundColorHovered = EntryBackgroundColorHovered;
-                widget.Draw(hovered);
+                widget.Draw(hovered, scale);
                 i++;
             }
         }
@@ -505,16 +524,18 @@ namespace Velo
 
     public class LabelW : Widget
     {
-        private CTextDrawComponent textDraw;
+        private readonly CTextDrawComponent textDraw;
 
         public LabelW(string text, CFont font)
         {
-            textDraw = new CTextDrawComponent(text, font, Vector2.Zero);
-            textDraw.IsVisible = true;
-            textDraw.Align = 0.5f * Vector2.One;
-            textDraw.HasDropShadow = true;
-            textDraw.DropShadowColor = Color.Black;
-            textDraw.DropShadowOffset = Vector2.One;
+            textDraw = new CTextDrawComponent(text, font, Vector2.Zero)
+            {
+                IsVisible = true,
+                Align = 0.5f * Vector2.One,
+                HasDropShadow = true,
+                DropShadowColor = Color.Black,
+                DropShadowOffset = Vector2.One
+            };
         }
 
         public Vector2 Align
@@ -535,28 +556,31 @@ namespace Velo
             set { textDraw.StringText = value; }
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
 
             if (!Visible)
                 return;
 
             textDraw.UpdateBounds();
 
-            textDraw.Position = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Offset;
+            textDraw.Offset = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Offset;
+            textDraw.Scale = Vector2.One * scale;
             textDraw.Draw(null);
         }
     }
 
     public class ImageW : Widget
     {
-        private CImageDrawComponent imageDraw;
+        private readonly CImageDrawComponent imageDraw;
 
         public ImageW(Texture2D image)
         {
-            imageDraw = new CImageDrawComponent(image != null ? new CImage(image) : null, Vector2.Zero, Vector2.Zero);
-            imageDraw.IsVisible = true;
+            imageDraw = new CImageDrawComponent(image != null ? new CImage(image) : null, Vector2.Zero, Vector2.Zero)
+            {
+                IsVisible = true
+            };
         }
 
         public Texture2D Image
@@ -565,16 +589,17 @@ namespace Velo
             set { imageDraw.Sprite = new CImage(value); }
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
 
             if (!Visible)
                 return;
 
             float min = Math.Min(Size.X, Size.Y);
             imageDraw.Size = new Vector2(min, min);
-            imageDraw.Position = Position + (Size - imageDraw.Size) / 2 + Offset;
+            imageDraw.Position = (Position + (Size - imageDraw.Size) / 2 + Offset) * scale;
+            imageDraw.Scale = Vector2.One * scale;
             imageDraw.Draw(null);
         }
     }
@@ -582,14 +607,14 @@ namespace Velo
 
     public class MultiSelectButton : LayoutW
     {
-        private List<LabelW> buttons;
+        private readonly List<LabelW> buttons;
         private int selected;
 
         public MultiSelectButton(IEnumerable<string> labels, int selected, CFont font) :
             base(LayoutW.EOrientation.HORIZONTAL)
         {
             buttons = new List<LabelW>();
-            selected = 0;
+            this.selected = selected;
 
             int i = 0;
             foreach (string text in labels)
@@ -603,8 +628,7 @@ namespace Velo
                             if (this.selected == j)
                                 return;
                             this.selected = j;
-                            if (OnSelect != null)
-                                OnSelect(this.selected);
+                            OnSelect.NullCond((o) => o(this.selected));
                         }
                     };
                 button.Hoverable = true;
@@ -639,7 +663,7 @@ namespace Velo
                 SetSize(i, Size.X / buttons.Count);
         }
 
-        public override void Draw(Widget hovered)
+        public override void Draw(Widget hovered, float scale)
         {
             int i = 0;
             foreach (LabelW button in buttons)
@@ -673,7 +697,7 @@ namespace Velo
                 i++;
             }
 
-            base.Draw(hovered);
+            base.Draw(hovered, scale);
         }
     }
 
@@ -693,11 +717,11 @@ namespace Velo
 
     public class TableW : LayoutW, IListEntryFactory
     {
-        private CFont font;
-        private LayoutW headers;
-        private ListW list;
-        private ScrollW scroll;
-        private List<TableColumn> columns;
+        private readonly CFont font;
+        private readonly LayoutW headers;
+        private readonly ListW list;
+        private readonly ScrollW scroll;
+        private readonly List<TableColumn> columns;
         
         public TableW(CFont font, int entryCount, float headerHeight, Func<int, float> entryHeight) :
             base(LayoutW.EOrientation.VERTICAL)
@@ -745,14 +769,16 @@ namespace Velo
 
         public void AddColumn(string header, float size, Func<int, Widget> factory)
         {
-            LabelW headerLabel = new LabelW(header, font);
-            headerLabel.Align = HeaderAlign;
-            headerLabel.Color = HeaderColor;
+            LabelW headerLabel = new LabelW(header, font)
+            {
+                Align = HeaderAlign,
+                Color = HeaderColor
+            };
             headers.AddChild(headerLabel, size);
             columns.Add(new TableColumn(header, size, factory));
         }
 
-        public void AddSpace(float space)
+        public new void AddSpace(float space)
         {
             headers.AddSpace(space);
             columns.Add(new TableColumn("", space, null));

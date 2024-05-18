@@ -43,7 +43,7 @@ namespace Velo
 
         public override void Update()
         {
-            if (Velo.MainPlayer == null)
+            if (Velo.MainPlayer == null || Velo.MainPlayer.grapple == null)
                 return;
 
             bool angleChanged = false;

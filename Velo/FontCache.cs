@@ -1,22 +1,52 @@
 ﻿using CEngine.Graphics.Library;
-using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 
 namespace Velo
 {
+    public class CachedFont
+    {
+        public string Key;
+        public CFont Font;
+        public int Count;
+
+        public void Release()
+        {
+            Count--;
+            if (Count == 0)
+                Velo.ContentManager.Release(Font);
+        }
+    }
+
     public static class FontCache
     {
-        private static Dictionary<string, CFont> fonts = new Dictionary<string,CFont>();
+        private static readonly ConditionalWeakTable<string, CachedFont> fonts = new ConditionalWeakTable<string, CachedFont>();
 
-        public static CFont Get(string name, int size)
+        public static void Get(ref CachedFont font, string name, int size)
         {
             string key = name + ":" + size;
-            if (fonts.ContainsKey(key))
-                return fonts[key];
+            if (font != null && font.Key == key)
+                return;
+
+            if (font != null)
+                font.Release();
+
+            if (fonts.TryGetValue(key, out font) && font != null)
+            {
+                font.Count++;
+                return;
+            }
 
             CFont newFont = new CFont(name, size);
             Velo.ContentManager.Load(newFont, false);
-            fonts.Add(key, newFont);
-            return newFont;
+            font = new CachedFont { Key = key, Font = newFont, Count = 1 };
+            fonts.Add(key, font);
+        }
+
+        public static void Release(ref CachedFont font)
+        {
+            if (font == null)
+                return;
+            font.Release();
         }
     }
 }
