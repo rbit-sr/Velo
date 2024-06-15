@@ -12,11 +12,19 @@ namespace Velo
 
         private static readonly string[] VariableLabels = new[] { "global time", "miss" };
 
+        public BoolSetting Grapple;
+        public BoolSetting SlopeSurf;
+        public BoolSetting IgnoreFullJump;
         public EnumSetting<EVariable> Variable;
         public ColorTransitionSetting Color;
 
         private TimeSpan releaseTime = new TimeSpan(0);
         private bool wasConnected = false;
+
+        private TimeSpan timePrev = new TimeSpan(0);
+        private Vector2 velPrev = Vector2.Zero;
+        private bool wasOnGround = false;
+
         private bool prevJumpPress = false;
         private bool hasJumped = false;
         private TimeSpan miss;
@@ -25,6 +33,18 @@ namespace Velo
 
         private JumpHoldingDisplay() : base("Jump Holding Display", true)
         {
+            NewCategory("general");
+            Grapple = AddBool("grapple", true);
+            SlopeSurf = AddBool("slope surf", true);
+            IgnoreFullJump = AddBool("ignore full jump", false);
+
+            Grapple.Tooltip =
+                "Indicate jump holding miss for grappling.";
+            SlopeSurf.Tooltip =
+                "Indicate jump holding miss for slope surfing.";
+            IgnoreFullJump.Tooltip =
+                "Ignore jump releases caused by the jump running out.";
+
             NewCategory("color");
             Variable = AddEnum("variable", EVariable.MISS, VariableLabels);
             Color = AddColorTransition("color", new ColorTransition(100, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
@@ -32,7 +52,7 @@ namespace Velo
             Variable.Tooltip =
                 "Set the variable to which the color transition should be bound to:\n" +
                 "-global time: global time in milliseconds\n" +
-                "-miss: time between the last jump release and subsequent grapple connection in milliseconds";
+                "-miss: time between the last jump release and subsequent grapple or slope connection in milliseconds";
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7f, -90f));
@@ -53,17 +73,20 @@ namespace Velo
                 hasJumped = true;
             }
 
-            if (Velo.MainPlayer.jumpPressed && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.MainPlayer.game_time.TotalGameTime)
+            if (
+                (Velo.MainPlayer.jumpPressed && !Velo.MainPlayer.sliding && !Velo.MainPlayer.on_ground && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.GameTime.TotalGameTime) ||
+                (IgnoreFullJump.Value && Velo.MainPlayer.jump_vel.Y <= -359.49f)
+                )
             {
-                releaseTime = Velo.MainPlayer.game_time.TotalGameTime;
+                releaseTime = Velo.GameTime.TotalGameTime;
             }
 
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
             {
                 wasConnected = true;
-                if (Velo.MainPlayer.actor.Velocity.Y < 0.0f && hasJumped)
+                if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && hasJumped)
                 {
-                    miss = Velo.MainPlayer.game_time.TotalGameTime - releaseTime;
+                    miss = Velo.GameTime.TotalGameTime - releaseTime;
                     missChanged = true;
                 }
                 hasJumped = false;
@@ -71,6 +94,23 @@ namespace Velo
             if (!Velo.MainPlayer.grapple.connected)
             {
                 wasConnected = false;
+            }
+
+            if (Velo.MainPlayer.on_ground && !wasOnGround)
+            {
+                wasOnGround = true;
+                if (SlopeSurf.Value && velPrev.Y < 0.0f && hasJumped)
+                {
+                    miss = timePrev - releaseTime;
+                    missChanged = true;
+                }
+                hasJumped = false;
+            }
+            timePrev = Velo.GameTime.TotalGameTime;
+            velPrev = Velo.MainPlayer.actor.Velocity;
+            if (!Velo.MainPlayer.on_ground)
+            {
+                wasOnGround = false;
             }
 
             if (missChanged || text.Length == 0)

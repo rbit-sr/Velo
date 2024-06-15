@@ -4,6 +4,18 @@ namespace Velo
 {
     public class Bytes
     {
+        public static void Write(byte value, byte[] buffer, ref int off)
+        {
+            buffer[off] = value;
+            off++;
+        }
+
+        public static void Read(ref byte value, byte[] buffer, ref int off)
+        {
+            value = buffer[off];
+            off++;
+        }
+
         public static void Write(short value, byte[] buffer, ref int off)
         {
             buffer[off] = (byte)(value);

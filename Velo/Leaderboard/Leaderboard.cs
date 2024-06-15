@@ -2,6 +2,8 @@
 using CEngine.Graphics.Component;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
+using System.Collections.Generic;
 
 namespace Velo
 {
@@ -12,48 +14,237 @@ namespace Velo
         public CachedFont FontLarge;
     }
 
+    public class LbMenuContext
+    {
+        private readonly WidgetContainer container;
+        private readonly TransitionW<Widget> stackTransition;
+        private readonly StackW stack;
+        private readonly TransitionW<LbMenu> menu;
+        private readonly LabelW profileButton;
+        private readonly LabelW versionText;
+        private readonly Stack<LbMenu> backStack;
+
+        public LeaderboardFonts Fonts;
+        public string Error;
+
+        public LbMenu Menu => menu.Child; 
+
+        public LbMenuContext()
+        {
+            Fonts = new LeaderboardFonts();
+
+            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15");
+            FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
+            FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
+
+            backStack = new Stack<LbMenu>();
+
+            profileButton = new LabelW("My profile", Fonts.FontMedium.Font);
+            Style.ApplyButton(profileButton);
+            profileButton.OnClick = wevent =>
+            {
+                if (wevent.Button == WEMouseClick.EButton.LEFT)
+                {
+                    if (menu.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
+                        return;
+
+                    ChangeMenu(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
+                }
+            };
+
+            versionText = new LabelW(Version.VERSION_NAME, Fonts.FontSmall.Font);
+            Style.ApplyText(versionText);
+            versionText.Align = new Vector2(0f, 0.5f);
+            versionText.Color = () => Color.Gray * 0.5f;
+            menu = new TransitionW<LbMenu>();
+            stack = new StackW();
+            stack.AddChild(menu, new Vector2(400f, 100f), new Vector2(1120f, 880f));
+            stack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            stack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            stackTransition = new TransitionW<Widget>();
+            container = new WidgetContainer(stackTransition, new Rectangle(0, 0, 1920, 1080));
+        }
+
+        private void TransitionTo(LbMenu newMenu)
+        {
+            menu.TransitionTo(newMenu, 8f, Vector2.Zero);
+        }
+
+        public void ChangeMenu(LbMenu newMenu)
+        {
+            if (menu.Child != null)
+                backStack.Push(menu.Child);
+            TransitionTo(newMenu);
+
+            ResetStateRerequest(menu.Child);
+        }
+
+        public void ResetStateRerequest(LbMenu menu)
+        {
+            RunsDatabase.Instance.CancelAll();
+            menu.ResetState();
+            menu.Rerequest();
+            menu.Refresh();
+        }
+
+        public void Rerequest(LbMenu menu)
+        {
+            RunsDatabase.Instance.CancelAll();
+            menu.Rerequest();
+            menu.Refresh();
+        }
+
+        public void ClearCacheRerequest(LbMenu menu)
+        {
+            RunsDatabase.Instance.CancelAll();
+            RunsDatabase.Instance.Clear();
+            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
+            menu.ResetState();
+            menu.Rerequest();
+            menu.Refresh();
+        }
+
+        public void PushBackStack(LbMenu menu)
+        {
+            backStack.Push(menu);
+        }
+
+        public void EnterMenu(LbMenu menu)
+        {
+            this.stackTransition.TransitionTo(stack, 4f, new Vector2(-500f, 0f));
+            this.menu.GoTo(menu);
+            ResetStateRerequest(menu);
+        }
+
+        public void ExitMenu(bool animation = true)
+        {
+            Leaderboard.Instance.Enabled.Disable();
+            backStack.Clear();
+            if (animation)
+                stackTransition.TransitionTo(null, 4f, new Vector2(-500f, 0f));
+            else
+                stackTransition.GoTo(null);
+        }
+
+        public void PopMenu()
+        {
+            TransitionTo(backStack.Pop());
+            Rerequest(menu.Child);
+        }
+
+        public void Draw()
+        {
+            if (stackTransition.Child == null && !stackTransition.Transitioning())
+                return;
+
+            CRectangleDrawComponent dimRecDraw = new CRectangleDrawComponent(0, 0, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height)
+            {
+                IsVisible = true,
+                OutlineEnabled = false,
+                OutlineThickness = 0,
+                FillEnabled = true,
+                FillColor = Leaderboard.Instance.DimColor.Value.Get() * (stackTransition.Child != null ? stackTransition.R : 1f - stackTransition.R)
+            };
+            Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
+            dimRecDraw.Draw(null);
+            Velo.SpriteBatch.End();
+
+            container.Draw();
+        }
+    }
+
     public class Leaderboard : ToggleModule
     {
-        public BoolSetting EnableSubmissions;
-        public HotkeySetting StopPlayback; 
+        public BoolSetting DisableLeaderboard;
+        public BoolSetting PreciseTimer;
+        public BoolSetting ShowRunStatus;
+        public FloatSetting GhostOffsetTime;
+        public BoolSetting LoopReplay;
+
+        public HotkeySetting Refresh;
+        public HotkeySetting StopReplay;
+        public HotkeySetting Rewind1Second;
+        public HotkeySetting ShowAppliedRules;
+        public HotkeySetting SaveRun;
+        public HotkeySetting ReplaySavedRun;
+        public HotkeySetting VerifySavedRun;
+        public HotkeySetting SetGhostSavedRun;
+
+        public ColorTransitionSetting TextColor;
+        public ColorTransitionSetting HeaderTextColor;
+        public ColorTransitionSetting HighlightTextColor;
+        public ColorTransitionSetting EntryColor1;
+        public ColorTransitionSetting EntryColor2;
+        public ColorTransitionSetting EntryHoveredColor;
+        public ColorTransitionSetting ButtonColor;
+        public ColorTransitionSetting ButtonHoveredColor;
+        public ColorTransitionSetting ButtonSelectedColor;
+        public ColorTransitionSetting DimColor;
+        public IntSetting ScrollBarWidth;
+        public EnumSetting<ETimeFormat> TimeFormat;
 
         private bool initialized = false;
 
-        private CRectangleDrawComponent dimRecDraw;
-        private LeaderboardFonts fonts;
-
-        private LeaderboardMenu menu;
-
-        private WidgetContainer container;
+        private LbMenuContext context;
 
         private Leaderboard() : base("Leaderboard")
         {
-            NewCategory("general");
-            EnableSubmissions = AddBool("enable submissions", true);
-            EnableSubmissions.Tooltip = "Disabling this will stop the automatic submission of new PB runs.";
+            Enabled.SetValueAndDefault(new Toggle((ushort)Keys.F2));
 
-            NewCategory("playback");
-            StopPlayback = AddHotkey("stop playback", 0x97);
+            NewCategory("general");
+            DisableLeaderboard = AddBool("disable leaderboard", false);
+            PreciseTimer = AddBool("precise timer", false);
+            ShowRunStatus = AddBool("show run status", false);
+            GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
+            LoopReplay = AddBool("loop replay", false);
+
+            DisableLeaderboard.Tooltip = "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
+            PreciseTimer.Tooltip =
+                "Makes the timer fully show all milliseconds (XX.XX:XXX)";
+            ShowRunStatus.Tooltip = 
+                "Shows the categorization and validation status of the current run in the top left corner. " +
+                "'1' means 1 lap and 'X' means invalid.";
+            GhostOffsetTime.Tooltip = "ghost offset time in seconds";
+
+            NewCategory("hotkeys");
+            Refresh = AddHotkey("refresh", 0x97);
+            ShowAppliedRules = AddHotkey("show applied rules", 0x97);
+            StopReplay = AddHotkey("stop replay", 0x97);
+            Rewind1Second = AddHotkey("rewind 1 second", 0x97, autoRepeat: true);
+            SaveRun = AddHotkey("save last run", 0x97);
+            ReplaySavedRun = AddHotkey("replay saved run", 0x97);
+            VerifySavedRun = AddHotkey("verify saved run", 0x97);
+            SetGhostSavedRun = AddHotkey("set ghost saved run", 0x97);
+
+            Refresh.Tooltip = 
+                "Clears the runs cache.";
+            Rewind1Second.Tooltip =
+                "Rewinds playback by 1 second.";
+            ShowAppliedRules.Tooltip = 
+                "Shows the rules that have been applied to the previous run leading to its categorization and validation.";
+            SaveRun.Tooltip = 
+                "Saves a recording of the previous run to \"Velo\\saved run\". If you believe your run to be wrongly categorized or invalidated, send the file to a leaderboard moderator.";
+
+            NewCategory("style");
+            TextColor = AddColorTransition("text color", new ColorTransition(Color.White));
+            HeaderTextColor = AddColorTransition("header text color", new ColorTransition(new Color(185, 253, 224)));
+            HighlightTextColor = AddColorTransition("highlight text color", new ColorTransition(Color.Gold));
+            EntryColor1 = AddColorTransition("entry color 1", new ColorTransition(new Color(40, 40, 40, 150)));
+            EntryColor2 = AddColorTransition("entry color 2", new ColorTransition(new Color(30, 30, 30, 150)));
+            EntryHoveredColor = AddColorTransition("entry hovered color", new ColorTransition(new Color(100, 100, 100, 150)));
+            ButtonColor = AddColorTransition("button color", new ColorTransition(new Color(150, 150, 150, 150)));
+            ButtonHoveredColor = AddColorTransition("button hovered color", new ColorTransition(new Color(200, 200, 200, 150)));
+            ButtonSelectedColor = AddColorTransition("button selected color", new ColorTransition(new Color(240, 70, 100, 200)));
+            DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
+            ScrollBarWidth = AddInt("scroll bar width", 10, 0, 20);
+            TimeFormat = AddEnum("time format", ETimeFormat.UNITS, new[] { "(XXm )(XXs )XXXms", "XX:XX:XXX", "XX.XX:XXX", "(XX:)XX:XXX", "(XX.)XX:XXX" });
         }
 
         public static Leaderboard Instance = new Leaderboard();
 
         private void Initialize()
         {
-            dimRecDraw = new CRectangleDrawComponent(0, 0, 1920, 1080)
-            {
-                IsVisible = true,
-                OutlineEnabled = false,
-                OutlineThickness = 0,
-                FillEnabled = true,
-                FillColor = new Color(0, 0, 0, 127)
-            };
-
-            fonts = new LeaderboardFonts();
-
-            FontCache.Get(ref fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf", 12);
-            FontCache.Get(ref fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf", 18);
-            FontCache.Get(ref fonts.FontLarge, "UI\\Font\\Souses.ttf", 42);
+            context = new LbMenuContext();
             
             initialized = true;
         }
@@ -62,9 +253,38 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (Keyboard.Pressed[StopPlayback.Value])
+            if (DisableLeaderboard.Value)
+                return;
+
+            if (ShowAppliedRules.Pressed())
+            {
+                LocalGameMods.Instance.ShowLastAppliedRules();
+            }
+            if (StopReplay.Pressed() && LocalGameMods.Instance.IsPlaybackRunning())
             {
                 LocalGameMods.Instance.StopPlayback();
+            }
+            if (SaveRun.Pressed())
+            {
+                LocalGameMods.Instance.SaveLast();
+            }
+            if (ReplaySavedRun.Pressed())
+            {
+                Recording rec = LocalGameMods.Instance.LoadSaved();
+                if (rec != null)
+                    LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.VIEW_REPLAY, showTime: true);
+            }
+            if (VerifySavedRun.Pressed())
+            {
+                Recording rec = LocalGameMods.Instance.LoadSaved();
+                if (rec != null)
+                    LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.VERIFY);
+            }
+            if (SetGhostSavedRun.Pressed())
+            {
+                Recording rec = LocalGameMods.Instance.LoadSaved();
+                if (rec != null)
+                    LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.SET_GHOST);
             }
         }
 
@@ -72,52 +292,59 @@ namespace Velo
         {
             base.PostRender();
 
-            if (Enabled.Modified())
+            if (DisableLeaderboard.Value || AutoUpdate.Instance.Enabled)
+                Enabled.Disable();
+
+            bool modified = Enabled.Modified();
+
+            if (modified)
             {
-                CEngine.CEngine.Instance.Game.IsMouseVisible = Enabled.Value.Enabled;
-            }
-            
-            if (!Enabled.Value.Enabled)
-            {
-                menu = null;
-                return;
+                if (Enabled.Value.Enabled)
+                    Velo.EnableCursor(this);
+                else
+                    Velo.DisableCursor(this);
             }
 
-            if (!initialized)
+            if (Enabled.Value.Enabled && !initialized)
                 Initialize();
 
-            if (menu == null)
+            if (Refresh.Pressed() && Enabled.Value.Enabled)
             {
-                if (Velo.Ingame)
-                    ChangeMenu(new BestForMapMenu(ChangeMenu, fonts, Map.GetCurrentMapId()));
-                else
-                    ChangeMenu(new TopRunsMenu(ChangeMenu, fonts));
+                context.ClearCacheRerequest(context.Menu);
             }
 
-            Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            dimRecDraw.Draw(null);
-            Velo.SpriteBatch.End();
-
-            container.Draw();
-        }
-
-        private void ChangeMenu(LeaderboardMenu newMenu)
-        {
-            if (newMenu == null)
-            {
-                menu = null;
-                container = null;
-                Enabled.Disable();
+            if (!Enabled.Value.Enabled && !initialized)
                 return;
+
+            if (modified)
+            {
+                if (Enabled.Value.Enabled)
+                {
+                    int mapId = Map.GetCurrentMapId();
+                    if (Velo.Ingame && Velo.ModuleSolo != null && mapId != -1)
+                    {
+                        context.PushBackStack(new LbMainMenuPage(context));
+                        context.EnterMenu(new LbMapMenuPage(context, mapId));
+                    }
+                    else
+                    {
+                        context.EnterMenu(new LbMainMenuPage(context));
+                    }
+                }
+                else
+                {
+                    context.ExitMenu(animation: true);
+                }
             }
 
-            menu = newMenu;
-            container = new WidgetContainer(menu, new Rectangle(400, 100, 1120, 880));
-            menu.Refresh();
+            context.Draw();
         }
 
         public void OnRunFinished(Recording run)
         {
+            if (DisableLeaderboard.Value)
+                return;
+
             RecordingSubmitter.Instance.Submit(run);
         }
     }

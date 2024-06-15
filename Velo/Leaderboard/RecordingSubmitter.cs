@@ -9,7 +9,7 @@ namespace Velo
     {
         private class SubmitRequest
         {
-            private readonly RequestHandler<NewPbInfo> handler;
+            private readonly RequestHandler handler;
             private readonly Task writeFileTask;
             private readonly string path;
             private RunInfo tempInfo;
@@ -37,11 +37,15 @@ namespace Velo
                         catch (Exception e)
                         {
                             Console.WriteLine(e);
+                            StreamWriter writer = new StreamWriter("exception.txt");
+                            writer.WriteLine(e.Message);
+                            writer.WriteLine(e.ToString());
+                            writer.Close();
                         }
                     });
                 }
 
-                handler = new RequestHandler<NewPbInfo>(int.MaxValue, (i) =>
+                handler = new RequestHandler(int.MaxValue, (i) =>
                 {
                     if (i < 3)
                         return 0;
@@ -52,23 +56,14 @@ namespace Velo
                 });
                 tempInfo = recording.Info;
                 RunsDatabase.Instance.AddPending(ref tempInfo);
-                handler.Run(new SubmitRunRequest(recording));
+                handler.Push(new SubmitRunRequest(recording), result =>
+                {
+                    Result = result;
+                });
+                handler.Run();
             }
 
-            public NewPbInfo Result
-            {
-                get
-                {
-                    if (handler.StatusChanged && handler.Status == ERequestStatus.SUCCESS)
-                    {
-                        return handler.Result;
-                    }
-                    else
-                    {
-                        return null;
-                    }
-                }
-            }
+            public NewPbInfo Result { get; set; }
 
             public RunInfo TempInfo
             {
@@ -79,8 +74,7 @@ namespace Velo
             {
                 Task.Run(() =>
                 {
-                    if (writeFileTask != null)
-                        writeFileTask.Wait();
+                    writeFileTask?.Wait();
                     if (File.Exists(path))
                         File.Delete(path);
                 });
@@ -100,6 +94,9 @@ namespace Velo
         {
             base.Init();
 
+            if (Leaderboard.Instance.DisableLeaderboard.Value)
+                return;
+
             LoadFromFilesAndSubmit();
         }
 
@@ -115,7 +112,7 @@ namespace Velo
                 {
                     requests.RemoveAt(i);
                     RunsDatabase.Instance.Remove(request.TempInfo.Id);
-                    if (result.TimeSave != -1)
+                    if (result.RunInfo.Id != -1)
                     {
                         RunsDatabase.Instance.Add(new[] { result.RunInfo });
                         string message;
@@ -125,7 +122,7 @@ namespace Velo
                             message = "New PB!";
 
                         if (result.TimeSave > 0)
-                            message += " (-" + Util.FormatTime(result.TimeSave) + ")";
+                            message += " (-" + Util.FormatTime(result.TimeSave, Leaderboard.Instance.TimeFormat.Value) + ")";
 
                         Notifications.Instance.PushNotification(message);
                     }
@@ -164,16 +161,16 @@ namespace Velo
 
         public void Submit(Recording recording, string path = "")
         {
-            if (!recording.Rules.Valid())
+            if (!recording.Rules.Valid || recording.Info.Id == -50)
                 return;
 
-            RunInfo pb = RunsDatabase.Instance.GetPB(Steamworks.SteamUser.GetSteamID().m_SteamID, recording.Info.MapId, (ECategory)recording.Info.Category);
+            RunInfo pb = RunsDatabase.Instance.GetPB(Steamworks.SteamUser.GetSteamID().m_SteamID, recording.Info.Category);
 
             if (pb.Id != -1 && recording.Info.RunTime >= pb.RunTime)
                 return;
 
             string message = "Submitting as ";
-            message += ((ECategory)recording.Info.Category).Label();
+            message += ((ECategoryType)recording.Info.Category.TypeId).Label();
             message += "...";
             Notifications.Instance.PushNotification(message);
 

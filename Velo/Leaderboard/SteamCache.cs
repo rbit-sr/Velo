@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace Velo
@@ -29,10 +30,11 @@ namespace Velo
         private static Texture2D AvatarToTexture(int id)
         {
             Texture2D texture;
-            if (id > 2)
+            if (id > 5)
             {
-                uint width, height;
-                Steamworks.SteamUtils.GetImageSize(id, out width, out height);
+                Steamworks.SteamUtils.GetImageSize(id, out uint width, out uint height);
+                if (width != 184 || height != 184)
+                    return CEngine.CEngine.Instance.WhitePixel;
                 byte[] avatar = new byte[4 * (int)width * (int)height];
                 Steamworks.SteamUtils.GetImageRGBA(id, avatar, avatar.Length);
                 texture = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, (int)width, (int)height);

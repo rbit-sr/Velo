@@ -11,6 +11,7 @@ namespace Velo
         public IntSetting Framelimit;
         public IntSetting FramelimitMethod;
         public BoolSetting DisableBubbles;
+        public BoolSetting DisableRemotePlayersAfterimages;
         public BoolSetting DisableSteamInputApi;
         public IntSetting EnableControllerId;
         public BoolSetting LimitFramerateAfterRender;
@@ -40,10 +41,13 @@ namespace Velo
 
             NewCategory("particles");
             DisableBubbles = AddBool("disable bubbles", false);
+            DisableRemotePlayersAfterimages = AddBool("disable remote players afterimages", false);
 
             DisableBubbles.Tooltip =
                 "Disabling bubbles gives a good performance boost on maps like SpeedCity Nights. " +
                 "The game does a collision detection for each bubble on every frame.";
+            DisableRemotePlayersAfterimages.Tooltip =
+                "Disables afterimages for remote players and ghosts.";
 
             NewCategory("input");
             DisableSteamInputApi = AddBool("disable Steam input API", false);
@@ -65,6 +69,48 @@ namespace Velo
         }
 
         public static Performance Instance = new Performance();
+
+        public override void PostUpdate()
+        {
+            base.PostUpdate();
+
+            if (!Velo.Ingame)
+                return;
+
+            if (DisableRemotePlayersAfterimages.Value)
+            {
+                Slot[] slots = Main.game.stack.gameInfo.slots;
+                foreach (Slot slot in slots)
+                {
+                    if (slot.Player != null && !slot.LocalPlayer)
+                    {
+                        slot.Player.afterImagesParticleEmitterProvider.Active = false;
+                    }
+                }
+            }
+        }
+
+        public long GetFramelimit(long current)
+        {
+            int framelimit = Framelimit.Value;
+            if (framelimit == -1)
+                return current;
+
+            if (Velo.Online)
+                return 10000000L / Math.Min(Math.Max(framelimit, 30), 300);
+
+            if (framelimit < 10)
+                framelimit = 10;
+            return 10000000L / framelimit;
+        }
+
+        public int GetFramelimitMethod(int current)
+        {
+            if (FramelimitMethod.Value < 0 || FramelimitMethod.Value > 3)
+                return current;
+
+            return FramelimitMethod.Value;
+        }
 
         public class MessagePoller
         {
@@ -96,12 +142,10 @@ namespace Velo
                         pollers.Clear();
                     }
                 }
-                uint num;
-                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, channel))
+                if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, channel))
                 {
                     NetIncomingMessage msg = pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
-                    Steamworks.CSteamID identifier;
-                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, channel);
+                    Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, channel);
                     msg.LengthBits = (int)(num * 8u);
                     return new Velo.Message(msg, identifier);
                 }
@@ -164,16 +208,14 @@ namespace Velo
             {
                 try
                 {
-                    uint num;
-                    if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out num, poller.channel))
+                    if (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, poller.channel))
                     {
                         NetIncomingMessage msg;
                         lock (poller.pools)
                         {
                             msg = poller.pools.CreateIncomingMessage(NetIncomingMessageType.Data, (int)num);
                         }
-                        Steamworks.CSteamID identifier;
-                        Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out identifier, poller.channel);
+                        Steamworks.SteamNetworking.ReadP2PPacket(msg.PeekDataBuffer(), num, out num, out Steamworks.CSteamID identifier, poller.channel);
                         msg.LengthBits = (int)(num * 8u);
                         lock (poller.messages)
                         {

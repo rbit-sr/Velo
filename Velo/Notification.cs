@@ -58,7 +58,7 @@ namespace Velo
             if (notificationQueue.Count == 0)
                 return;
 
-            FontCache.Get(ref font, "UI\\Font\\NotoSans-Regular.ttf", 24);
+            FontCache.Get(ref font, "UI\\Font\\NotoSans-Regular.ttf:24");
 
             if (textDraw == null)
             {
@@ -74,9 +74,10 @@ namespace Velo
                 textDraw.UpdateBounds();
             }
             textDraw.Opacity = age.TotalSeconds <= 2.0 ? 1f : (float)(3.0 - age.TotalSeconds);
+            textDraw.Scale = CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height / 1080f * Vector2.One;
 
-            float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
-            float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
+            float screenWidth = Velo.GraphicsDevice.Viewport.Width;
+            float screenHeight = Velo.GraphicsDevice.Viewport.Height;
 
             float width = textDraw.Bounds.Width;
             float height = textDraw.Bounds.Height;

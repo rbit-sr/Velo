@@ -7,6 +7,7 @@ namespace Velo
     public class RopeIndicators : DisplayModule
     {
         public IntSetting MaxCount;
+        public BoolSetting ClearOnReset;
         public IntSetting Thickness;
         public BoolSetting AntiAliasing;
         public ColorTransitionSetting Color;
@@ -21,6 +22,10 @@ namespace Velo
         {
             NewCategory("general");
             MaxCount = AddInt("max count", 50, 1, 500);
+            ClearOnReset = AddBool("clear on reset", false);
+
+            ClearOnReset.Tooltip =
+                "Clear all rope indicators on pressing reset.";
 
             NewCategory("style");
             Thickness = AddInt("thickness", 3, 0, 10);
@@ -33,16 +38,27 @@ namespace Velo
 
         public static RopeIndicators Instance = new RopeIndicators();
 
-        public override bool FixedPos()
+        public override void Init()
         {
-            return false;
+            base.Init();
+
+            Velo.OnMainPlayerReset.Add(() =>
+            {
+                if (ClearOnReset.Value)
+                    drawComp.lines.Clear();
+            });
         }
 
-        public override ICDrawComponent GetComponent()
+        public override bool FixedPos => false;
+
+        public override ICDrawComponent Component
         {
-            if (drawComp == null)
-                drawComp = new CLineDrawComponent();
-            return drawComp;
+            get
+            {
+                if (drawComp == null)
+                    drawComp = new CLineDrawComponent();
+                return drawComp;
+            }
         }
 
         public override void UpdateComponent()

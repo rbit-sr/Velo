@@ -21,14 +21,13 @@ namespace Velo
     {
         private static readonly ConditionalWeakTable<string, CachedFont> fonts = new ConditionalWeakTable<string, CachedFont>();
 
-        public static void Get(ref CachedFont font, string name, int size)
+        public static void Get(ref CachedFont font, string name)
         {
-            string key = name + ":" + size;
+            string key = name;
             if (font != null && font.Key == key)
                 return;
 
-            if (font != null)
-                font.Release();
+            font?.Release();
 
             if (fonts.TryGetValue(key, out font) && font != null)
             {
@@ -36,7 +35,7 @@ namespace Velo
                 return;
             }
 
-            CFont newFont = new CFont(name, size);
+            CFont newFont = new CFont(name);
             Velo.ContentManager.Load(newFont, false);
             font = new CachedFont { Key = key, Font = newFont, Count = 1 };
             fonts.Add(key, font);

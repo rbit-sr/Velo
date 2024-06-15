@@ -8,30 +8,22 @@ using System.Text;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
 using Microsoft.Xna.Framework;
-#if !VELO_OLD
 using Microsoft.Xna.Framework.Input;
-#endif
-#if VELO_OLD
-using CEngine.Util.Input.SDLInput;
-#endif
 
 namespace Velo
 {
     public class SettingsUI : ToggleModule
     {
-#if !VELO_OLD
         public BoolSetting DisableWarning;
-#endif
         public BoolSetting DisableKeyInput;
+        public IntSetting ControllerIndex;
 
         private bool initialized = false;
 
-#if !VELO_OLD
         private string selectedDriver = "";
         private bool unsupportedWarned = false;
         private TimeSpan unsupportedWarningTime = TimeSpan.Zero;
         private CachedFont unsupportedWarningFont;
-#endif
 
         public bool SendUpdates = false;
 
@@ -39,14 +31,16 @@ namespace Velo
         {
             Enabled.SetValueAndDefault(new Toggle((ushort)System.Windows.Forms.Keys.F1));
 
-#if !VELO_OLD
             DisableWarning = AddBool("disable warning", false);
             DisableWarning.Hidden = true;
-#endif
+
             DisableKeyInput = AddBool("disable key input", false);
+            ControllerIndex = AddInt("controller index", 0, 0, 3);
 
             DisableKeyInput.Tooltip =
                 "Disables any key inputs while the settings menu is open.";
+            ControllerIndex.Tooltip =
+                "controller player index";
         }
 
         public static SettingsUI Instance = new SettingsUI();
@@ -59,38 +53,12 @@ namespace Velo
                 return;
 
             setUiHotkey((byte)Enabled.Value.Hotkey);
-
-            if (!Enabled.Value.Enabled)
-                return;
-
-            ResetInputStates();
-        }
-
-        public override void PostUpdate()
-        {
-            base.PostUpdate();
-
-            if (!initialized || !Enabled.Value.Enabled)
-                return;
-
-            ResetInputStates();
-        }
-
-        public override void PreRender()
-        {
-            base.PreRender();
-
-            if (!initialized || !Enabled.Value.Enabled)
-                return;
-
-            ResetInputStates();
         }
 
         public override void PostRender()
         {
             base.PostRender();
 
-#if !VELO_OLD
             if (unsupportedWarned)
             {
                 if (Enabled.Modified())
@@ -99,19 +67,23 @@ namespace Velo
                 DrawWarning();
                 return;
             }
-#endif
+
+            if (AutoUpdate.Instance.Enabled)
+                Enabled.Disable();
 
             if (Enabled.Modified())
             {
-                CEngine.CEngine.Instance.Game.IsMouseVisible = Enabled.Value.Enabled;
+                if (Enabled.Value.Enabled)
+                    Velo.EnableCursor(this);
+                else
+                    Velo.DisableCursor(this);
+
                 if (!Enabled.Value.Enabled && initialized)
                     unfocusAll();
-#if !VELO_OLD
                 if (Enabled.Value.Enabled)
                     TextInputEXT.StartTextInput();
                 else
                     TextInputEXT.StopTextInput();
-#endif
             }
 
             if (!Enabled.Value.Enabled)
@@ -121,10 +93,8 @@ namespace Velo
             {
                 if (!InitImGui())
                 {
-#if !VELO_OLD
                     unsupportedWarned = true;
                     unsupportedWarningTime = new TimeSpan(DateTime.Now.Ticks);
-#endif
                     CEngine.CEngine.Instance.Game.IsMouseVisible = false;
                     return;
                 }
@@ -156,33 +126,13 @@ namespace Velo
 
             MouseState mouse = Mouse.GetState();
 
+            GamePadButtons(Input.GamePadButtonsDown);
             RenderImGui(
                     mouse.X,
                     mouse.Y,
                     CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width,
                     CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height
                 );
-
-            ResetInputStates();
-        }
-
-        private void ResetInputStates()
-        {
-            CEngine.CEngine.Instance.input_manager.mouse_state1 = new MouseState(
-                    CEngine.CEngine.Instance.input_manager.mouse_state1.X,
-                    CEngine.CEngine.Instance.input_manager.mouse_state1.Y,
-                    0, new ButtonState(), new ButtonState(), new ButtonState(), new ButtonState(), new ButtonState()
-                );
-            CEngine.CEngine.Instance.input_manager.mouse_state2 = new MouseState(
-                    CEngine.CEngine.Instance.input_manager.mouse_state2.X,
-                    CEngine.CEngine.Instance.input_manager.mouse_state2.Y,
-                    0, new ButtonState(), new ButtonState(), new ButtonState(), new ButtonState(), new ButtonState()
-                );
-            if (DisableKeyInput.Value)
-            {
-                CEngine.CEngine.Instance.input_manager.keyboard_state1 = new KeyboardState();
-                CEngine.CEngine.Instance.input_manager.keyboard_state2 = new KeyboardState();
-            }
         }
 
         public void SettingUpdate(Setting setting)
@@ -202,16 +152,13 @@ namespace Velo
 
         private delegate uint GetPtrFromObjDel(object o);
 
-#if !VELO_OLD
         enum ERenderer
         {
             D3D11, OPEN_GL, VULKAN
         }
-#endif
 
         public bool InitImGui()
         {
-#if !VELO_OLD
             ERenderer renderer = ERenderer.D3D11;
 
             string[] args = Environment.GetCommandLineArgs();
@@ -271,30 +218,10 @@ namespace Velo
                 // unsupported!!
                 return false;
             }
-#else
-            var dyn = new DynamicMethod("GetDevicePtr", typeof(uint), new[] { typeof(object) }, typeof(Velo).Module);
-            var il = dyn.GetILGenerator();
-            il.DeclareLocal(typeof(object), true);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Stloc_0);
-            il.Emit(OpCodes.Ldloc_0); // load GraphicsDevice
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ldc_I4, 0xB8);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::pComPtr : IDirect3DDevice9*
-            il.Emit(OpCodes.Conv_I);
-            il.Emit(OpCodes.Ret);
-            GetPtrFromObjDel GetDevicePtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
 
-            GraphicsDevice o = CEngine.CEngine.Instance.GraphicsDevice;
-            uint DevicePtr = GetDevicePtr(o);
-
-            InitializeImGui_d3d9((IntPtr)DevicePtr);
-#endif
             return true;
         }
 
-#if !VELO_OLD
         public void SdlPoll(ref SDL.SDL_Event sdl_event)
         {
             if (!initialized || !Enabled.Value.Enabled)
@@ -310,29 +237,18 @@ namespace Velo
             {
                 ProcessEvent((IntPtr)Unsafe.AsPointer(ref sdl_event));
             }
-
-            if (
-                (DisableKeyInput.Value &&
-                (sdl_event.type == SDL.SDL_EventType.SDL_KEYUP ||
-                sdl_event.type == SDL.SDL_EventType.SDL_KEYDOWN)) ||
-                sdl_event.type == SDL.SDL_EventType.SDL_MOUSEWHEEL
-                )
-                sdl_event.type = 0;
         }
-#endif
 
-#if !VELO_OLD
         private void DrawWarning()
         {
             if (
-                    DisableWarning.Value ||
-                    new TimeSpan(DateTime.Now.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10)
-                    )
+                DisableWarning.Value ||
+                new TimeSpan(DateTime.Now.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10))
             {
                 FontCache.Release(ref unsupportedWarningFont);
                 return;
             }
-            FontCache.Get(ref unsupportedWarningFont, "UI\\Font\\ariblk.ttf", 24);
+            FontCache.Get(ref unsupportedWarningFont, "UI\\Font\\ariblk.ttf:24");
 
             CTextDrawComponent warning = new CTextDrawComponent("", unsupportedWarningFont.Font, Vector2.Zero)
             {
@@ -347,8 +263,8 @@ namespace Velo
             };
             warning.UpdateBounds();
 
-            float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
-            float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
+            float screenWidth = Velo.GraphicsDevice.Viewport.Width;
+            float screenHeight = Velo.GraphicsDevice.Viewport.Height;
 
             float width = warning.Bounds.Width;
             float height = warning.Bounds.Height;
@@ -360,17 +276,11 @@ namespace Velo
             warning.Draw(null);
             Velo.SpriteBatch.End();
         }
-#endif
 
-#if !VELO_OLD
         [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d11")]
         private static extern void InitializeImGui_d3d11(IntPtr swapChain);
         [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_opengl")]
         private static extern void InitializeImGui_opengl();
-#else
-        [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d9")]
-        private static extern void InitializeImGui_d3d9(IntPtr device);
-#endif
         [DllImport("Velo_UI.dll", EntryPoint = "RenderImGui")]
         private static extern void RenderImGui(float mouseX, float mouseY, float frameW, float frameH);
 
@@ -381,7 +291,7 @@ namespace Velo
         private static extern void unfocusAll();
 
         [DllImport("Velo_UI.dll", EntryPoint = "setUiHotkey")]
-        private static extern void setUiHotkey(byte keyCode);
+        private static extern void setUiHotkey(int keyCode);
 
         [DllImport("Velo_UI.dll", EntryPoint = "LoadProgram")]
         private static extern void LoadProgram(IntPtr str, int strSize);
@@ -391,6 +301,8 @@ namespace Velo
 
         [DllImport("Velo_UI.dll", EntryPoint = "ProcessEvent")]
         private static extern void ProcessEvent(IntPtr eventPtr);
+        [DllImport("Velo_UI.dll", EntryPoint = "GamePadButtons")]
+        private static extern void GamePadButtons(bool[] buttons);
 
         [DllImport("Velo_UI.dll", EntryPoint = "GetChangeSize")]
         private static extern int GetChangeSize();

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Net.Sockets;
 using System.Net;
 using System.Threading;
+using System.Runtime.InteropServices;
 
 namespace Velo
 {    
@@ -95,12 +96,15 @@ namespace Velo
 
         public void Connect()
         {
-            IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
+            //IPAddress ipAddress = IPAddress.Parse("127.0.0.1");
+            IPAddress ipAddress = IPAddress.Parse("207.246.94.33");
             IPEndPoint localEndPoint = new IPEndPoint(ipAddress, 2343);
-            socket = new Socket(localEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-            socket.Blocking = false;
-            socket.ReceiveTimeout = 5000;
-            socket.SendTimeout = 5000;
+            socket = new Socket(localEndPoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+            {
+                Blocking = false,
+                ReceiveTimeout = 5000,
+                SendTimeout = 5000
+            };
 
             Task task = socket.ConnectAsync(localEndPoint);
             try
@@ -109,7 +113,9 @@ namespace Velo
             }
             catch (Exception e)
             {
-                throw e.InnerException;
+                if (e.InnerException != null)
+                    throw e.InnerException;
+                throw e;
             }
 
             if (!socket.Connected)
@@ -141,17 +147,17 @@ namespace Velo
 
         public void VerifyCrc()
         {
-            uint crc1 = 0;
             uint crc2 = this.crc;
-            Receive(ref crc1);
+            uint crc1 = Receive<uint>();
             if (crc1 != crc2)
                 throw new CrcException();
             this.crc = 0;
         }
 
-        public void Send(byte[] data, int size)
+        public void Send(byte[] data)
         {
             int off = 0;
+            int size = data.Length;
             while (size > 0)
             {
                 Task<int> task = socket.SendAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
@@ -176,9 +182,10 @@ namespace Velo
             UpdateCrc(data);
         }
 
-        public void Receive(byte[] data, int size)
+        public void Receive(byte[] data)
         {
             int off = 0;
+            int size = data.Length;
             while (size > 0)
             {
                 Task<int> task = socket.ReceiveAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
@@ -187,15 +194,13 @@ namespace Velo
                     if (!task.Wait(5000, cancel))
                         throw new TimedOutException("Timed out while trying to receive a packet!");
                 }
-                catch(TimedOutException e)
-                {
-                    throw e;
-                }
                 catch (Exception e)
                 {
-                    throw e.InnerException;
+                    if (e.InnerException != null)
+                        throw e.InnerException;
+                    throw e;
                 }
-
+                
                 int received = task.Result;
                 size -= received;
                 off += received;
@@ -205,86 +210,36 @@ namespace Velo
 
         public void ReceiveSuccess()
         {
-            int success = 0;
-            Receive(ref success);
+            int success = Receive<int>();
             if (success != int.MaxValue)
                 throw new VerifyException();
         }
 
-        public void Send(int data)
+        public void Send<T>(T data) where T : struct
         {
-            Send(BitConverter.GetBytes(data), sizeof(int));
+            Send(data.ToBytes());
         }
 
-        public void Receive(ref int data)
+        public T Receive<T>() where T : struct
         {
-            byte[] bytes = new byte[sizeof(int)];
-            Receive(bytes, sizeof(int));
-            data = BitConverter.ToInt32(bytes, 0);
-        }
-
-        public void Send(float data)
-        {
-            Send(BitConverter.GetBytes(data), sizeof(float));
-        }
-
-        public void Receive(ref float data)
-        {
-            byte[] bytes = new byte[sizeof(float)];
-            Receive(bytes, sizeof(float));
-            data = BitConverter.ToSingle(bytes, 0);
-        }
-
-        public void Send(uint data)
-        {
-            Send(BitConverter.GetBytes(data), sizeof(uint));
-        }
-
-        public void Receive(ref uint data)
-        {
-            byte[] bytes = new byte[sizeof(uint)];
-            Receive(bytes, sizeof(uint));
-            data = BitConverter.ToUInt32(bytes, 0);
-        }
-
-        public void Send(long data)
-        {
-            Send(BitConverter.GetBytes(data), sizeof(long));
-        }
-
-        public void Receive(ref long data)
-        {
-            byte[] bytes = new byte[sizeof(long)];
-            Receive(bytes, sizeof(long));
-            data = BitConverter.ToInt64(bytes, 0);
-        }
-
-        public void Send(ulong data)
-        {
-            Send(BitConverter.GetBytes(data), sizeof(ulong));
-        }
-
-        public void Receive(ref ulong data)
-        {
-            byte[] bytes = new byte[sizeof(ulong)];
-            Receive(bytes, sizeof(ulong));
-            data = BitConverter.ToUInt64(bytes, 0);
+            byte[] bytes = new byte[Marshal.SizeOf<T>()];
+            Receive(bytes);
+            return bytes.FromBytes<T>();
         }
 
         public void Send(string data)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(data);
             Send(bytes.Length);
-            Send(bytes, bytes.Length);
+            Send(bytes);
         }
 
-        public void Receive(ref string data)
+        public string ReceiveStr()
         {
-            int len = 0;
-            Receive(ref len);
+            int len = Receive<int>();
             byte[] bytes = new byte[len];
-            Receive(bytes, len);
-            data = Encoding.UTF8.GetString(bytes);
+            Receive(bytes);
+            return Encoding.UTF8.GetString(bytes);
         }
     }
 }

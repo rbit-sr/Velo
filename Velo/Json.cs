@@ -262,69 +262,6 @@ namespace Velo
             return this;
         }
 
-        public JsonArray AddElementIf(JsonElement value, bool condition)
-        {
-            if (condition)
-                this.value.Add(value);
-            return this;
-        }
-
-        public JsonArray AddDecimalIf(string value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonDecimal(value));
-            return this;
-        }
-
-        public JsonArray AddDecimalIf(int value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonDecimal(value));
-            return this;
-        }
-
-        public JsonArray AddDecimalIf(float value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonDecimal(value));
-            return this;
-        }
-
-        public JsonArray AddBooleanIf(bool value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonBoolean(value));
-            return this;
-        }
-
-        public JsonArray AddStringIf(string value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonString(value));
-            return this;
-        }
-
-        public JsonArray AddNullIf(bool condition)
-        {
-            if (condition)
-                value.Add(new JsonNull());
-            return this;
-        }
-
-        public JsonArray AddArrayIf(List<JsonElement> value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonArray(value));
-            return this;
-        }
-
-        public JsonArray AddObjectIf(List<KeyValuePair<string, JsonElement>> value, bool condition)
-        {
-            if (condition)
-                this.value.Add(new JsonObject(value));
-            return this;
-        }
-
         public override string ToString(bool whiteSpace, int depth = 0)
         {
             if (value.Count == 0)
@@ -504,12 +441,12 @@ namespace Velo
                 action(value);
         }
 
-        public T DoWithValueRet<T>(string key, Func<JsonElement, T> func)
+        public T RetWithValue<T>(string key, Func<JsonElement, T> func)
         {
             JsonElement value = Get(key);
             if (value != null)
                 return func(value);
-            return default(T);
+            return default;
         }
 
         public override string ToString(bool whiteSpace, int depth = 0)

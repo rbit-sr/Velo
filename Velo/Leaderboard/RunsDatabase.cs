@@ -1,62 +1,39 @@
 ﻿using System.Collections.Generic;
 using System;
+using System.Linq;
 
 namespace Velo
 {
+    public enum ECategoryType : byte
+    {
+        NEW_LAP, ONE_LAP, NEW_LAP_SKIPS, ONE_LAP_SKIPS, COUNT
+    }
+
+    public struct Category
+    {
+        public byte MapId;
+        public byte TypeId;
+    }
+
     public struct RunInfo
     {
         public ulong PlayerId;
         public long CreateTime;
 
         public int Id;
-        public int MapId;
         public int RunTime;
-        public int Category;
-        public int WasWR;
+        public Category Category;
+        public byte WasWR;
+        public byte HasComments;
         public int Place;
-        public int TravDist;
+        public int Dist;
+        public int GroundDist;
+        public int SwingDist;
+        public int ClimbDist;
         public short AvgSpeed;
         public short Grapples;
         public short Jumps;
         public short BoostUsed;
-
-        public static void GetBytes(RunInfo info, byte[] bytes)
-        {
-            int off = 0;
-            Bytes.Write(info.PlayerId, bytes, ref off);
-            Bytes.Write(info.CreateTime, bytes, ref off);
-            Bytes.Write(info.Id, bytes, ref off);
-            Bytes.Write(info.MapId, bytes, ref off);
-            Bytes.Write(info.RunTime, bytes, ref off);
-            Bytes.Write(info.Category, bytes, ref off);
-            Bytes.Write(info.WasWR, bytes, ref off);
-            Bytes.Write(info.Place, bytes, ref off);
-            Bytes.Write(info.TravDist, bytes, ref off);
-            Bytes.Write(info.AvgSpeed, bytes, ref off);
-            Bytes.Write(info.Grapples, bytes, ref off);
-            Bytes.Write(info.Jumps, bytes, ref off);
-            Bytes.Write(info.BoostUsed, bytes, ref off);
-        }
-
-        public static RunInfo FromBytes(byte[] bytes)
-        {
-            RunInfo info = new RunInfo();
-            int off = 0;
-            Bytes.Read(ref info.PlayerId, bytes, ref off);
-            Bytes.Read(ref info.CreateTime, bytes, ref off);
-            Bytes.Read(ref info.Id, bytes, ref off);
-            Bytes.Read(ref info.MapId, bytes, ref off);
-            Bytes.Read(ref info.RunTime, bytes, ref off);
-            Bytes.Read(ref info.Category, bytes, ref off);
-            Bytes.Read(ref info.WasWR, bytes, ref off);
-            Bytes.Read(ref info.Place, bytes, ref off);
-            Bytes.Read(ref info.TravDist, bytes, ref off);
-            Bytes.Read(ref info.AvgSpeed, bytes, ref off);
-            Bytes.Read(ref info.Grapples, bytes, ref off);
-            Bytes.Read(ref info.Jumps, bytes, ref off);
-            Bytes.Read(ref info.BoostUsed, bytes, ref off);
-            return info;
-        }
 
         public int CompareTo(RunInfo other)
         {
@@ -68,35 +45,71 @@ namespace Velo
         }
     }
 
-    public struct PlayerInfo : IComparable<PlayerInfo>
+    public struct MapRunInfos
+    {
+        public int MapId;
+        public RunInfo NewLap;
+        public RunInfo OneLap;
+        public RunInfo NewLapSkip;
+        public RunInfo OneLapSkip;
+
+        public void Set(ECategoryType type, RunInfo info)
+        {
+            switch (type)
+            {
+                case ECategoryType.NEW_LAP:
+                    NewLap = info;
+                    break;
+                case ECategoryType.ONE_LAP:
+                    OneLap = info;
+                    break;
+                case ECategoryType.NEW_LAP_SKIPS:
+                    NewLapSkip = info;
+                    break;
+                case ECategoryType.ONE_LAP_SKIPS:
+                    OneLapSkip = info;
+                    break;
+            }
+        }
+    }
+
+    public struct PlayerInfoWRs : IComparable<PlayerInfoWRs>
     {
         public ulong PlayerId;
         public int WrCount;
+        public int Place;
 
-        public int CompareTo(PlayerInfo other)
+        public int CompareTo(PlayerInfoWRs other)
         {
             return WrCount.CompareTo(other.WrCount);
         }
     }
 
-    public enum ECategory : int
+    public struct PlayerInfoScore : IComparable<PlayerInfoScore>
     {
-        NEW_LAP, ONE_LAP, NEW_LAP_SKIPS, ONE_LAP_SKIPS, COUNT
+        public ulong PlayerId;
+        public int Score;
+        public int Place;
+
+        public int CompareTo(PlayerInfoScore other)
+        {
+            return Score.CompareTo(other.Score);
+        }
     }
 
-    public static class CategoryExt
+    public static class CategoryTypeExt
     {
-        public static string Label(this ECategory category)
+        public static string Label(this ECategoryType categoryType)
         {
-            switch (category)
+            switch (categoryType)
             {
-                case ECategory.NEW_LAP:
+                case ECategoryType.NEW_LAP:
                     return "New lap";
-                case ECategory.ONE_LAP:
+                case ECategoryType.ONE_LAP:
                     return "1 lap";
-                case ECategory.NEW_LAP_SKIPS:
+                case ECategoryType.NEW_LAP_SKIPS:
                     return "New lap (Skip)";
-                case ECategory.ONE_LAP_SKIPS:
+                case ECategoryType.ONE_LAP_SKIPS:
                     return "1 lap (Skip)";
                 default:
                     return "";
@@ -106,16 +119,19 @@ namespace Velo
 
     public class RunsDatabase : Module, IComparer<int>
     {
-        public RequestHandler<List<RunInfo>>[] GetRunHandlers = new RequestHandler<List<RunInfo>>[]
-            {
-                new RequestHandler<List<RunInfo>>(),
-                new RequestHandler<List<RunInfo>>()
-            };
-        public RequestHandler<Recording> GetRecordingHandler = new RequestHandler<Recording>();
+        private readonly RequestHandler getRunHandler = new RequestHandler();
+        private readonly RequestHandler getRecordingHandler = new RequestHandler();
+        private readonly RequestHandler getCommentHandler = new RequestHandler();
+        private readonly RequestHandler initHandler = new RequestHandler();
+        private bool addedDeletecSincePushed = false;
+
+        private readonly Queue<KeyValuePair<int, Recording>> recordingCache = new Queue<KeyValuePair<int, Recording>>();
 
         private readonly SortedDictionary<int, RunInfo> allRuns = new SortedDictionary<int, RunInfo>(Comparer<int>.Create((x, y) => y.CompareTo(x)));
-        private readonly List<int>[,] runsPerMapCat = new List<int>[Map.COUNT, (int)ECategory.COUNT];
+        private readonly List<int>[,] runsPerCategory = new List<int>[Map.COUNT, (int)ECategoryType.COUNT];
         private readonly List<int> pendingRuns = new List<int>();
+        private readonly Dictionary<int, string> comments = new Dictionary<int, string>();
+        private readonly List<PlayerInfoScore> scores = new List<PlayerInfoScore>();
 
         private bool initRequest = false;
 
@@ -128,13 +144,16 @@ namespace Velo
 
         private void Add(RunInfo info)
         {
+            if (info.Category.MapId >= Map.COUNT)
+                return;
+
             if (!allRuns.ContainsKey(info.Id))
             {
                 allRuns.Add(info.Id, info);
 
-                if (runsPerMapCat[info.MapId, info.Category] == null)
-                    runsPerMapCat[info.MapId, info.Category] = new List<int>();
-                List<int> runs = runsPerMapCat[info.MapId, info.Category];
+                if (runsPerCategory[info.Category.MapId, info.Category.TypeId] == null)
+                    runsPerCategory[info.Category.MapId, info.Category.TypeId] = new List<int>();
+                List<int> runs = runsPerCategory[info.Category.MapId, info.Category.TypeId];
 
                 int index = runs.BinarySearch(info.Id, this);
                 if (index < 0)
@@ -149,60 +168,95 @@ namespace Velo
 
         public void Add(IEnumerable<RunInfo> infos)
         {
-            lock (allRuns)
+            foreach (RunInfo info in infos)
             {
-                foreach (RunInfo info in infos)
-                {
-                    Add(info);
-                }
+                Add(info);
             }
         }
 
         public void Remove(int id)
         {
-            lock (allRuns)
+            if (!allRuns.ContainsKey(id))
+                return;
+
+            RunInfo info = allRuns[id];
+
+            if (runsPerCategory[info.Category.MapId, info.Category.TypeId] == null)
+                return;
+            List<int> runs = runsPerCategory[info.Category.MapId, info.Category.TypeId];
+
+            int index = runs.BinarySearch(info.Id, this);
+            if (index < 0)
+                return;
+            runs.RemoveAt(index);
+
+            allRuns.Remove(id);
+        }
+
+        public void Remove(IEnumerable<int> ids)
+        {
+            foreach (int id in ids)
             {
-                if (!allRuns.ContainsKey(id))
-                    return;
-
-                RunInfo info = allRuns[id];
-
-                if (runsPerMapCat[info.MapId, info.Category] == null)
-                    return;
-                List<int> runs = runsPerMapCat[info.MapId, info.Category];
-
-                int index = runs.BinarySearch(info.Id, this);
-                if (index < 0)
-                    return;
-                runs.RemoveAt(index);
-
-                allRuns.Remove(id);
+                Remove(id);
             }
         }
 
         public void AddPending(ref RunInfo info)
         {
             info.Id = -100 - pendingRuns.Count;
+            info.Place = -1;
             Add(new List<RunInfo> { info });
             pendingRuns.Add(info.Id);
+        }
+
+        public void SetComment(int id, string comment)
+        {
+            comments[id] = comment;
+        }
+
+        public void Clear()
+        {
+            List<RunInfo> pending = pendingRuns.Where((i) => allRuns.ContainsKey(i)).Select((i) => allRuns[i]).ToList();
+            allRuns.Clear();
+            for (int m = 0; m < Map.COUNT; m++)
+            {
+                for (int c = 0; c < (int)ECategoryType.COUNT; c++)
+                {
+                    runsPerCategory[m, c]?.Clear();
+                }
+            }
+            scores.Clear();
+            comments.Clear();
+            foreach (var info in pending)
+            {
+                Add(new List<RunInfo> { info });
+            }
         }
 
         public RunInfo Get(int id)
         {
             if (allRuns.ContainsKey(id))
                 return allRuns[id];
-            return new RunInfo { Id = -1, PlayerId = 0, MapId = -1, Category = -1 };
+            return new RunInfo { Id = -1 };
         }
 
-        public void GetPBsForMapCat(int mapId, ECategory category, List<RunInfo> runs)
+        public int Count()
         {
-            if (runsPerMapCat[mapId, (int)category] == null)
-                return;
+            return allRuns.Count;
+        }
+
+        public IEnumerable<RunInfo> GetPBsForCategory(Category category)
+        {
+            List<RunInfo> runs = new List<RunInfo>();
+            var runsForCategory = runsPerCategory[category.MapId, category.TypeId];
+            if (runsForCategory == null)
+                return runs;
 
             HashSet<ulong> visitedPlayers = new HashSet<ulong>();
-            foreach (int id in runsPerMapCat[mapId, (int)category])
-            {
 
+            for (int i = 0; i < runsForCategory.Count; i++)
+            {
+                int id = runsForCategory[i];
                 RunInfo info = allRuns[id];
                 if (visitedPlayers.Contains(info.PlayerId))
                     continue;
@@ -210,83 +264,95 @@ namespace Velo
                 visitedPlayers.Add(info.PlayerId);
                 runs.Add(info);
             }
+            return runs;
         }
 
-        public void GetWRs(RunInfo[,] runs)
+        public IEnumerable<RunInfo> GetAllForCategory(Category category)
         {
+            var runsForCategory = runsPerCategory[category.MapId, category.TypeId];
+            if (runsForCategory == null)
+                return new List<RunInfo>();
+
+            return runsForCategory.Select(i => allRuns[i]).ToList();
+        }
+
+        public IEnumerable<RunInfo> GetWRHistoryForCategory(Category category)
+        {
+            var runsForCategory = runsPerCategory[category.MapId, category.TypeId];
+            if (runsForCategory == null)
+                return new List<RunInfo>();
+
+            return runsForCategory.Select(i => allRuns[i]).Where(run => run.WasWR == 1);
+        }
+
+        public IEnumerable<MapRunInfos> GetWRs()
+        {
+            List<MapRunInfos> runs = new List<MapRunInfos>();
+
             for (int m = 0; m < Map.COUNT; m++)
             {
-                for (int c = 0; c < (int)ECategory.COUNT; c++)
+                MapRunInfos mapRuns = new MapRunInfos
                 {
-                    if (runsPerMapCat[m, c] == null || runsPerMapCat[m, c].Count == 0)
-                    {
-                        runs[m, c] = new RunInfo
-                        {
-                            Id = -1,
-                            PlayerId = 0
-                        };
-                        continue;
-                    }
-
-                    runs[m, c] = allRuns[runsPerMapCat[m, c][0]];
+                    MapId = m
+                };
+                for (int t = 0; t < (int)ECategoryType.COUNT; t++)
+                {
+                    var runsForCategory = runsPerCategory[m, t];
+                    if (runsForCategory == null || runsForCategory.Count == 0)
+                        mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
+                    else
+                        mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[0]]);
                 }
+                runs.Add(mapRuns);
             }
+            return runs;
         }
 
-        public void GetPlayerPBs(ulong playerId, RunInfo[,] runs)
+        public IEnumerable<MapRunInfos> GetPlayerPBs(ulong playerId)
         {
+            List<MapRunInfos> runs = new List<MapRunInfos>();
+
             for (int m = 0; m < Map.COUNT; m++)
             {
-                for (int c = 0; c < (int)ECategory.COUNT; c++)
+                MapRunInfos mapRuns = new MapRunInfos
                 {
-                    if (runsPerMapCat[m, c] == null || runsPerMapCat[m, c].Count == 0)
+                    MapId = m
+                };
+                for (int t = 0; t < (int)ECategoryType.COUNT; t++)
+                {
+                    var runsForCategory = runsPerCategory[m, t];
+                    if (runsForCategory == null || runsForCategory.Count == 0)
+                        mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
+                    else
                     {
-                        runs[m, c] = new RunInfo
-                        {
-                            Id = -1,
-                            PlayerId = 0
-                        };
-                        continue;
+                        int j = runsForCategory.FindIndex((id) => allRuns[id].PlayerId == playerId);
+                        if (j == -1)
+                            mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
+                        else
+                            mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[j]]);
                     }
-
-                    int i = runsPerMapCat[m, c].FindIndex((id) => allRuns[id].PlayerId == playerId);
-                    if (i == -1)
-                    {
-                        runs[m, c] = new RunInfo
-                        {
-                            Id = -1,
-                            PlayerId = 0
-                        };
-                        continue;
-                    }
-
-                    runs[m, c] = allRuns[runsPerMapCat[m, c][i]];
                 }
+                runs.Add(mapRuns);
             }
+            return runs;
         }
 
-        public void GetRecent(List<RunInfo> runs)
+        public IEnumerable<RunInfo> GetRecent()
         {
-            int count = 0;
-            foreach (var pair in allRuns)
-            {
-                runs.Add(pair.Value);
-
-                count++;
-                if (count == 50)
-                    break;
-            }
+            return allRuns.Select(pair => pair.Value);
         }
 
-        public RunInfo GetPB(ulong player, int mapId, ECategory category)
+        public IEnumerable<RunInfo> GetRecentWRs()
         {
-            if (runsPerMapCat[mapId, (int)category] == null)
-                return new RunInfo
-                    {
-                        Id = -1
-                    };
+            return allRuns.Select(pair => pair.Value).Where(run => run.WasWR == 1);
+        }
 
-            foreach (int id in runsPerMapCat[mapId, (int)category])
+        public RunInfo GetPB(ulong player, Category category)
+        {
+            if (runsPerCategory[category.MapId, category.TypeId] == null)
+                return new RunInfo { Id = -1 };
+
+            foreach (int id in runsPerCategory[category.MapId, category.TypeId])
             {
                 RunInfo info = allRuns[id];
                 if (info.PlayerId != player)
@@ -300,35 +366,36 @@ namespace Velo
             };
         }
 
-        public RunInfo GetWR(int mapId, ECategory category)
+        public RunInfo GetWR(int mapId, ECategoryType category)
         {
-            if (runsPerMapCat[mapId, (int)category] == null || runsPerMapCat[mapId, (int)category].Count == 0)
+            if (runsPerCategory[mapId, (int)category] == null || runsPerCategory[mapId, (int)category].Count == 0)
                 return new RunInfo
                 {
                     Id = -1
                 };
 
-            return allRuns[runsPerMapCat[mapId, (int)category][0]];
+            return allRuns[runsPerCategory[mapId, (int)category][0]];
         }
 
-        public void GetTopPlayers(List<PlayerInfo> players)
+        public IEnumerable<PlayerInfoWRs> GetWRCounts()
         {
-            Dictionary<ulong, PlayerInfo> playerDict = new Dictionary<ulong, PlayerInfo>();
+            List<PlayerInfoWRs> players = new List<PlayerInfoWRs>();
+            Dictionary<ulong, PlayerInfoWRs> playerDict = new Dictionary<ulong, PlayerInfoWRs>();
             for (int m = 0; m < Map.COUNT; m++)
             {
-                for (int c = 0; c < (int)ECategory.COUNT; c++)
+                for (int c = 0; c < (int)ECategoryType.COUNT; c++)
                 {
-                    if (runsPerMapCat[m, c] == null || runsPerMapCat[m, c].Count == 0)
+                    if (runsPerCategory[m, c] == null || runsPerCategory[m, c].Count == 0)
                         continue;
 
-                    RunInfo run = allRuns[runsPerMapCat[m, c][0]];
+                    RunInfo run = allRuns[runsPerCategory[m, c][0]];
                     if (run.Id == -1)
                         continue;
                     if (!playerDict.ContainsKey(run.PlayerId))
-                        playerDict.Add(run.PlayerId, new PlayerInfo { PlayerId = run.PlayerId, WrCount = 1 });
+                        playerDict.Add(run.PlayerId, new PlayerInfoWRs { PlayerId = run.PlayerId, WrCount = 1 });
                     else
                     {
-                        PlayerInfo player = playerDict[run.PlayerId];
+                        PlayerInfoWRs player = playerDict[run.PlayerId];
                         player.WrCount++;
                         playerDict[run.PlayerId] = player;
                     }
@@ -341,40 +408,118 @@ namespace Velo
             }
             players.Sort();
             players.Reverse();
+            for (int i = 0; i < players.Count; i++)
+            {
+                PlayerInfoWRs info = players[i];
+                info.Place = i;
+                players[i] = info;
+            }
+            return players;
         }
 
-        public void RequestPBsForMapCat(int mapId, ECategory category, Action onSuccess = null, Action<Exception> onFailure = null, int handler = 0)
+        public string GetComment(int id)
         {
-            Request(new GetPBsForMapCatRequest(mapId, category), onSuccess, onFailure, handler);
+            if (!comments.ContainsKey(id))
+                return null;
+            return comments[id];
         }
 
-        public void RequestPlayerPBs(ulong playerId, Action onSuccess = null, Action<Exception> onFailure = null, int handler = 0)
+        public IEnumerable<PlayerInfoScore> GetScores()
         {
-            Request(new GetPlayerPBs(playerId), onSuccess, onFailure, handler);
+            return scores;
         }
 
-        public void RequestWRs(Action onSuccess = null, Action<Exception> onFailure = null, int channel = 0)
+        public bool Pending()
         {
-            Request(new GetWRsRequest(), onSuccess, onFailure, channel);
+            return
+                getRunHandler.Status == ERequestStatus.PENDING ||
+                getRecordingHandler.Status == ERequestStatus.PENDING ||
+                getCommentHandler.Status == ERequestStatus.PENDING;
         }
 
-        public void RequestRecent(Action onSuccess = null, Action<Exception> onFailure = null, int channel = 0)
+        public void CancelAll()
         {
-            Request(new GetRecentRequest(), onSuccess, onFailure, channel);
+            getRunHandler.Cancel();
+            getRecordingHandler.Cancel();
+            getCommentHandler.Cancel();
         }
 
-        private void Request(IRequest<List<RunInfo>> request, Action onSuccess, Action<Exception> onFailure, int handler = 0)
+        public void CancelRequestRecording()
         {
-            GetRunHandlers[handler].Run(request, (runs) =>
+            getRecordingHandler.Cancel();
+        }
+
+        public void CancelRequestComment()
+        {
+            getCommentHandler.Cancel();
+        }
+
+        public void PushRequestRuns(IRequest<List<RunInfo>> request, Action onSuccess)
+        {
+            getRunHandler.Push(request, (runs) =>
             {
                 Add(runs);
-                onSuccess.NullCond((o) => o());
-            }, onFailure);
+                onSuccess?.Invoke();
+            });
+            if (!addedDeletecSincePushed)
+                PushAddedDeletedSince();
+            addedDeletecSincePushed = true;
+        }
+
+        public void PushRequestScores(Action onSuccess)
+        {
+            getRunHandler.Push(new GetScoresRequest(), (newScores) =>
+            {
+                scores.Clear();
+                scores.AddRange(newScores);
+                scores.Sort();
+                scores.Reverse();
+                onSuccess?.Invoke();
+            });
+        }
+
+        public void RunRequestRuns(Action<Exception> onFailure)
+        {
+            getRunHandler.Run(onFailure);
+            addedDeletecSincePushed = false;
+        }
+
+        public void RequestComment(int id, Action onSuccess, Action<Exception> onFailure)
+        {
+            getCommentHandler.Push(new GetCommentsRequest(id), (text) =>
+            {
+                SetComment(id, text);
+                onSuccess?.Invoke();
+            });
+            getCommentHandler.Run(onFailure);
+        }
+
+        private void PushAddedDeletedSince()
+        {
+            getRunHandler.Push(new GetAddedSinceRequest(getRunHandler.Time), (added) => { Add(added); });
+            getRunHandler.Push(new GetDeletedSinceRequest(getRunHandler.Time), (deleted) => { Remove(deleted); });
+        }
+
+        public Recording GetRecording(int id)
+        {
+            foreach (var pair in recordingCache)
+            {
+                if (pair.Key == id)
+                    return pair.Value;
+            }
+            return null;
         }
 
         public void RequestRecording(int id, Action<Recording> onSuccess = null, Action<Exception> onFailure = null)
         {
-            GetRecordingHandler.Run(new GetRecordingRequest(id), onSuccess, onFailure);
+            getRecordingHandler.Push(new GetRecordingRequest(id), (recording) =>
+            {
+                if (recordingCache.Count >= 10)
+                    recordingCache.Dequeue();
+                recordingCache.Enqueue(new KeyValuePair<int, Recording>(id, recording));
+                onSuccess?.Invoke(recording);
+            });
+            getRecordingHandler.Run(onFailure);
         }
 
         public override void Init()
@@ -386,10 +531,14 @@ namespace Velo
         {
             base.PreUpdate();
 
+            if (Leaderboard.Instance.DisableLeaderboard.Value)
+                return;
+
             if (Velo.Ingame && !Velo.IngamePrev && !initRequest)
             {
-                RequestPlayerPBs(Steamworks.SteamUser.GetSteamID().m_SteamID, null, null, 1);
-                new RequestHandler<string>().Run(new SendPlayerNameRequest());
+                initHandler.Push(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs));
+                initHandler.Push(new SendPlayerNameRequest());
+                initHandler.Run();
                 initRequest = true;
             }
         }

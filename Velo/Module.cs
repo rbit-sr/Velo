@@ -132,14 +132,14 @@ namespace Velo
     public abstract class Module
     {
         private readonly string name;
-        public string Name { get { return name; } }
+        public string Name => name;
         public string Tooltip { get; set; }
 
         private readonly List<Setting> settings;
         private readonly Dictionary<string, Setting> settingsLookup;
 
-        private Category currentCategory;
-        protected Category CurrentCategory { get { return currentCategory; } }
+        private SettingCategory currentCategory;
+        protected SettingCategory CurrentCategory => currentCategory;
 
         public Module(string name)
         {
@@ -152,7 +152,7 @@ namespace Velo
             ModuleManager.Instance.Add(this);
         }
 
-        private Setting Add(Setting setting)
+        private T Add<T>(T setting) where T : Setting
         {
             if (currentCategory == null)
             {
@@ -166,7 +166,7 @@ namespace Velo
 
         protected void NewCategory(string name)
         {
-            currentCategory = new Category(this, name);
+            currentCategory = new SettingCategory(this, name);
             settings.Add(currentCategory);
             settingsLookup.Add(name, currentCategory);
         }
@@ -178,77 +178,77 @@ namespace Velo
 
         protected IntSetting AddInt(string name, int defaultValue, int min, int max)
         {
-            return (IntSetting)Add(new IntSetting(this, name, defaultValue, min, max));
+            return Add(new IntSetting(this, name, defaultValue, min, max));
         }
 
         protected FloatSetting AddFloat(string name, float defaultValue, float min, float max)
         {
-            return (FloatSetting)Add(new FloatSetting(this, name, defaultValue, min, max));
+            return Add(new FloatSetting(this, name, defaultValue, min, max));
         }
 
         protected BoolSetting AddBool(string name, bool defaultValue)
         {
-            return (BoolSetting)Add(new BoolSetting(this, name, defaultValue));
+            return Add(new BoolSetting(this, name, defaultValue));
         }
 
         protected ToggleSetting AddToggle(string name, Toggle defaultValue)
         {
-            return (ToggleSetting)Add(new ToggleSetting(this, name, defaultValue));
+            return Add(new ToggleSetting(this, name, defaultValue));
         }
 
-        protected HotkeySetting AddHotkey(string name, ushort defaultValue)
+        protected HotkeySetting AddHotkey(string name, ushort defaultValue, bool autoRepeat = false)
         {
-            return (HotkeySetting)Add(new HotkeySetting(this, name, defaultValue));
+            return Add(new HotkeySetting(this, name, defaultValue, autoRepeat));
         }
 
         protected VectorSetting AddVector(string name, Vector2 defaultValue, Vector2 min, Vector2 max)
         {
-            return (VectorSetting)Add(new VectorSetting(this, name, defaultValue, min, max));
+            return Add(new VectorSetting(this, name, defaultValue, min, max));
         }
 
         protected StringSetting AddString(string name, string defaultValue)
         {
-            return (StringSetting)Add(new StringSetting(this, name, defaultValue));
+            return Add(new StringSetting(this, name, defaultValue));
         }
 
         protected RoundingMultiplierSetting AddRoundingMultiplier(string name, RoundingMultiplier defaultValue)
         {
-            return (RoundingMultiplierSetting)Add(new RoundingMultiplierSetting(this, name, defaultValue));
+            return Add(new RoundingMultiplierSetting(this, name, defaultValue));
         }
 
         protected BoolListSetting AddBoolList(string name, string[] labels, bool[] defaultValue)
         {
-            return (BoolListSetting)Add(new BoolListSetting(this, name, labels, defaultValue));
+            return Add(new BoolListSetting(this, name, labels, defaultValue));
         }
 
         protected StringListSetting AddStringList(string name, string[] defaultValue)
         {
-            return (StringListSetting)Add(new StringListSetting(this, name, defaultValue));
+            return Add(new StringListSetting(this, name, defaultValue));
         }
 
         protected EnumSetting<E> AddEnum<E>(string name, E defaultValue, string[] labels) where E : struct
         {
-            return (EnumSetting<E>)Add(new EnumSetting<E>(this, name, defaultValue, labels));
+            return Add(new EnumSetting<E>(this, name, defaultValue, labels));
         }
 
         protected ColorSetting AddColor(string name, Color defaultValue)
         {
-            return (ColorSetting)Add(new ColorSetting(this, name, defaultValue));
+            return Add(new ColorSetting(this, name, defaultValue));
         }
 
         protected ColorTransitionSetting AddColorTransition(string name, ColorTransition defaultValue)
         {
-            return (ColorTransitionSetting)Add(new ColorTransitionSetting(this, name, defaultValue));
+            return Add(new ColorTransitionSetting(this, name, defaultValue));
         }
 
         protected InputBoxSetting AddInputBox(string name, InputBox defaultValue)
         {
-            return (InputBoxSetting)Add(new InputBoxSetting(this, name, defaultValue));
+            return Add(new InputBoxSetting(this, name, defaultValue));
         }
 
         public int SettingsCount()
         {
-            return settings.Sum(setting => setting is Category ? (setting as Category).Children.Count : 1);
+            return settings.Sum(setting => setting is SettingCategory ? (setting as SettingCategory).Children.Count : 1);
         }
 
         public JsonElement ToJson(ToJsonArgs args)
@@ -302,7 +302,7 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (Keyboard.Pressed[Enabled.Value.Hotkey])
+            if (Input.Pressed(Enabled.Value.Hotkey))
             {
                 Enabled.ToggleState();
             }
@@ -320,15 +320,15 @@ namespace Velo
             IngameOnly = ingameOnly;
         }
 
-        public abstract bool FixedPos();
-        public abstract ICDrawComponent GetComponent();
+        public abstract bool FixedPos { get; }
+        public abstract ICDrawComponent Component { get; }
         public abstract void UpdateComponent();
 
         public override void PreRender()
         {
             base.PreRender();
 
-            if (!FixedPos())
+            if (!FixedPos)
                 Update();
         }
 
@@ -336,7 +336,7 @@ namespace Velo
         {
             base.PostRender();
 
-            if (FixedPos())
+            if (FixedPos)
                 Update();
         }
 
@@ -347,11 +347,11 @@ namespace Velo
             if (IngameOnly && !Velo.Ingame)
                 enabled = false;
 
-            ICDrawComponent drawComp = GetComponent();
+            ICDrawComponent drawComp = Component;
 
             if (
                 !enabled ||
-                (!FixedPos() && CEngine.CEngine.Instance.LayerManager.GetLayer("LocalPlayersLayer") == null))
+                (!FixedPos && CEngine.CEngine.Instance.LayerManager.GetLayer("LocalPlayersLayer") == null))
             {
                 if (added && drawComp != null)
                     CEngine.CEngine.Instance.LayerManager.RemoveDrawer(drawComp);
@@ -359,14 +359,14 @@ namespace Velo
                 return;
             }
 
-            if (FixedPos() && added)
+            if (FixedPos && added)
             {
                 if (drawComp != null)
                     CEngine.CEngine.Instance.LayerManager.RemoveDrawer(drawComp);
                 added = false;
             }
 
-            if (!FixedPos() && !added)
+            if (!FixedPos && !added)
             {
                 CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawComp);
                 added = true;
@@ -374,7 +374,7 @@ namespace Velo
 
             UpdateComponent();
 
-            if (FixedPos())
+            if (FixedPos)
             {
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
                 drawComp.Draw(null);
@@ -396,14 +396,14 @@ namespace Velo
             IngameOnly = ingameOnly;
         }
 
-        public abstract bool FixedPos();
+        public abstract bool FixedPos { get; }
         public abstract void UpdateComponents();
 
         public override void PreRender()
         {
             base.PreRender();
 
-            if (!FixedPos())
+            if (!FixedPos)
                 Update();
         }
 
@@ -411,21 +411,21 @@ namespace Velo
         {
             base.PostRender();
 
-            if (FixedPos())
+            if (FixedPos)
                 Update();
         }
 
         public void AddComponent(ICDrawComponent component)
         {
             components.Add(component);
-            if (!FixedPos() && added)
+            if (!FixedPos && added)
                 CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", component);
         }
 
         public void RemoveComponent(ICDrawComponent component)
         {
             components.Remove(component);
-            if (!FixedPos() && added)
+            if (!FixedPos && added)
                 CEngine.CEngine.Instance.LayerManager.RemoveDrawer(component);
         }
 
@@ -438,7 +438,7 @@ namespace Velo
 
             if (
                 !enabled ||
-                (!FixedPos() && CEngine.CEngine.Instance.LayerManager.GetLayer("LocalPlayersLayer") == null))
+                (!FixedPos && CEngine.CEngine.Instance.LayerManager.GetLayer("LocalPlayersLayer") == null))
             {
                 if (added)
                 {
@@ -449,14 +449,14 @@ namespace Velo
                 return;
             }
 
-            if (FixedPos() && added)
+            if (FixedPos && added)
             {  
                 foreach (var component in components)
                     CEngine.CEngine.Instance.LayerManager.RemoveDrawer(component);
                 added = false;
             }
 
-            if (!FixedPos() && !added)
+            if (!FixedPos && !added)
             {
                 foreach (var component in components)
                     CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", component);
@@ -465,7 +465,7 @@ namespace Velo
 
             UpdateComponents();
 
-            if (FixedPos())
+            if (FixedPos)
             {
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
                 foreach (var component in components)
@@ -607,21 +607,21 @@ namespace Velo
         public abstract string GetText();
         public abstract Color GetColor();
 
-        public override bool FixedPos()
-        {
-            return Orientation.Value != EOrientation.PLAYER;
-        }
+        public override bool FixedPos => Orientation.Value != EOrientation.PLAYER;
 
-        public override ICDrawComponent GetComponent()
+        public override ICDrawComponent Component
         {
-            if (drawComp == null)
-                drawComp = new CTextDrawComponent("", null, Vector2.Zero);
-            return drawComp;
+            get
+            {
+                if (drawComp == null)
+                    drawComp = new CTextDrawComponent("", null, Vector2.Zero);
+                return drawComp;
+            }
         }
 
         public override void UpdateComponent()
         {
-            FontCache.Get(ref font, Font.Value, FontSize.Value);
+            FontCache.Get(ref font, Font.Value + ":" + FontSize.Value);
 
             Update();
 

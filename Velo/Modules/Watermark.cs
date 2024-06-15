@@ -21,7 +21,7 @@ namespace Velo
             if (!Velo.Ingame || Velo.Online)
                 return;
 
-            FontCache.Get(ref font, "UI\\Font\\ariblk.ttf", 24);
+            FontCache.Get(ref font, "UI\\Font\\ariblk.ttf:24");
 
             CTextDrawComponent watermark = new CTextDrawComponent("", font.Font, new Vector2(32, 32))
             {
@@ -46,10 +46,14 @@ namespace Velo
                 long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
                 if (milliseconds - LocalGameMods.Instance.savestateLoadTime <= 500)
                     text += "\nload";
+
+                int status = LocalGameMods.Instance.CurrentRunStatus();
+                if (Leaderboard.Instance.ShowRunStatus.Value && status != 0)
+                    text += "\n" + (status == 1 ? "1" : "X");
             }
             else
             {
-                text = "\nplayback";
+                text = "\nreplay";
             }
 
             if (text.Length > 0)
@@ -60,6 +64,7 @@ namespace Velo
                 watermark.HasDropShadow = true;
                 watermark.DropShadowColor = Color.Black;
                 watermark.DropShadowOffset = Vector2.One;
+                watermark.Scale = CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height / 1080f * Vector2.One;
                 watermark.UpdateBounds();
             
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);

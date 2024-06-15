@@ -19,9 +19,9 @@ namespace Velo
         public EnumSetting<EVariable> Variable;
         public ColorTransitionSetting Color;
 
-        public List<TimeSpan> measurements = new List<TimeSpan>();
+        private readonly List<TimeSpan> measurements = new List<TimeSpan>();
 
-        public TimeSpan lastUpdate = TimeSpan.Zero;
+        private TimeSpan lastUpdate = TimeSpan.Zero;
 
         private string text = "-1";
         private int fps = -1;

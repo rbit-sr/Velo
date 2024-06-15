@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Xna.Framework;
@@ -42,28 +46,13 @@ namespace Velo
         DESTRUCTIBLE_ENVIRONMENT
     }
 
+    public enum ETimeFormat
+    {
+        UNITS, COLON, DOT_COLON, COLON_MIN_OPT, DOT_COLON_MIN_OPT
+    }
+
     public static class Util
     {
-        public static void Match<T>(this object o, Action<T> act)
-        {
-            if (o is T)
-                act((T)o);
-        }
-
-        public static T Match<T>(this object o, T def)
-        {
-            if (o is T)
-                return ((T)o);
-            else
-                return def;
-        }
-
-        public static void NullCond<T>(this T t, Action<T> act)
-        {
-            if (t != null)
-                act(t);
-        }
-
         public static T[] Fill<T>(this T[] array, T value)
         {
             for (int i = 0; i < array.Length; i++)
@@ -71,6 +60,12 @@ namespace Velo
                 array[i] = value;
             }
             return array;
+        }
+
+        public static void ForEach<T>(this IEnumerable<T> elems, Action<T> action)
+        {
+            foreach (var elem in elems)
+                action(elem);
         }
 
         public static string LineBreaks(string s, int maxCharPerLine)
@@ -139,33 +134,100 @@ namespace Velo
             return value + " " + unit + (value == 1 ? "" : "s");
         }
 
-        public static string FormatTime(long millis)
+        public static string FormatTime(long millis, ETimeFormat style)
         {
             string text = "";
             bool hasUnit = false;
-            if (millis >= 1000 * 60)
+            switch (style)
             {
-	            long minutes = millis / (1000 * 60);
-                text = minutes.ToString() + "m ";
-	            millis -= minutes * 1000 * 60;
-	            hasUnit = true;
+                case ETimeFormat.UNITS:
+                    if (millis >= 1000 * 60)
+                    {
+                        long minutes = millis / (1000 * 60);
+                        text = minutes.ToString() + "m ";
+                        millis -= minutes * 1000 * 60;
+                        hasUnit = true;
+                    }
+                    if (millis >= 1000 || hasUnit)
+                    {
+                        long seconds = millis / 1000;
+                        if (hasUnit)
+                            text += seconds.ToString("00");
+                        else
+                            text += seconds.ToString();
+                        text += "s ";
+                        millis -= seconds * 1000;
+                        hasUnit = true;
+                    }
+                    if (hasUnit)
+                        text += millis.ToString("000");
+                    else
+                        text += millis.ToString();
+                    text += "ms";
+                    break;
+                case ETimeFormat.COLON:
+                    {
+                        long minutes = millis / (1000 * 60);
+                        text = minutes.ToString("00") + ":";
+                        millis -= minutes * 1000 * 60;
+
+                        long seconds = millis / 1000;
+                        text += seconds.ToString("00");
+                        text += ":";
+                        millis -= seconds * 1000;
+
+                        text += millis.ToString("000");
+                    }
+                    break;
+                case ETimeFormat.DOT_COLON:
+                    {
+                        long minutes = millis / (1000 * 60);
+                        text = minutes.ToString("00") + ".";
+                        millis -= minutes * 1000 * 60;
+
+                        long seconds = millis / 1000;
+                        text += seconds.ToString("00");
+                        text += ":";
+                        millis -= seconds * 1000;
+
+                        text += millis.ToString("000");
+                    }
+                    break;
+                case ETimeFormat.COLON_MIN_OPT:
+                    {
+                        long minutes = millis / (1000 * 60);
+                        if (minutes != 0)
+                        {
+                            text = minutes.ToString("00") + ":";
+                            millis -= minutes * 1000 * 60;
+                        }
+
+                        long seconds = millis / 1000;
+                        text += seconds.ToString("00");
+                        text += ":";
+                        millis -= seconds * 1000;
+
+                        text += millis.ToString("000");
+                    }
+                    break;
+                case ETimeFormat.DOT_COLON_MIN_OPT:
+                    {
+                        long minutes = millis / (1000 * 60);
+                        if (minutes != 0)
+                        {
+                            text = minutes.ToString("00") + ".";
+                            millis -= minutes * 1000 * 60;
+                        }
+
+                        long seconds = millis / 1000;
+                        text += seconds.ToString("00");
+                        text += ":";
+                        millis -= seconds * 1000;
+
+                        text += millis.ToString("000");
+                    }
+                    break;
             }
-            if (millis >= 1000 || hasUnit)
-            {
-	            long seconds = millis / 1000;
-	            if (hasUnit)
-		            text += seconds.ToString("00");
-                else
-                    text += seconds.ToString();
-                text += "s ";
-	            millis -= seconds * 1000;
-	            hasUnit = true;
-            }
-            if (hasUnit)
-                text += millis.ToString("000");
-            else
-                text += millis.ToString();
-            text += "ms";
             return text;
         }
 
@@ -192,6 +254,34 @@ namespace Velo
             }
         }
 
+        public static byte[] ToBytes<T>(this T value) where T : struct
+        {
+            unsafe
+            {
+                byte[] bytes = new byte[Marshal.SizeOf<T>()];
+                void* valuePtr = Unsafe.AsPointer(ref value);
+                fixed (byte* bytePtr = bytes)
+                {
+                    Buffer.MemoryCopy(valuePtr, bytePtr, bytes.Length, bytes.Length);
+                }
+                return bytes;
+            }
+        }
+
+        public static T FromBytes<T>(this byte[] bytes) where T : struct
+        {
+            unsafe
+            {
+                T value = new T();
+                void* valuePtr = Unsafe.AsPointer(ref value);
+                fixed (byte* bytePtr = bytes)
+                {
+                    Buffer.MemoryCopy(bytePtr, valuePtr, bytes.Length, bytes.Length);
+                }
+                return value;
+            }
+        }
+
         [DllImport("Kernel32.dll", CallingConvention = CallingConvention.Winapi)]
         private static extern void GetSystemTimePreciseAsFileTime(out long filetime);
 
@@ -199,8 +289,7 @@ namespace Velo
         {
             get
             {
-                long filetime;
-                GetSystemTimePreciseAsFileTime(out filetime);
+                GetSystemTimePreciseAsFileTime(out long filetime);
                 return DateTime.FromFileTimeUtc(filetime).Ticks;
             }
         }
@@ -240,6 +329,126 @@ namespace Velo
         }
     }
 
+    public static class StreamUtil
+    {
+        public static unsafe void Write(this Stream stream, object obj, int off, int size)
+        {
+            byte[] buffer = new byte[size];
+            void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
+            fixed (byte* bufferPtr = buffer)
+            {
+                Buffer.MemoryCopy(objPtr, bufferPtr, size, size);
+            }
+            stream.Write(buffer, 0, size);
+        }
+
+        public static unsafe void Read(this Stream stream, object obj, int off, int size)
+        {
+            byte[] buffer = new byte[size];
+            stream.ReadExactly(buffer, 0, size);
+            void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
+            fixed (byte* bufferPtr = buffer)
+            {
+                Buffer.MemoryCopy(bufferPtr, objPtr, size, size);
+            }
+        }
+
+        public static unsafe void Write<T>(this Stream stream, T value) where T : struct
+        {
+            byte[] buffer = value.ToBytes();
+            stream.Write(buffer, 0, buffer.Length);
+        }
+
+        public static unsafe T Read<T>(this Stream stream) where T : struct
+        {
+            byte[] buffer = new byte[Marshal.SizeOf<T>()];
+            stream.ReadExactly(buffer, 0, buffer.Length);
+            return buffer.FromBytes<T>();
+        }
+
+        public static unsafe void WriteArr<T>(this Stream stream, T[] value) where T : struct
+        {
+            if (value == null)
+            {
+                Write(stream, -1);
+                return;
+            }
+            Write(stream, value.Length);
+            foreach (T elem in value)
+                Write(stream, elem);
+        }
+
+        public static unsafe T[] ReadArr<T>(this Stream stream) where T : struct
+        {
+            int length = Read<int>(stream);
+            if (length == -1)
+                return null;
+            T[] value = new T[length];
+            for (int i = 0; i < length; i++)
+                value[i] = Read<T>(stream);
+            return value;
+        }
+
+        public static unsafe void WriteArr<T>(this Stream stream, T[] value, int length) where T : struct
+        {
+            Write(stream, length);
+            foreach (T elem in value)
+                Write(stream, elem);
+        }
+
+        public static unsafe T[] ReadArr<T>(this Stream stream, int length) where T : struct
+        {
+            T[] value = new T[length];
+            for (int i = 0; i < length; i++)
+                value[i] = Read<T>(stream);
+            return value;
+        }
+
+        public static unsafe void WriteBoolArr(this Stream stream, bool[] value)
+        {
+            if (value == null)
+            {
+                Write(stream, -1);
+                return;
+            }
+            Write(stream, value.Length);
+            byte[] packed = new byte[(value.Length + 7) >> 3];
+            for (int i = 0; i < value.Length; i++)
+                packed[i >> 3] |= (byte)((value[i] ? 1 : 0) << (i & 7));
+            foreach (byte b in packed)
+                Write(stream, b);
+        }
+
+        public static unsafe bool[] ReadBoolArr(this Stream stream)
+        {
+            int length = Read<int>(stream);
+            if (length == -1)
+                return null;
+            bool[] value = new bool[length];
+            byte[] packed = new byte[(length + 7) >> 3];
+            for (int i = 0; i < packed.Length; i++)
+                packed[i] = Read<byte>(stream);
+            for (int i = 0; i < value.Length; i++)
+                value[i] = ((packed[i >> 3] >> (i & 7)) & 1) == 1;
+            return value;
+        }
+
+        public static unsafe void WriteStr(this Stream stream, string str)
+        {
+            byte[] bytes = str != null ? Encoding.ASCII.GetBytes(str) : null;
+            WriteArr(stream, bytes);
+        }
+
+        public static unsafe string ReadStr(this Stream stream)
+        {
+            byte[] bytes = ReadArr<byte>(stream);
+            if (bytes == null)
+                return null;
+            return Encoding.ASCII.GetString(bytes);
+        }
+    }
+
+
     public class CircArray<T>
     {
         T[] arr;
@@ -274,7 +483,7 @@ namespace Velo
         public void PopFront()
         { 
             if (typeof(T).IsClass)
-                arr[begin] = default(T);
+                arr[begin] = default;
             begin++;
             if (begin == arr.Length)
                 begin = 0;
@@ -314,7 +523,7 @@ namespace Velo
             {
                 for (int i = begin; i != end; )
                 {
-                    arr[i] = default(T);
+                    arr[i] = default;
                     i++;
                     if (i == arr.Length)
                         i = 0;

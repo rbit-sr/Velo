@@ -1,8 +1,6 @@
 ﻿using System;
 using Microsoft.Xna.Framework;
-using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
-using System.Windows.Forms;
 using System.Linq;
 
 namespace Velo
@@ -71,14 +69,11 @@ namespace Velo
 
         public static InputDisplay Instance = new InputDisplay();
 
-        public override bool FixedPos()
-        {
-            return Orientation.Value != EOrientation.PLAYER;
-        }
+        public override bool FixedPos => Orientation.Value != EOrientation.PLAYER;
 
         public override void UpdateComponents()
         {
-            FontCache.Get(ref font, Font.Value, (int)(FontSize.Value * Scale.Value));
+            FontCache.Get(ref font, Font.Value + ":" + (int)(FontSize.Value * Scale.Value));
 
             Player player = Velo.MainPlayer;
 
@@ -142,8 +137,8 @@ namespace Velo
             Color releasedTextColor = ReleasedTextColor.Value.Get();
             Color pressedTextColor = PressedTextColor.Value.Get();
 
-            float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
-            float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
+            float screenWidth = Velo.GraphicsDevice.Viewport.Width;
+            float screenHeight = Velo.GraphicsDevice.Viewport.Height;
 
             float minX = float.MaxValue;
             float minY = float.MaxValue;

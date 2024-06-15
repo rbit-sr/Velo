@@ -5,9 +5,9 @@ namespace Velo
 {
     public class Map
     {
-        public static readonly int COUNT = 45;
+        public static readonly int COUNT = 55;
 
-        public static Dictionary<string, int> AllowedMaps = new Dictionary<string, int>
+        private static readonly Dictionary<string, int> AllowedMapsNames = new Dictionary<string, int>
         {
             { "Metro", 0 },
             { "SS Royale", 1 },
@@ -56,21 +56,51 @@ namespace Velo
             { "Void", 44 }
         };
 
+        private static readonly Dictionary<ulong, int> AllowedMapsFileIds = new Dictionary<ulong, int>
+        {
+            { 459395096UL, 45 }, // Arctic
+            { 355112213UL, 46 }, // Boardwalk
+            { 366868469UL, 47 }, // Mall
+            { 684228943UL, 48 }, // Metalworks
+            { 373772831UL, 49 }, // Park
+            { 318216468UL, 50 }, // Rainx Laboratory
+            { 726451361UL, 51 }, // Rush Ring
+            { 947525541UL, 52 }, // Safari Park r45
+            { 510517129UL, 53 }, // SubWave 1.4
+            { 389154478UL, 54 } // Winds Peak
+        };
+
         public static string[] MapIdToName = new Func<string[]>(() =>
+        {
+            string[] names = new string[AllowedMapsNames.Count + AllowedMapsFileIds.Count];
+            foreach (var pair in AllowedMapsNames)
             {
-                string[] names = new string[AllowedMaps.Count];
-                foreach (var pair in AllowedMaps)
-                {
-                    int delim = pair.Key.IndexOf('|');
-                    if (delim == -1)
-                        names[pair.Value] = pair.Key;
-                    else
-                        names[pair.Value] = pair.Key.Substring(0, delim);
-                }
-                names[6] = "Powerplant";
-                names[16] = "Laboratory";
-                return names;
-            })();
+                names[pair.Value] = pair.Key;
+            }
+            names[6] = "Powerplant";
+            names[16] = "Laboratory";
+            names[45] = "Arctic";
+            names[46] = "Boardwalk";
+            names[47] = "Mall";
+            names[48] = "Metalworks";
+            names[49] = "Park";
+            names[50] = "Rainx Laboratory";
+            names[51] = "Rush Ring";
+            names[52] = "Safari Park r45";
+            names[53] = "SubWave 1.4";
+            names[54] = "Winds Peak";
+            return names;
+        })();
+
+        public static Dictionary<int, ulong> MapIdToFileId = new Func<Dictionary<int, ulong>>(() =>
+        {
+            Dictionary<int, ulong> dict = new Dictionary<int, ulong>();
+            foreach (var pair in AllowedMapsFileIds)
+            {
+                dict.Add(pair.Value, pair.Key);
+            }
+            return dict;
+        })();
 
         public static int GetCurrentMapId()
         {
@@ -79,15 +109,42 @@ namespace Velo
             if (Velo.ModuleSolo.LevelData == null)
                 return -1;
 
+            Console.WriteLine();
+            
             string mapName = Velo.ModuleSolo.LevelData.name;
             string mapAuthor = Velo.ModuleSolo.LevelData.author;
-            if (mapAuthor != "Casper van Est" && mapAuthor != "Gert-Jan Stolk" && mapAuthor != "dd_workshop")
-                return -1;
-            int mapId = -1;
-            if (AllowedMaps.ContainsKey(mapName))
-                mapId = AllowedMaps[mapName];
 
-            return mapId;
+            if (mapAuthor == "Casper van Est" || mapAuthor == "Gert-Jan Stolk" || mapAuthor == "dd_workshop")
+            {
+                if (AllowedMapsNames.ContainsKey(mapName))
+                    return AllowedMapsNames[mapName];
+                return -1;
+            }
+
+            if (Velo.ModuleSolo.gameInfo.unknown1 != null)
+            {
+                ulong fileId = ((PublishedFileId)Velo.ModuleSolo.gameInfo.unknown1.publishedFileId).published_file_id.m_PublishedFileId;
+                if (AllowedMapsFileIds.ContainsKey(fileId))
+                    return AllowedMapsFileIds[fileId];
+                return -1;
+            }
+
+            return -1;
+        }
+
+        public static bool IsOfficial(int mapId)
+        {
+            return mapId <= 16;
+        }
+
+        public static bool IsRWS(int mapId)
+        {
+            return mapId >= 17 && mapId <= 44;
+        }
+
+        public static bool IsOldRWS(int mapId)
+        {
+            return mapId >= 45 && mapId <= 54;
         }
 
         public static bool HasBoostaCoke(int mapId)
@@ -116,7 +173,10 @@ namespace Velo
                 mapId == 20 ||
                 mapId == 23 ||
                 mapId == 26 ||
-                mapId == 44;
+                mapId == 29 ||
+                mapId == 44 ||
+                mapId == 50 ||
+                mapId == 51;
         }
     }
 }

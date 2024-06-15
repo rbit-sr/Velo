@@ -1,7 +1,6 @@
 ﻿using CEngine.Graphics.Camera;
 using Microsoft.Xna.Framework;
 using System;
-using System.Windows.Forms;
 
 namespace Velo
 {
@@ -65,6 +64,9 @@ namespace Velo
             if (!Enabled.Value.Enabled)
                 return;
 
+            if (!Velo.Ingame)
+                return;
+
             Camera camera = (Camera)cameraMod;
 
             if (Enabled.Modified())
@@ -118,10 +120,10 @@ namespace Velo
                 targetVel.Y = -targetVel.Y;
 
             Vector2 camVelDiff = targetVel - camVel;
-            Vector2 clamp = MaxAcc.Value * (float)CEngine.CEngine.Instance.GameTime.ElapsedGameTime.TotalSeconds;
+            Vector2 clamp = MaxAcc.Value * (float)Velo.GameTime.ElapsedGameTime.TotalSeconds;
             camVelDiff = new Vector2(MathHelper.Clamp(camVelDiff.X, -clamp.X, clamp.X), MathHelper.Clamp(camVelDiff.Y, -clamp.Y, clamp.Y));
             camVel += camVelDiff;
-            camPos += camVel * (float)CEngine.CEngine.Instance.GameTime.ElapsedGameTime.TotalSeconds;
+            camPos += camVel * (float)Velo.GameTime.ElapsedGameTime.TotalSeconds;
             camera.position = camPos;
         }
     }

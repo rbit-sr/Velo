@@ -127,7 +127,7 @@ namespace Velo
                 case 3:
                     return new Rectangle(16 - rect.Bottom, rect.Left, rect.Height, rect.Width);
                 default:
-                    return default(Rectangle);
+                    return default;
             }
         }
 
@@ -328,37 +328,37 @@ namespace Velo
 
         private void SetUpTextures()
         {
-            Action<Texture2D> Dispose = (texture) => texture.Dispose();
+            pixel?.Dispose();
+            pixel = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 1, 1);
 
-            pixel.NullCond(Dispose);
             for (int i = 1; i < 16; i++)
             {
-                tiles[i].NullCond(Dispose);
+                tiles[i]?.Dispose();
                 tiles[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
             for (int i = 0; i < 4; i++)
             {
-                slopeOutline[i].NullCond(Dispose);
+                slopeOutline[i]?.Dispose();
                 slopeOutline[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
             for (int i = 0; i < 4; i++)
             {
-                slopeOutlineCornerBoth[i].NullCond(Dispose);
+                slopeOutlineCornerBoth[i]?.Dispose();
                 slopeOutlineCornerBoth[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
             for (int i = 0; i < 4; i++)
             {
-                slopeOutlineCornerCCW[i].NullCond(Dispose);
+                slopeOutlineCornerCCW[i]?.Dispose();
                 slopeOutlineCornerCCW[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
             for (int i = 0; i < 4; i++)
             {
-                slopeOutlineCornerCW[i].NullCond(Dispose);
+                slopeOutlineCornerCW[i]?.Dispose();
                 slopeOutlineCornerCW[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
             for (int i = 0; i < 4; i++)
             {
-                slopeOutlineCornerSmall[i].NullCond(Dispose);
+                slopeOutlineCornerSmall[i]?.Dispose();
                 slopeOutlineCornerSmall[i] = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 16, 16);
             }
 
@@ -369,7 +369,6 @@ namespace Velo
             Color wallColor = Util.ApplyAlpha(WallColor.Value);
             Color grappleCeilColor = Util.ApplyAlpha(GrappleCeilingColor.Value);
 
-            pixel = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, 1, 1);
             pixel.SetData(new Color[]
                 {
                     Color.White

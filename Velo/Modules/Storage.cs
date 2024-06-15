@@ -7,8 +7,6 @@ namespace Velo
 {
     public class Storage : Module
     {
-        private static readonly string VERSION = "2.0.1";
-
         private readonly List<Setting> modified = new List<Setting>();
         private TimeSpan lastSave = TimeSpan.Zero;
 
@@ -53,7 +51,7 @@ namespace Velo
                 if (!module.HasSettings())
                     continue;
                 JsonElement settings = module.ToJson(ToJsonArgs.ForStorage);
-                (settings as JsonObject).AddString("Version", VERSION);
+                (settings as JsonObject).AddString("Version", Version.VERSION_NAME);
                 File.WriteAllText("Velo\\" + module.Name + ".json", settings.ToString(true));
             }
         }

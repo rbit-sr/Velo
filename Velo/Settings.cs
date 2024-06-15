@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -39,22 +40,19 @@ namespace Velo
     public abstract class Setting
     {
         private readonly Module module;
-        public Module Module { get { return module; } }
+        public Module Module => module;
         private readonly string name;
-        public string Name { get { return name; } }
+        public string Name => name;
         private string tooltip;
         public string Tooltip 
-        { 
-            get { return tooltip; }
-            set
-            {
-                tooltip = Util.LineBreaks(value, 80);
-            }
+        {
+            get => tooltip;
+            set => tooltip = Util.LineBreaks(value, 80);
         }
 
         protected bool modified;
         private readonly int id;
-        public int Id { get { return id; } }
+        public int Id => id;
         public bool Hidden = false;
 
         public Setting(Module module, string name)
@@ -63,7 +61,8 @@ namespace Velo
             this.name = name;
             Tooltip = name;
             modified = false;
-            id = ModuleManager.Instance.Add(this);
+            if (module != null)
+                id = ModuleManager.Instance.Add(this);
         }
 
         public bool Modified()
@@ -89,11 +88,11 @@ namespace Velo
         }
     }
 
-    public class Category : Setting
+    public class SettingCategory : Setting
     {
         public List<Setting> Children;
 
-        public Category(Module module, string name) :
+        public SettingCategory(Module module, string name) :
             base(module, name)
         {
             Children = new List<Setting>();
@@ -201,7 +200,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsInt()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsInt());
         }
     }
 
@@ -231,7 +231,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsFloat()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsFloat());
         }
     }
 
@@ -253,7 +254,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsBool()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsBool());
         }
     }
 
@@ -295,15 +297,48 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsToggle()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsToggle());
         }
     }
 
     public class HotkeySetting : Setting<ushort>
     {
-        public HotkeySetting(Module module, string name, ushort defaultValue) :
+        private readonly bool autoRepeat;
+        private TimeSpan pressTime;
+        private TimeSpan lastRepeat;
+
+        public HotkeySetting(Module module, string name, ushort defaultValue, bool autoRepeat = false) :
             base(module, name, defaultValue)
-        { }
+        {
+            this.autoRepeat = autoRepeat;
+        }
+
+        public bool Pressed()
+        {
+            if (Input.Pressed(Value))
+            {
+                if (autoRepeat)
+                {
+                    pressTime = new TimeSpan(DateTime.Now.Ticks);
+                    lastRepeat = TimeSpan.Zero;
+                }
+                return true;
+            }
+
+            if (!autoRepeat || !Input.Held(Value))
+                return false;
+
+            TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
+
+            if ((now - pressTime).TotalSeconds >= 0.5 && (now - lastRepeat).TotalSeconds >= 0.05)
+            {
+                lastRepeat = now;
+                return true;
+            }
+
+            return false;
+        }
 
         public override JsonElement ToJson(ToJsonArgs args)
         {
@@ -317,8 +352,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = (ushort)value.AsInt()));
-
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = (ushort)value.AsInt());
         }
     }
 
@@ -348,7 +383,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsVector2()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsVector2());
         }
     }
 
@@ -370,8 +406,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsString()));
-
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsString());
         }
     }
 
@@ -393,7 +429,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsRoundingMultiplier()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsRoundingMultiplier());
         }
     }
 
@@ -420,7 +457,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsBoolArr()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsBoolArr());
         }
     }
 
@@ -442,7 +480,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsStringArr()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsStringArr());
         }
     }
 
@@ -469,7 +508,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = (E)(object)value.AsInt()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = (E)(object)value.AsInt());
         }
     }
 
@@ -491,7 +531,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsColor()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsColor());
         }
     }
 
@@ -513,7 +554,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsColorTransition()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsColorTransition());
         }
     }
 
@@ -535,7 +577,8 @@ namespace Velo
         {
             base.FromJson(elem);
 
-            elem.Match<JsonObject>(setting => setting.DoWithValueRet("Value", value => Value = value.AsInputBox()));
+            if (elem is JsonObject setting)
+                setting.DoWithValue("Value", value => Value = value.AsInputBox());
         }
     }
 }

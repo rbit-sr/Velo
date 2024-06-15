@@ -17,7 +17,7 @@ namespace Velo
         public ColorTransitionSetting ObjectsColor;
 
         // collision ID to IdList index
-        public Dictionary<int, int> colToIndex = new Dictionary<int, int>
+        private static readonly Dictionary<int, int> colToIndex = new Dictionary<int, int>
         {
             { 100, 0 },     // player
             { 101, 1 },     // hook
@@ -39,7 +39,7 @@ namespace Velo
             { -1, 17 }      // freeze ray
         };
 
-        public Dictionary<CActor, ICDrawComponent> hitboxes = new Dictionary<CActor, ICDrawComponent>();
+        private readonly Dictionary<CActor, ICDrawComponent> hitboxes = new Dictionary<CActor, ICDrawComponent>();
 
         private HitboxIndicator() : base("Hitbox Indicator", true)
         {
@@ -98,10 +98,7 @@ namespace Velo
 
         public static HitboxIndicator Instance = new HitboxIndicator();
 
-        public override bool FixedPos()
-        {
-            return false;
-        }
+        public override bool FixedPos => false;
 
         public override void UpdateComponents()
         {
@@ -161,12 +158,12 @@ namespace Velo
 
                 Color color = 
                     actor.CollidableType != 100 ? ObjectsColor.Value.Get() : 
-                    actor.localPlayer ? LocalPlayersColor.Value.Get() : 
+                    (actor.Controller is Player && (actor.Controller as Player).slot.LocalPlayer) ? LocalPlayersColor.Value.Get() : 
                     RemotePlayersColor.Value.Get();
 
                 if (useRect)
                 {
-                    CAABB rect = collision is CAABB ? (CAABB)collision : actor.Bounds;
+                    CAABB rect = collision is CAABB cAABB ? cAABB : actor.Bounds;
 
                     if (hitbox == null)
                     {

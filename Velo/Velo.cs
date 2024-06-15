@@ -10,41 +10,56 @@ using CEngine.Graphics.Layer;
 using Lidgren.Network;
 using SDL2;
 using System.Collections.Generic;
+using Microsoft.Xna.Framework.Input;
 
 namespace Velo
 {
     public class Velo
     {
+        private static TimeSpan lastFrameTime = TimeSpan.Zero;
+
+        public static TimeSpan Delta;
+        public static CEngine.CEngine CEngineInst;
         public static SpriteBatch SpriteBatch;
         public static CContentBundleManager ContentManager;
+        public static GraphicsDevice GraphicsDevice;
+        public static GameTime GameTime;
         public static Player MainPlayer = null;
         public static Player Ghost = null;
         public static ModuleSolo ModuleSolo = null;
         public static bool Ingame = false;
         public static bool IngamePrev = false;
+        public static bool Paused = false;
+        public static bool PausedPrev = false;
+        public static bool PauseMenu = false;
+        public static bool PauseMenuPrev = false;
         public static bool Online = false;
-        public static float TimerPrev = 0.0f;
-        public static float Timer = 0.0f;
         public static bool BoostaCokeModified = false;
         public static bool GhostLaserCollision = false;
+        public static float LastUsedItemTime = float.PositiveInfinity;
+        public static byte LastUsedItemId = (byte)EItem.NONE;
+        private static byte itemIdPrev = (byte)EItem.NONE;
+        public static float LastUsedDrillTime = float.PositiveInfinity;
+        public static float LastUsedModTime = float.PositiveInfinity;
+        public static float LastUsedSavestateTime = float.PositiveInfinity;
 
         public static List<Action> OnMainPlayerReset = new List<Action>();
-        public static List<Action> OnLapFinish = new List<Action>();
+        public static List<Action<float>> OnLapFinish = new List<Action<float>>();
 
         private static readonly List<Action> onPreUpdate = new List<Action>();
-        private static readonly List<Action> onPostUpdate = new List<Action>();
-        private static readonly List<Action> onPreRender = new List<Action>();
-        private static readonly List<Action> onPostRender = new List<Action>();
 
         // thread-safe
         private static readonly List<Action> onPreUpdateTS = new List<Action>();
-        private static readonly List<Action> onPostUpdateTS = new List<Action>();
-        private static readonly List<Action> onPreRenderTS = new List<Action>();
-        private static readonly List<Action> onPostRenderTS = new List<Action>();
+
+        private static readonly HashSet<Module> cursorRequests = new HashSet<Module>();
+
+        private static int ghostPollCounter = 0;
+
+        
 
         public static Player GetMainPlayer()
         {
-            CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
+            CCollisionEngine collisionEngine = CEngineInst.World.CollisionEngine;
 
             for (int i = 0; i < collisionEngine.ActorCount; i++)
             {
@@ -53,7 +68,7 @@ namespace Velo
                 if (controller is Player)
                 {
                     Player player = controller as Player;
-                    if (player.actor.localPlayer)
+                    if (player.slot.LocalPlayer)
                         return player;
                 }
             }
@@ -63,7 +78,9 @@ namespace Velo
 
         public static Player GetGhost()
         {
-            CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
+            if (ModuleSolo == null)
+                return null;
+            CCollisionEngine collisionEngine = CEngineInst.World.CollisionEngine;
 
             for (int i = 0; i < collisionEngine.ActorCount; i++)
             {
@@ -72,7 +89,7 @@ namespace Velo
                 if (controller is Player)
                 {
                     Player player = controller as Player;
-                    if (!player.actor.localPlayer)
+                    if (!player.slot.LocalPlayer)
                         return player;
                 }
             }
@@ -105,16 +122,68 @@ namespace Velo
                 return null;
 
             foreach (var module in Main.game.stack.modules)
-                if (module is ModuleSolo)
-                    return module as ModuleSolo;
+                if (module is ModuleSolo moduleSolo)
+                    return moduleSolo;
 
-            return default(ModuleSolo);
+            return default;
         }
 
-#if !VELO_OLD
+        public static void EnableCursor(Module requester)
+        {
+            cursorRequests.Add(requester);
+            if (cursorRequests.Count >= 1)
+                CEngineInst.Game.IsMouseVisible = true;
+        }
+
+        public static void DisableCursor(Module requester)
+        {
+            cursorRequests.Remove(requester);
+            if (cursorRequests.Count == 0)
+                CEngineInst.Game.IsMouseVisible = false;
+        }
+
+        private static void ClearLastUsedTimes()
+        {
+            LastUsedItemTime = float.PositiveInfinity;
+            LastUsedDrillTime = float.PositiveInfinity;
+            LastUsedModTime = float.PositiveInfinity;
+            LastUsedSavestateTime = float.PositiveInfinity;
+            UpdateLastUsed();
+        }
+
+        private static void UpdateLastUsed()
+        {
+            float delta = (float)CEngineInst.gameTime.ElapsedGameTime.TotalSeconds;
+            LastUsedItemTime += delta;
+            LastUsedDrillTime += delta;
+            LastUsedModTime += delta;
+            LastUsedSavestateTime += delta;
+
+            if (MainPlayer != null && itemIdPrev != (int)EItem.NONE && itemIdPrev != MainPlayer.item_id)
+            {
+                LastUsedItemTime = Math.Min(0f, LastUsedItemTime);
+                if (itemIdPrev == (int)EItem.BOMB || itemIdPrev == (int)EItem.TRIGGER)
+                    LastUsedItemTime = float.NegativeInfinity;
+                LastUsedItemId = itemIdPrev;
+            }
+            if (MainPlayer != null && MainPlayer.using_drill)
+                LastUsedDrillTime = 0f;
+
+            if (LocalGameMods.Instance.IsPlaybackRunning())
+                LastUsedModTime = Math.Min(0f, LastUsedModTime);
+            else if (
+                LocalGameMods.Instance.IsModded() ||
+                LocalGameMods.Instance.DtFixed || 
+                BlindrunSimulator.Instance.Enabled.Value.Enabled
+                )
+                LastUsedModTime = float.NegativeInfinity;
+
+            if (MainPlayer != null)
+                itemIdPrev = MainPlayer.item_id;
+        }
+
 #pragma warning disable IDE1006
 #pragma warning disable IDE0060
-#endif
         // It follows a list of interface methods that the modded game client
         // can call in order to communicate with Velo.
         // These are all written in snake_case.
@@ -122,26 +191,31 @@ namespace Velo
         // called once after the game's engine has finished setup
         public static void init()
         {
-            SpriteBatch = CEngine.CEngine.Instance.SpriteBatch;
-            ContentManager = CEngine.CEngine.Instance.ContentBundleManager;
+            CEngineInst = CEngine.CEngine.Instance;
+            SpriteBatch = CEngineInst.SpriteBatch;
+            ContentManager = CEngineInst.ContentBundleManager;
+            GraphicsDevice = CEngineInst.GraphicsDevice;
+            GameTime = CEngineInst.gameTime;
 
             ModuleManager.Instance.Init();
             Storage.Instance.Load();
             SettingsUI.Instance.SendUpdates = false;
             SettingsUI.Instance.Enabled.Disable();
             SettingsUI.Instance.SendUpdates = true;
-            Keyboard.Init();
+            LocalGameMods.Instance.Freeze.Disable();
+            Leaderboard.Instance.Enabled.Disable();
         }
 
         // replaces the game's update call
         public static void game_update(GameTime gameTime)
         {
-            if (!Util.IsFocused()) // we don't want inputs to be detected when game is unfocused
-            {
-                Keyboard.Held.Fill(false);
-                Keyboard.Pressed.Fill(false);
-            }
+            TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
+            if (lastFrameTime != new TimeSpan())
+                Delta = now - lastFrameTime;
+            lastFrameTime = now;
 
+            Input.Update();
+           
             foreach (Action action in onPreUpdate)
                 action();
             onPreUpdate.Clear();
@@ -163,60 +237,36 @@ namespace Velo
             ModuleSolo = GetModuleSolo();
             IngamePrev = Ingame;
             Ingame = MainPlayer != null;
+            PauseMenuPrev = PauseMenu;
+            PauseMenu = Main.game.stack.baseModule.IsPaused;
+            PausedPrev = Paused;
+            Paused = CEngineInst.IsPaused && !PauseMenu;
             Online = IsOnline();
-            TimerPrev = Timer;
-            if (Ingame)
-            {
-                ICActorController timerAct = CEngine.CEngine.Instance.World.CollisionEngine.FindActorOfType(typeof(Timer));
-                if (timerAct != null)
-                    Timer = (timerAct as Timer).current;
-            }
 
-            foreach (Action action in onPostUpdate)
-                action();
-            onPostUpdate.Clear();
-            lock (onPostUpdateTS)
-            {
-                foreach (Action action in onPostUpdateTS)
-                    action();
-                onPostUpdateTS.Clear();
-            }
+            UpdateLastUsed();
+            
+            if (!IngamePrev && Ingame)
+                ClearLastUsedTimes();
+           
             ModuleManager.Instance.PostUpdate();
 
             if (
                 !(Performance.Instance.Enabled.Value &&
-                Performance.Instance.LimitFramerateAfterRender.Value) ||
-                Util.IsMinimized() // call when minimized to prevent crashing
+                Performance.Instance.LimitFramerateAfterRender.Value)
                 )
             {
                 Main.game.Delay(); // limits framerate
             }
+
+            ghostPollCounter = 0;
         }
 
         public static void game_draw(GameTime gameTime)
         {
-            foreach (Action action in onPreRender)
-                action();
-            onPreRender.Clear();
-            lock (onPreRenderTS)
-            {
-                foreach (Action action in onPreRenderTS)
-                    action();
-                onPreRenderTS.Clear();
-            }
             ModuleManager.Instance.PreRender();
 
             Main.game.GameDraw(gameTime);
 
-            foreach (Action action in onPostRender)
-                action();
-            onPostRender.Clear();
-            lock (onPostRenderTS)
-            {
-                foreach (Action action in onPostRenderTS)
-                    action();
-                onPostRenderTS.Clear();
-            }
             ModuleManager.Instance.PostRender();
 
             if (
@@ -226,11 +276,14 @@ namespace Velo
             {
                 Main.game.Delay(); // limits framerate
             }
-
-            Keyboard.Pressed.Fill(false);
         }
 
         public static void AddOnPreUpdate(Action action)
+        {
+            onPreUpdate.Add(action);
+        }
+
+        public static void AddOnPreUpdateTS(Action action)
         {
             lock (onPreUpdateTS)
             {
@@ -238,53 +291,17 @@ namespace Velo
             }
         }
 
-        public static void AddOnPostUpdate(Action action)
-        {
-            lock (onPostUpdateTS)
-            {
-                onPostUpdateTS.Add(action);
-            }
-        }
-
-        public static void AddOnPreRender(Action action)
-        {
-            lock (onPreRenderTS)
-            {
-                onPreRenderTS.Add(action);
-            }
-        }
-
-        public static void AddOnPostRender(Action action)
-        {
-            lock (onPostRenderTS)
-            {
-                onPostRenderTS.Add(action);
-            }
-        }
-
         // called in Main.game.Delay()
         // returns the targetted frame period in ticks
         public static long get_framelimit(long current)
         {
-            int framelimit = Performance.Instance.Framelimit.Value;
-            if (framelimit == -1)
-                return current;
-
-            if (Online)
-                return 10000000L / Math.Min(Math.Max(framelimit, 30), 300);
-
-            if (framelimit < 10)
-                framelimit = 10;
-            return 10000000L / framelimit;
+            return Performance.Instance.GetFramelimit(current);
         }
 
         // called in Main.game.Delay()
         public static int get_framelimit_method(int current)
         {
-            if (Performance.Instance.FramelimitMethod.Value < 0 || Performance.Instance.FramelimitMethod.Value > 3)
-                return current;
-
-            return Performance.Instance.FramelimitMethod.Value;
+            return Performance.Instance.GetFramelimitMethod(current);
         }
 
         // called in CEngine's update method
@@ -293,26 +310,47 @@ namespace Velo
             return LocalGameMods.Instance.TimeScaleVal;
         }
 
-#if !VELO_OLD
+        // skip all key inputs on true
+        public static bool disable_key_input()
+        {
+            return 
+                (SettingsUI.Instance.Enabled.Value.Enabled && 
+                SettingsUI.Instance.DisableKeyInput.Value) ||
+                AutoUpdate.Instance.Enabled;
+        }
+
+        // skip all mouse inputs on true
+        public static bool disable_mouse_input()
+        {
+            return
+                SettingsUI.Instance.Enabled.Value.Enabled ||
+                Leaderboard.Instance.Enabled.Value.Enabled ||
+                AutoUpdate.Instance.Enabled;
+        }
+
+        // hooked into FNA.dll's event loop
         public static void sdl_poll(ref SDL.SDL_Event sdl_event)
         {
             SettingsUI.Instance.SdlPoll(ref sdl_event);
         }
-#endif
 
+        // called in Player.Reset()
         public static void player_reset(Player player)
         {
             if (player == MainPlayer)
             {
+                onPreUpdate.Add(ClearLastUsedTimes);
+
                 foreach (Action action in OnMainPlayerReset)
                     onPreUpdate.Add(action);
             }
         }
 
-        public static void lap_finish()
+        // called on lap finish
+        public static void lap_finish(float time)
         {
-            foreach (Action action in OnLapFinish)
-                onPreUpdate.Add(action);
+            foreach (Action<float> action in OnLapFinish)
+                onPreUpdate.Add(() => action(time));
         }
 
         public static void boostacoke_add()
@@ -323,6 +361,29 @@ namespace Velo
         public static void boostacoke_remove()
         {
             BoostaCokeModified = true;
+        }
+
+        // "fixing" a weird bug where a ghost replay will freeze
+        // the game by forever generating new packets in a single update
+        public static bool ghost_poll()
+        {
+            if (Delta.TotalSeconds > 0.5 && ModuleSolo != null && ghostPollCounter++ > 100)
+            {
+                ModuleSolo.removeGhost(GameTime);
+                Notifications.Instance.PushNotification("Warning: Game freezing ghost detected and removed!");
+                return false;
+            }
+            return true;
+        }
+
+        public static bool disable_ghost_poll()
+        {
+            return LocalGameMods.Instance.IsGhostPlaybackRunning();
+        }
+
+        public static bool disable_grapple_sound(Player player)
+        {
+            return Miscellaneous.Instance.DisableGrappleSound(player);
         }
 
         public static float get_camera_max_speed(ICCameraModifier camera)
@@ -380,7 +441,7 @@ namespace Velo
 
             return
                 LocalGameMods.Instance.FixGrappleGlitches.Value.Enabled &&
-                !Keyboard.Held[LocalGameMods.Instance.FixGrappleGlitches.Value.Hotkey];
+                !Input.Held(LocalGameMods.Instance.FixGrappleGlitches.Value.Hotkey);
         }
 
         public static bool get_enable_old_moonwalk()
@@ -411,6 +472,7 @@ namespace Velo
             return true;
         }
 
+        // called when game detects a player laser collision
         public static void player_laser_collide(ICCollidable collidable)
         {
             if ((collidable as CActor).Controller == Ghost)
@@ -425,19 +487,11 @@ namespace Velo
             return LocalGameMods.Instance.DtFixed;
         }
 
-        public static bool set_inputs()
+        // called when player inputs get polled (in the Player.Update() method)
+        // on true the game skips the input polls
+        public static bool set_inputs(Player player)
         {
-            return LocalGameMods.Instance.SetInputs();
-        }
-
-        public static bool skip_if_ghost()
-        {
-            return LocalGameMods.Instance.SkipIfGhost();
-        }
-
-        public static bool skip_if_ghost(Player player)
-        {
-            return LocalGameMods.Instance.SkipIfGhost() && player == Ghost;
+            return LocalGameMods.Instance.SetInputs(player);
         }
 
         public static bool skip_update_sprite(Player player)
@@ -457,27 +511,27 @@ namespace Velo
 
         public static int event_id()
         {
-            return EventBypass.Instance.Event.Value.Id();
+            return Miscellaneous.Instance.Event.Value.Id();
         }
 
         public static bool bypass_pumpkin_cosmo()
         {
-            return EventBypass.Instance.BypassPumpkinCosmo.Value;
+            return Miscellaneous.Instance.BypassPumpkinCosmo.Value;
         }
 
         public static bool bypass_xl()
         {
-            return EventBypass.Instance.BypassXl.Value;
+            return Miscellaneous.Instance.BypassXl.Value;
         }
 
         public static bool bypass_excel()
         {
-            return EventBypass.Instance.BypassExcel.Value;
+            return Miscellaneous.Instance.BypassExcel.Value;
         }
 
         public static bool reloading_contents()
         {
-            return HotReload.Instance.contentsReloaded;
+            return Miscellaneous.Instance.contentsReloaded;
         }
 
         public static void update_popup(Player player)
@@ -495,6 +549,11 @@ namespace Velo
             return Appearance.Instance.PopupScale.Value;
         }
 
+        public static bool enable_popup_with_ghost()
+        {
+            return Appearance.Instance.EnablePopupWithGhost.Value;
+        }
+
         public static void update_grapple_color(Grapple grapple)
         {
             Appearance.Instance.UpdateGrappleColor(grapple);
@@ -510,14 +569,24 @@ namespace Velo
             Appearance.Instance.UpdateRopeColor(rope);
         }
 
+        public static void update_gate_color(SwitchBlock switchBlock)
+        {
+            Appearance.Instance.UpdateGateColor(switchBlock);
+        }
+
         public static Color get_popup_color()
         {
             return Appearance.Instance.PopupColor.Value.Get();
         }
 
-        public static Color get_player_color()
+        public static Color get_player_color(Player player)
         {
-            return Appearance.Instance.PlayerColor.Value.Get();
+            if (player == MainPlayer)
+                return Appearance.Instance.LocalColor.Value.Get();
+            else if (player == Ghost)
+                return Appearance.Instance.GhostColor.Value.Get();
+            else
+                return Appearance.Instance.RemoteColor.Value.Get();
         }
 
         public static Color get_win_star_color()
@@ -584,9 +653,16 @@ namespace Velo
 
         public static Color get_background_color(ICLayer layer, Color color)
         {
-            if (layer.Id != "BackgroundLayer0")
-                return color;
-            return new Color(color.ToVector4() * Appearance.Instance.BackgroundColor.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer0")
+                return new Color(color.ToVector4() * Appearance.Instance.Background0Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer1")
+                return new Color(color.ToVector4() * Appearance.Instance.Background1Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer2")
+                return new Color(color.ToVector4() * Appearance.Instance.Background2Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer3")
+                return new Color(color.ToVector4() * Appearance.Instance.Background3Color.Value.Get().ToVector4());
+
+            return color;
         }
 
         public static bool draw_chunk(CBufferedTileMapLayer tilemap, Vector2 pos, int x, int y)
@@ -661,14 +737,12 @@ namespace Velo
                 Performance.Instance.EnableControllerId.Value != controller_id;
         }
 
-#if VELO_OLD
-        public static bool skip_all_key_input()
+        public static string timespan_to_string(TimeSpan timespan, string format)
         {
-            return
-                SettingsUI.Instance.Enabled.Value.Enabled &&
-                SettingsUI.Instance.DisableKeyInput.Value;
+            if (!Leaderboard.Instance.PreciseTimer.Value)
+                return timespan.ToString(format);
+            return Util.FormatTime(timespan.Ticks / TimeSpan.TicksPerMillisecond, ETimeFormat.DOT_COLON);
         }
-#endif
 
         public class Message
         {

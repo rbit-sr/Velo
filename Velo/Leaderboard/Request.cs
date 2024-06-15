@@ -1,9 +1,9 @@
-﻿using System.Runtime.InteropServices;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Threading;
 using System.IO;
+using System.Linq;
 
 namespace Velo
 {
@@ -15,7 +15,22 @@ namespace Velo
 
     public enum ERequestType : uint
     {
-        GET_PBS_FOR_MAP_CAT, GET_PLAYER_PBS, GET_WRS, GET_RECENT, SUBMIT_RUN, GET_RECORDING, SEND_PLAYER_NAME
+        NOP,
+        GET_PLAYER_PBS, 
+        GET_WRS, 
+        GET_RECENT,
+        GET_RECENT_WRS,
+        GET_ALL_FOR_CATEGORY,
+        GET_PBS_FOR_CATEGORY,
+        GET_WR_HISTORY_FOR_CATEGORY,
+        SUBMIT_RUN, 
+        GET_RECORDING, 
+        SEND_PLAYER_NAME, 
+        GET_COMMENTS, 
+        GET_SCORES,
+        GET_ADDED_SINCE,
+        GET_DELETED_SINCE,
+        CHECK_UPDATE
     }
 
     public enum ERequestStatus
@@ -23,27 +38,17 @@ namespace Velo
         NONE, PENDING, SUCCESS, FAILURE
     }
 
-    public class Result<T>
+    public class RequestHandler
     {
-        public T Value;
-        public Exception Error;
-
-        public Result(T value)
+        private struct RequestEntry
         {
-            Value = value;
+            public Action<Client> SendHeader;
+            public Func<Client, Action> Run;
+            public bool BypassVersionCheck;
         }
 
-        public Result(Exception error)
-        {
-            Error = error;
-        }
-    }
-
-    public class RequestHandler<T>
-    {
-        public static readonly uint VERSION = 0;
-
-        private Task<Result<T>> task;
+        private List<RequestEntry> requests = new List<RequestEntry>();
+        private Task<bool> task;
         private CancellationTokenSource cancel;
         private bool statusChanged = false;
 
@@ -56,77 +61,155 @@ namespace Velo
             this.attemptWaitTimes = attemptWaitTimes;
         }
 
-        public void Run(IRequest<T> request, Action<T> onSuccess = null, Action<Exception> onFailure = null)
+        public void Push<T>(IRequest<T> request, Action<T> onSuccess = null, bool onSuccessPreUpdate = true)
         {
+            requests.Add(new RequestEntry
+            {
+                SendHeader = (client) => 
+                { 
+                    client.Send(request.RequestType()); 
+                    request.SendHeader(client); 
+                },
+                Run = (client) => 
+                { 
+                    T result = request.Run(client);
+                    if (onSuccess != null && onSuccessPreUpdate)
+                        return () => Velo.AddOnPreUpdateTS(() => onSuccess.Invoke(result));
+                    else
+                        return () => onSuccess?.Invoke(result);
+                },
+                BypassVersionCheck = request is IVersionBypassingRequest
+            });
+        }
+
+        public void Run(Action<Exception> onFailure = null)
+        {
+            List<RequestEntry> requests2 = requests;
+            requests = new List<RequestEntry>();
+
             Cancel();
+            task?.Wait();
 
             cancel = new CancellationTokenSource();
+            CancellationToken cancelToken = cancel.Token;
             statusChanged = true;
 
             task = Task.Run(() =>
             {
-                Result<T> result = null;
+                List<Action> onSuccessActions = new List<Action>();
+                Exception error = null;
+                bool bypassVersionCheck = requests2.Any(entry => entry.BypassVersionCheck);
                 for (int i = 0; i < maxAttempts; i++)
                 {
-                    Client client = new Client(cancel.Token);
+                    onSuccessActions.Clear();
+                    Client client = new Client(cancelToken);
                     try
                     {
                         client.Connect();
-                        client.Send(request.RequestType() | (VERSION << 16));
-                        client.SendCrc();
-                        int success = 0;
-                        client.Receive(ref success);
-                        client.VerifyCrc();
-                        if (success != int.MaxValue)
-                            throw new OutdatedVersionException();
+                        byte enableCrc = 1;
+                        client.Send(enableCrc);
+                        client.Send((byte)requests2.Count);
+                        if (!bypassVersionCheck)
+                            client.Send(Version.VERSION);
+                        else
+                            client.Send(ushort.MaxValue);
+                        client.SendCrc(); 
+                        try
+                        {
+                            foreach (var request in requests2)
+                            {
+                                request.SendHeader(client);
+                            }
 
-                        result = new Result<T>(request.Run(client));
+                            client.SendCrc();
+
+                            int success = client.Receive<int>();
+                            if (success != int.MaxValue)
+                                throw new OutdatedVersionException();
+                        }
+                        catch (OutdatedVersionException e)
+                        {
+                            throw e;
+                        }
+                        catch (Exception e)
+                        {
+                            int success = client.Receive<int>();
+                            if (success != int.MaxValue)
+                                throw new OutdatedVersionException();
+                            throw e;
+                        }
+
+                        ulong time = client.Receive<ulong>();
+
+                        if (cancelToken.IsCancellationRequested)
+                            throw new OperationCanceledException();
+                        Time = time;
+
+                        foreach (var request in requests2)
+                        {
+                            onSuccessActions.Add(request.Run(client));
+                        }
+
                         client.ReceiveSuccess();
+                    }
+                    catch (OutdatedVersionException e)
+                    {
+                        Velo.AddOnPreUpdateTS(AutoUpdate.Instance.Check);
+                        error = e;
                     }
                     catch (Exception e)
                     {
-                        result = new Result<T>(e);
+                        error = e;
                     }
                     finally
                     {
                         client.Close();
                     }
-                    if (result.Value != null)
+
+                    if (cancelToken.IsCancellationRequested || error is OutdatedVersionException)
+                        break;
+
+                    if (error == null)
                     {
-                        if (onSuccess != null)
+                        foreach (var onSuccessAction in onSuccessActions)
                         {
-                            Velo.AddOnPreUpdate(() =>
-                            {
-                                onSuccess(result.Value);
-                            });
+                            onSuccessAction();
                         }
-                        return result;
+
+                        return true;
                     }
 
                     if (attemptWaitTimes != null && i + 1 < maxAttempts)
                     {
                         int millis = attemptWaitTimes(i);
-                        Task.Delay(millis).Wait();
+                        try
+                        {
+                            Task.Delay(millis).Wait(cancelToken);
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            break;
+                        }
                     }
                 }
-                if (onFailure != null)
+                if (onFailure != null && error != null && !(error is OperationCanceledException || error is TaskCanceledException))
                 {
-                    Velo.AddOnPreUpdate(() =>
+                    Velo.AddOnPreUpdateTS(() =>
                     {
-                        onFailure(result.Error);
+                        onFailure(error);
                     });
                 }
-                return result;
+                return false;
             });
         }
 
         public void Cancel()
         {
-            if (task != null && !task.IsCompleted)
+            if (cancel != null && task != null && !task.IsCompleted)
             {
                 cancel.Cancel();
                 cancel.Dispose();
-                task = null;
+                cancel = null;
             }
         }
 
@@ -138,7 +221,7 @@ namespace Velo
                     return ERequestStatus.NONE;
                 if (!task.IsCompleted)
                     return ERequestStatus.PENDING;
-                if (task.Result.Error == null)
+                if (task.Result)
                     return ERequestStatus.SUCCESS;
                 else
                     return ERequestStatus.FAILURE;
@@ -156,82 +239,41 @@ namespace Velo
             }
         }
 
-        public T Result
-        {
-            get { return task.Result.Value; }
-        }
-
-        public Exception Error
-        {
-            get { return task.Result.Error; }
-        }
+        public ulong Time { get; set; }
     }
 
     public interface IRequest<T>
     {
+        void SendHeader(Client client);
         T Run(Client client);
         uint RequestType();
     }
 
-    public class GetPBsForMapCatRequest : IRequest<List<RunInfo>>
+    public interface IVersionBypassingRequest
     {
-        private readonly int mapId;
-        private readonly ECategory category;
 
-        public GetPBsForMapCatRequest(int mapId, ECategory category)
-        {
-            this.mapId = mapId;
-            this.category = category;
-        }
-
-        public List<RunInfo> Run(Client client)
-        {
-            client.Send(mapId);
-            client.Send((int)category);
-            client.SendCrc();
-
-            List<RunInfo> result = new List<RunInfo>();
-            while (true)
-            {
-                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                client.Receive(buffer, buffer.Length);
-                RunInfo current = RunInfo.FromBytes(buffer);
-                if (current.Id == -1)
-                    break;
-                result.Add(current);
-            }
-
-            client.VerifyCrc();
-
-            return result;
-        }
-
-        public uint RequestType()
-        {
-            return (uint)ERequestType.GET_PBS_FOR_MAP_CAT;
-        }
     }
 
-    public class GetPlayerPBs : IRequest<List<RunInfo>>
+    public class GetPlayerPBsRequest : IRequest<List<RunInfo>>
     {
         private readonly ulong playerId;
 
-        public GetPlayerPBs(ulong playerId)
+        public GetPlayerPBsRequest(ulong playerId)
         {
             this.playerId = playerId;
         }
 
-        public List<RunInfo> Run(Client client)
+        public void SendHeader(Client client)
         {
             client.Send(playerId);
-            client.SendCrc();
+        }
 
+        public List<RunInfo> Run(Client client)
+        {
             List<RunInfo> result = new List<RunInfo>();
             while (true)
             {
-                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                client.Receive(buffer, buffer.Length);
-                RunInfo current = RunInfo.FromBytes(buffer);
+                RunInfo current = client.Receive<RunInfo>();
                 if (current.Id == -1)
                     break;
                 result.Add(current);
@@ -255,14 +297,17 @@ namespace Velo
 
         }
 
+        public void SendHeader(Client client)
+        {
+
+        }
+
         public List<RunInfo> Run(Client client)
         {
             List<RunInfo> result = new List<RunInfo>();
             while (true)
             {
-                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                client.Receive(buffer, buffer.Length);
-                RunInfo current = RunInfo.FromBytes(buffer);
+                RunInfo current = client.Receive<RunInfo>();
                 if (current.Id == -1)
                     break;
                 result.Add(current);
@@ -281,9 +326,19 @@ namespace Velo
 
     public class GetRecentRequest : IRequest<List<RunInfo>>
     {
-        public GetRecentRequest()
-        {
+        private readonly int start;
+        private readonly int count;
 
+        public GetRecentRequest(int start, int count)
+        {
+            this.start = start;
+            this.count = count;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(start);
+            client.Send(count);
         }
 
         public List<RunInfo> Run(Client client)
@@ -291,13 +346,13 @@ namespace Velo
             List<RunInfo> result = new List<RunInfo>();
             while (true)
             {
-                byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-                client.Receive(buffer, buffer.Length);
-                RunInfo current = RunInfo.FromBytes(buffer);
+                RunInfo current = client.Receive<RunInfo>();
                 if (current.Id == -1)
                     break;
                 result.Add(current);
             }
+
+            client.Receive<int>();
 
             client.VerifyCrc();
 
@@ -307,6 +362,182 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.GET_RECENT;
+        }
+    }
+
+    public class GetRecentWRsRequest : IRequest<List<RunInfo>>
+    {
+        private readonly int start;
+        private readonly int count;
+
+        public GetRecentWRsRequest(int start, int count)
+        {
+            this.start = start;
+            this.count = count;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(start);
+            client.Send(count);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.Receive<int>();
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_RECENT_WRS;
+        }
+    }
+
+    public class GetAllForCategoryRequest : IRequest<List<RunInfo>>
+    {
+        private readonly Category category;
+        private readonly int start;
+        private readonly int count;
+
+        public GetAllForCategoryRequest(Category category, int start, int count)
+        {
+            this.category = category;
+            this.start = start;
+            this.count = count;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(category.MapId);
+            client.Send(category.TypeId);
+            client.Send(start);
+            client.Send(count);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.Receive<int>();
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_ALL_FOR_CATEGORY;
+        }
+    }
+
+    public class GetPBsForCategoryRequest : IRequest<List<RunInfo>>
+    {
+        private readonly Category category;
+        private readonly int start;
+        private readonly int count;
+
+        public GetPBsForCategoryRequest(Category category, int start, int count)
+        {
+            this.category = category;
+            this.start = start;
+            this.count = count;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(category.MapId);
+            client.Send(category.TypeId);
+            client.Send(start);
+            client.Send(count);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.Receive<int>();
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_PBS_FOR_CATEGORY;
+        }
+    }
+
+    public class GetWRHistoryForCategoryRequest : IRequest<List<RunInfo>>
+    {
+        private readonly Category category;
+        private readonly int start;
+        private readonly int count;
+
+        public GetWRHistoryForCategoryRequest(Category category, int start, int count)
+        {
+            this.category = category;
+            this.start = start;
+            this.count = count;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(category.MapId);
+            client.Send(category.TypeId);
+            client.Send(start);
+            client.Send(count);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.Receive<int>();
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_WR_HISTORY_FOR_CATEGORY;
         }
     }
 
@@ -326,16 +557,17 @@ namespace Velo
             this.recording = recording;
         }
 
+        public void SendHeader(Client client)
+        {
+            
+        }
+
         public NewPbInfo Run(Client client)
         {
-            byte[] buffer = new byte[Marshal.SizeOf<RunInfo>()];
-            RunInfo.GetBytes(recording.Info, buffer);
-            client.Send(buffer, buffer.Length);
+            client.Send(recording.Info);
             client.SendCrc();
 
-            int timeSave = 0;
-            int newWr = 0;
-            client.Receive(ref timeSave);
+            int timeSave = client.Receive<int>();
             
             if (timeSave == -1)
             {
@@ -343,7 +575,7 @@ namespace Velo
                 return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
             }
 
-            client.Receive(ref newWr);
+            int newWr = client.Receive<int>();
             client.VerifyCrc();
 
             MemoryStream dataStream = new MemoryStream();
@@ -351,14 +583,12 @@ namespace Velo
 
             byte[] bytes = dataStream.ToArray();
             client.Send(bytes.Length);
-            client.Send(bytes, bytes.Length);
+            client.Send(bytes);
 
             client.SendCrc();
 
-            buffer = new byte[Marshal.SizeOf<RunInfo>()];
-            client.Receive(buffer, buffer.Length);
+            RunInfo result = client.Receive<RunInfo>();
             client.VerifyCrc();
-            RunInfo result = RunInfo.FromBytes(buffer);
 
             return new NewPbInfo 
             { 
@@ -383,17 +613,18 @@ namespace Velo
             this.id = id;
         }
 
-        public Recording Run(Client client)
+        public void SendHeader(Client client)
         {
             client.Send(id);
-            client.SendCrc();
+        }
 
+        public Recording Run(Client client)
+        {
             Recording result = new Recording();
 
-            int size = 0;
-            client.Receive(ref size);
+            int size = client.Receive<int>();
             byte[] data = new byte[size];
-            client.Receive(data, size);
+            client.Receive(data);
 
             MemoryStream dataStream = new MemoryStream(data)
             {
@@ -419,6 +650,11 @@ namespace Velo
 
         }
 
+        public void SendHeader(Client client)
+        {
+
+        }
+
         public string Run(Client client)
         {
             ulong steamId = Steamworks.SteamUser.GetSteamID().m_SteamID;
@@ -432,6 +668,202 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.SEND_PLAYER_NAME;
+        }
+    }
+
+    public class GetCommentsRequest : IRequest<string>
+    {
+        private readonly int id;
+
+        public GetCommentsRequest(int id)
+        {
+            this.id = id;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(id);
+        }
+
+        public string Run(Client client)
+        {
+            string text = client.ReceiveStr();
+            client.VerifyCrc();
+
+            return text;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_COMMENTS;
+        }
+    }
+
+    public class GetScoresRequest : IRequest<List<PlayerInfoScore>>
+    {
+        public GetScoresRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+            
+        }
+
+        public List<PlayerInfoScore> Run(Client client)
+        {
+            List<PlayerInfoScore> result = new List<PlayerInfoScore>();
+            while (true)
+            {
+                ulong playerId = client.Receive<ulong>();
+                int score = client.Receive<int>();
+               
+                if (score == -1)
+                    break;
+                result.Add(new PlayerInfoScore { PlayerId = playerId, Score = score });
+            }
+
+            client.VerifyCrc();
+
+            result.Sort();
+            result.Reverse();
+
+            for (int i = 0; i < result.Count; i++)
+            {
+                PlayerInfoScore info = result[i];
+                info.Place = i;
+                result[i] = info;
+            }
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_SCORES;
+        }
+    }
+
+    public class GetAddedSinceRequest : IRequest<List<RunInfo>>
+    {
+        private readonly ulong time;
+
+        public GetAddedSinceRequest(ulong time)
+        {
+            this.time = time;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(time);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_ADDED_SINCE;
+        }
+    }
+
+    public class GetDeletedSinceRequest : IRequest<List<int>>
+    {
+        private readonly ulong time;
+
+        public GetDeletedSinceRequest(ulong time)
+        {
+            this.time = time;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(time);
+        }
+
+        public List<int> Run(Client client)
+        {
+            List<int> result = new List<int>();
+            while (true)
+            {
+                int id = client.Receive<int>();
+                if (id == -1)
+                    break;
+                result.Add(id);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_DELETED_SINCE;
+        }
+    }
+
+    public class VeloUpdate
+    {
+        public string VersionName;
+        public string Filename;
+        public byte[] Bytes;
+    }
+
+    public class CheckUpdateRequest : IRequest<VeloUpdate>, IVersionBypassingRequest
+    {
+        public CheckUpdateRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(Version.VERSION);
+        }
+
+        public VeloUpdate Run(Client client)
+        {
+            int newVersion = client.Receive<int>();
+            if (newVersion == 0)
+            {
+                client.VerifyCrc();
+                return null;
+            }
+
+            VeloUpdate update = new VeloUpdate
+            {
+                VersionName = client.ReceiveStr(),
+                Filename = client.ReceiveStr()
+            };
+
+            int fileSize = client.Receive<int>();
+
+            update.Bytes = new byte[fileSize];
+            client.Receive(update.Bytes);
+
+            client.VerifyCrc();
+
+            return update;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.CHECK_UPDATE;
         }
     }
 }

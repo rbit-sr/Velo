@@ -15,12 +15,12 @@ namespace Velo
 
         public enum ESpeedType
         {
-            ABSOLUTE, X_VELOCITY, Y_VELOCITY, X_VELOCITY_ABSOLUTE, Y_VELOCITY_ABSOLUTE
+            ABSOLUTE, X_VELOCITY, Y_VELOCITY, X_VELOCITY_ABSOLUTE, Y_VELOCITY_ABSOLUTE, POSITION
         }
 
         private static readonly string[] SpeedTypeLabels = new[]
         {
-            "absolute", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)"
+            "absolute", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)", "position"
         };
 
         public IntSetting UpdateInterval;
@@ -140,7 +140,10 @@ namespace Velo
             {
                 lastUpdate = milliseconds;
                 text = RoundingMultiplier.Value.ToStringRounded(speed);
-                //text = "" + Velo.PlayerPos.X + "\n" + Velo.PlayerPos.Y;
+                if (SpeedType.Value == ESpeedType.POSITION)
+                    text = 
+                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Position.X) + " " +
+                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Position.Y);
                 this.speed = speed;
             }
         }
