@@ -837,7 +837,7 @@ namespace Velo
             Write(stream, obj.random);
             Write(stream, obj.groupDraw);
             stream.Write(obj.player != null ? obj.player.actor.Id : -1);
-            stream.WriteArr(obj.bools, 4);
+            stream.WriteArr(obj.bools.Select(b => b ? (byte)1 : (byte)0).ToArray(), 4);
         }
 
         private static unsafe void Read(MemoryStream stream, BoostaCoke obj)
@@ -855,7 +855,7 @@ namespace Velo
             Read(stream, obj.groupDraw);
             int playerId = stream.Read<int>();
             applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
-            obj.bools = stream.ReadArr<bool>(4);
+            obj.bools = stream.ReadArr<byte>(4).Select(b => b != 0).ToArray();
             obj.actor.UpdateCollision();
         }
 

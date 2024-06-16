@@ -404,6 +404,8 @@ namespace Velo
 
             if (LapStart != 0)
             {
+                Savestates[LapStart] = new Savestate();
+
                 size = raw.Read<int>();
                 buffer = new byte[size];
                 raw.ReadExactly(buffer, 0, size);

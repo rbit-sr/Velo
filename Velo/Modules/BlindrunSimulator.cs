@@ -120,10 +120,10 @@ namespace Velo
                 targetVel.Y = -targetVel.Y;
 
             Vector2 camVelDiff = targetVel - camVel;
-            Vector2 clamp = MaxAcc.Value * (float)Velo.GameTime.ElapsedGameTime.TotalSeconds;
+            Vector2 clamp = MaxAcc.Value * (float)Velo.CEngineInst.gameTime.ElapsedGameTime.TotalSeconds;
             camVelDiff = new Vector2(MathHelper.Clamp(camVelDiff.X, -clamp.X, clamp.X), MathHelper.Clamp(camVelDiff.Y, -clamp.Y, clamp.Y));
             camVel += camVelDiff;
-            camPos += camVel * (float)Velo.GameTime.ElapsedGameTime.TotalSeconds;
+            camPos += camVel * (float)Velo.CEngineInst.gameTime.ElapsedGameTime.TotalSeconds;
             camera.position = camPos;
         }
     }

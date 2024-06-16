@@ -17,7 +17,8 @@ namespace Velo
         GATE_NOT_CLOSED, // a gate was not closed upon starting the lap
         FALL_TILE_BROKEN, // a fall tile was broken upon starting the lap
         MOVING_LASER_NON_MENU_RESET, // player did not start the new lap from the menu on a map with moving lasers
-        WALL_RESET_BOOST, // player reset the lap while on a wall and jumped at the beginning to boost themself
+        WALL_RESET_BOOST, // player reset the lap while on a wall
+        JUMP_RESET_BOOST, // player reset the lap right after jumping
         COUNT
     }
 
@@ -160,7 +161,7 @@ namespace Velo
         public string[] Violations = new string[(int)EViolations.COUNT];
 
         public int MapId = -1;
-        private float mapProgress = 0f;
+        //private float mapProgress = 0f;
 
         private int primaryI = 0;
         private int secondaryI = 0;
@@ -295,15 +296,15 @@ namespace Velo
             secondaryI = 0;
             frames = 0;
 
-            if (Velo.PausedPrev)
+            /*if (Velo.PausedPrev)
                 mapProgress = Velo.ModuleSolo.remainingProgress;
 
             float finishLineDrift = Math.Abs(mapProgress - Velo.ModuleSolo.remainingProgress);
             float finishLineDrift2 = Math.Abs(mapProgress - finishLineDrift);
-
+            
             if (finishLineDrift > 100f && finishLineDrift2 > 500f)
                 Violations[(int)EViolations.FINISH_LINE_DRIFT] = "finish line drifted by " + Math.Min(finishLineDrift, finishLineDrift2);
-
+            */
             if (MapId == -1)
                 Violations[(int)EViolations.NON_VELO_CURATED] = "non Velo curated map";
 
@@ -371,6 +372,9 @@ namespace Velo
 
             if (Velo.MainPlayer.wall_cd > 0f)
                 OneLapReasons[(int)E1LapReasons.WALL_RESET_BOOST] = "lap reset whilst on wall";
+
+            if (Velo.MainPlayer.timespan1.TotalSeconds >= Velo.CEngineInst.gameTime.TotalGameTime.TotalSeconds - 0.25f)
+                OneLapReasons[(int)E1LapReasons.JUMP_RESET_BOOST] = "lap reset right after jumping";
         }
 
         private static RectangleF ParseRecF(string str, ref int off)

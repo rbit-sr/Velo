@@ -391,9 +391,8 @@ namespace Velo
 
         public static unsafe void WriteArr<T>(this Stream stream, T[] value, int length) where T : struct
         {
-            Write(stream, length);
-            foreach (T elem in value)
-                Write(stream, elem);
+            for (int i = 0; i < length; i++)
+                Write(stream, value[i]);
         }
 
         public static unsafe T[] ReadArr<T>(this Stream stream, int length) where T : struct

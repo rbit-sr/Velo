@@ -142,7 +142,7 @@ namespace Velo
 
         public static RunsDatabase Instance = new RunsDatabase();
 
-        private void Add(RunInfo info)
+        public void Add(RunInfo info, bool updatePlace)
         {
             if (info.Category.MapId >= Map.COUNT)
                 return;
@@ -159,6 +159,18 @@ namespace Velo
                 if (index < 0)
                     index = ~index;
                 runs.Insert(index, info.Id);
+                if (updatePlace)
+                {
+                    for (int i = index + 1; i < runs.Count; i++)
+                    {
+                        if (info.CompareTo(allRuns[runs[i]]) < 0 && allRuns[runs[i]].Place != -1)
+                        {
+                            RunInfo info2 = allRuns[runs[i]];
+                            info2.Place++;
+                            allRuns[runs[i]] = info2;
+                        }
+                    }
+                }
             }
             else
             {
@@ -166,15 +178,15 @@ namespace Velo
             }
         }
 
-        public void Add(IEnumerable<RunInfo> infos)
+        public void Add(IEnumerable<RunInfo> infos, bool updatePlace)
         {
             foreach (RunInfo info in infos)
             {
-                Add(info);
+                Add(info, updatePlace);
             }
         }
 
-        public void Remove(int id)
+        public void Remove(int id, bool updatePlace)
         {
             if (!allRuns.ContainsKey(id))
                 return;
@@ -189,15 +201,27 @@ namespace Velo
             if (index < 0)
                 return;
             runs.RemoveAt(index);
+            if (updatePlace)
+            {
+                for (int i = index; i < runs.Count; i++)
+                {
+                    if (info.CompareTo(allRuns[runs[i]]) < 0 && allRuns[runs[i]].Place != -1)
+                    {
+                        RunInfo info2 = allRuns[runs[i]];
+                        info2.Place--;
+                        allRuns[runs[i]] = info2;
+                    }
+                }
+            }
 
             allRuns.Remove(id);
         }
 
-        public void Remove(IEnumerable<int> ids)
+        public void Remove(IEnumerable<int> ids, bool updatePlace)
         {
             foreach (int id in ids)
             {
-                Remove(id);
+                Remove(id, updatePlace);
             }
         }
 
@@ -205,7 +229,7 @@ namespace Velo
         {
             info.Id = -100 - pendingRuns.Count;
             info.Place = -1;
-            Add(new List<RunInfo> { info });
+            Add(new List<RunInfo> { info }, false);
             pendingRuns.Add(info.Id);
         }
 
@@ -229,7 +253,7 @@ namespace Velo
             comments.Clear();
             foreach (var info in pending)
             {
-                Add(new List<RunInfo> { info });
+                Add(new List<RunInfo> { info }, false);
             }
         }
 
@@ -458,7 +482,7 @@ namespace Velo
         {
             getRunHandler.Push(request, (runs) =>
             {
-                Add(runs);
+                Add(runs, request is GetAddedSinceRequest);
                 onSuccess?.Invoke();
             });
             if (!addedDeletecSincePushed)
@@ -496,8 +520,8 @@ namespace Velo
 
         private void PushAddedDeletedSince()
         {
-            getRunHandler.Push(new GetAddedSinceRequest(getRunHandler.Time), (added) => { Add(added); });
-            getRunHandler.Push(new GetDeletedSinceRequest(getRunHandler.Time), (deleted) => { Remove(deleted); });
+            getRunHandler.Push(new GetAddedSinceRequest(getRunHandler.Time), (added) => { Add(added, true); });
+            getRunHandler.Push(new GetDeletedSinceRequest(getRunHandler.Time), (deleted) => { Remove(deleted, true); });
         }
 
         public Recording GetRecording(int id)
@@ -536,7 +560,7 @@ namespace Velo
 
             if (Velo.Ingame && !Velo.IngamePrev && !initRequest)
             {
-                initHandler.Push(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs));
+                initHandler.Push(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
                 initHandler.Push(new SendPlayerNameRequest());
                 initHandler.Run();
                 initRequest = true;

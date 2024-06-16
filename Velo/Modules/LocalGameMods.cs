@@ -29,6 +29,7 @@ namespace Velo
         public BoolSetting ResetBoost;
         public BoolSetting ResetBoostaCoke;
         public BoolSetting ResetWallBoost;
+        public BoolSetting ResetJumpTime;
 
         public FloatSetting CameraZoom;
         public FloatSetting CameraMaxSpeed;
@@ -70,13 +71,23 @@ namespace Velo
             EnableOldMoonwalk = AddBool("enable old moonwalk", false);
             DisableGhostLaserInteraction = AddBool("disable ghost laser interaction", true);
 
+            TimeScale.Tooltip =
+                "Slow down or speed up the time of the game.";
+            MaxSpeed.Tooltip =
+                "maximum speed the player can reach";
+            Gravity.Tooltip =
+                "gravity vector the player is pulled towards";
+            InfiniteJumps.Tooltip =
+                "Allows you to do as many air jumps as you want without landing.";
             FixGrappleGlitches.Tooltip =
                 "Fixes reverse grapples, 90s, flaccid drops.\n" +
                 "You can specify a hotkey to hold in order to temporarily disable the fix.";
-
             EnableOldMoonwalk.Tooltip =
                 "Reenables an old and long fixed glitch that allowed you to initiate a moonwalk" +
                 "by hitting ceiling slopes from below.";
+            DisableGhostLaserInteraction.Tooltip =
+                "Disables any interactions of ghosts with lasers. " +
+                "Ghosts can actually block lasers, which is forbidden as per leaderboard rules.";
 
             NewCategory("reset");
             ResetObstacles = AddBool("obstacles", true);
@@ -87,6 +98,7 @@ namespace Velo
             ResetBoost = AddBool("boost", false);
             ResetBoostaCoke = AddBool("boosta coke", false);
             ResetWallBoost = AddBool("wall boost", true);
+            ResetJumpTime = AddBool("jump time", true);
 
             CurrentCategory.Tooltip = "Things to reset to their default state when pressing the reset key.";
             ResetObstacles.Tooltip = "Respawn all obstacles (boxes) on pressing reset.";
@@ -96,7 +108,12 @@ namespace Velo
             ResetItems.Tooltip = "Destroy all currently alive items on pressing reset.";
             ResetBoost.Tooltip = "Set boost to 0 on pressing reset.";
             ResetBoostaCoke.Tooltip = "Set boosta coke to 100% on pressing reset.";
-            ResetWallBoost.Tooltip = "Set the timer for the extra acceleration you receive after getting off of a wall to 0 on pressing reset.";
+            ResetWallBoost.Tooltip =
+                "Set the timer for the extra acceleration you receive after getting off of a wall to 0 on pressing reset. " +
+                "This timer actually does not get reset on pressing reset, allowing players to get a faster acceleration by quickly jumping right after resetting.";
+            ResetJumpTime.Tooltip =
+                "Set the time point on when the player last started jumping to 0 on pressing reset. " +
+                "This time point actually does not get reset on pressing reset, increasing the ground acceleration ever so slightly for a few milliseconds right after pressing jump and then resetting due to a bug.";
 
             NewCategory("camera");
             CameraZoom = AddFloat("zoom", -1f, 0.1f, 10f);
@@ -104,6 +121,8 @@ namespace Velo
 
             CameraZoom.Tooltip =
                 "zoom (Set to -1 for no change)";
+            CameraMaxSpeed.Tooltip =
+                "maximum speed the camera can reach";
 
             NewCategory("savestates");
             SaveKey = AddHotkey("save key", 0x97);
@@ -111,6 +130,10 @@ namespace Velo
             LoadHaltDuration = AddInt("load halt duration", 0, 0, 2000);
             StoreAIVolumes = AddBool("store AI volumes", false);
 
+            SaveKey.Tooltip =
+                "Create a savestate.";
+            LoadKey.Tooltip =
+                "Load a savestate.";
             LoadHaltDuration.Tooltip =
                 "Duration in milliseconds the game will run in slow motion after loading a savestate.";
             StoreAIVolumes.Tooltip =
@@ -217,9 +240,11 @@ namespace Velo
 
             if (LoadKey.Pressed())
             {
-                savestate.Load(false);
-                Velo.LastUsedSavestateTime = 0f;
-                recorder.Restart();
+                if (savestate.Load(setGlobalTime: false))
+                {
+                    Velo.LastUsedSavestateTime = 0f;
+                    recorder.Restart();
+                }
             }
 
             if (Velo.ModuleSolo != null)
@@ -513,6 +538,10 @@ namespace Velo
             if (ResetWallBoost.Value && !obstaclesOnly)
             {
                 Velo.MainPlayer.wall_cd = 0f;
+            }
+            if (ResetJumpTime.Value && !obstaclesOnly)
+            {
+                Velo.MainPlayer.timespan1 = TimeSpan.Zero;
             }
         }
 

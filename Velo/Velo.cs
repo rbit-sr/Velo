@@ -10,7 +10,6 @@ using CEngine.Graphics.Layer;
 using Lidgren.Network;
 using SDL2;
 using System.Collections.Generic;
-using Microsoft.Xna.Framework.Input;
 
 namespace Velo
 {
@@ -23,7 +22,6 @@ namespace Velo
         public static SpriteBatch SpriteBatch;
         public static CContentBundleManager ContentManager;
         public static GraphicsDevice GraphicsDevice;
-        public static GameTime GameTime;
         public static Player MainPlayer = null;
         public static Player Ghost = null;
         public static ModuleSolo ModuleSolo = null;
@@ -54,8 +52,6 @@ namespace Velo
         private static readonly HashSet<Module> cursorRequests = new HashSet<Module>();
 
         private static int ghostPollCounter = 0;
-
-        
 
         public static Player GetMainPlayer()
         {
@@ -195,7 +191,6 @@ namespace Velo
             SpriteBatch = CEngineInst.SpriteBatch;
             ContentManager = CEngineInst.ContentBundleManager;
             GraphicsDevice = CEngineInst.GraphicsDevice;
-            GameTime = CEngineInst.gameTime;
 
             ModuleManager.Instance.Init();
             Storage.Instance.Load();
@@ -369,7 +364,7 @@ namespace Velo
         {
             if (Delta.TotalSeconds > 0.5 && ModuleSolo != null && ghostPollCounter++ > 100)
             {
-                ModuleSolo.removeGhost(GameTime);
+                ModuleSolo.removeGhost(CEngineInst.gameTime);
                 Notifications.Instance.PushNotification("Warning: Game freezing ghost detected and removed!");
                 return false;
             }
@@ -720,6 +715,11 @@ namespace Velo
             return
                 Performance.Instance.Enabled.Value &&
                 Performance.Instance.DisableBubbles.Value;
+        }
+
+        public static void particle_engine_update()
+        {
+            Performance.Instance.ParticleEngineUpdate();
         }
 
         public static bool disable_steam_input_api()

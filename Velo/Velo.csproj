@@ -83,7 +83,6 @@
     <Compile Include="Input.cs" />
     <Compile Include="Json.cs" />
     <Compile Include="Leaderboard\AutoUpdate.cs" />
-    <Compile Include="Leaderboard\Bytes.cs" />
     <Compile Include="Leaderboard\Client.cs" />
     <Compile Include="Leaderboard\Leaderboard.cs" />
     <Compile Include="Leaderboard\LeaderboardMenus.cs" />

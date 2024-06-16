@@ -38,6 +38,13 @@ namespace Velo
             SlopeSurf = AddBool("slope surf", true);
             IgnoreFullJump = AddBool("ignore full jump", false);
 
+            CurrentCategory.Tooltip =
+                "Shows you how efficient your jump holding during spam grappling or slope surfing is. " +
+                "This is an important aspect for building speed that many players are not aware of. " +
+                "For spam grappling, hold the jump button until your grapple connects for maximum efficiency. " +
+                "For slope surfing, hold the jump button as long as you can before the jump runs out and you stick to the slope. " +
+                "The jump holding display will show you how much longer you should have held jump than you actually did. " +
+                "Try to bring this number down to 0.000!";
             Grapple.Tooltip =
                 "Indicate jump holding miss for grappling.";
             SlopeSurf.Tooltip =
@@ -74,11 +81,11 @@ namespace Velo
             }
 
             if (
-                (Velo.MainPlayer.jumpPressed && !Velo.MainPlayer.sliding && !Velo.MainPlayer.on_ground && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.GameTime.TotalGameTime) ||
+                (Velo.MainPlayer.jumpPressed && !Velo.MainPlayer.sliding && !Velo.MainPlayer.on_ground && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.CEngineInst.gameTime.TotalGameTime) ||
                 (IgnoreFullJump.Value && Velo.MainPlayer.jump_vel.Y <= -359.49f)
                 )
             {
-                releaseTime = Velo.GameTime.TotalGameTime;
+                releaseTime = Velo.CEngineInst.gameTime.TotalGameTime;
             }
 
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
@@ -86,7 +93,7 @@ namespace Velo
                 wasConnected = true;
                 if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && hasJumped)
                 {
-                    miss = Velo.GameTime.TotalGameTime - releaseTime;
+                    miss = Velo.CEngineInst.gameTime.TotalGameTime - releaseTime;
                     missChanged = true;
                 }
                 hasJumped = false;
@@ -106,7 +113,7 @@ namespace Velo
                 }
                 hasJumped = false;
             }
-            timePrev = Velo.GameTime.TotalGameTime;
+            timePrev = Velo.CEngineInst.gameTime.TotalGameTime;
             velPrev = Velo.MainPlayer.actor.Velocity;
             if (!Velo.MainPlayer.on_ground)
             {

@@ -111,10 +111,10 @@ namespace Velo
                 if (result != null)
                 {
                     requests.RemoveAt(i);
-                    RunsDatabase.Instance.Remove(request.TempInfo.Id);
+                    RunsDatabase.Instance.Remove(request.TempInfo.Id, false);
                     if (result.RunInfo.Id != -1)
                     {
-                        RunsDatabase.Instance.Add(new[] { result.RunInfo });
+                        RunsDatabase.Instance.Add(result.RunInfo, true);
                         string message;
                         if (result.NewWr)
                             message = "New WR!";

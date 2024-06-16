@@ -473,6 +473,7 @@ namespace Velo
         public float R;
         private float speed;
         private Vector2 offset;
+        private Vector2 offsetFadeout;
 
         public W Child => child.Child;
 
@@ -502,7 +503,7 @@ namespace Velo
             child.Opacity = R;
             childFadeout.Opacity = 1f - R;
             child.Offset = offset * (1 - R);
-            childFadeout.Offset = offset * R;
+            childFadeout.Offset = offsetFadeout * R;
 
             if (R == 1f)
                 childFadeout.Child = null;
@@ -510,8 +511,11 @@ namespace Velo
             base.Draw(hovered, scale, opacity);
         }
 
-        public void TransitionTo(W widget, float speed, Vector2 offset)
+        public void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false)
         {
+            this.speed = speed;
+            this.offset = offset;
+            offsetFadeout = (opposite ? -1f : 1f) * offset; 
             bool transitionBack = childFadeout.Child == widget;
             childFadeout.Child = child.Child;
             child.Child = widget;
@@ -519,9 +523,7 @@ namespace Velo
             child.Opacity = R;
             childFadeout.Opacity = 1f - R;
             child.Offset = offset * (1 - R);
-            childFadeout.Offset = offset * R;
-            this.speed = speed;
-            this.offset = offset;
+            childFadeout.Offset = offsetFadeout * R;
         }
 
         public void GoTo(W widget)
@@ -858,6 +860,14 @@ namespace Velo
 
         public Vector2 Padding { get; set; }
 
+        public override void UpdateBounds(Rectangle crop)
+        {
+            base.UpdateBounds(crop);
+
+            Vector2 requestedSize = textDraw.Size + 2 * Padding;
+            Size = new Vector2(Math.Max(Size.X, requestedSize.X), Math.Max(Size.Y, requestedSize.Y));
+        }
+
         public override void Draw(Widget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
@@ -1022,14 +1032,13 @@ namespace Velo
         }
     }
 
-    public class TabbedW<W> : Widget where W : Widget
+    public class TabbedW<W> : TransitionW<W> where W : Widget
     {
         private readonly W[] tabs;
         private readonly SelectorButton selector;
 
         private int selectedPrev;
         private int selected;
-        private float r = 1f;
 
         public TabbedW(SelectorButton selector)
         {
@@ -1042,12 +1051,13 @@ namespace Velo
         public void SetTab(int i, W tab)
         {
             tabs[i] = tab;
+
+            if (i == selected)
+                GoTo(tab);
         }
 
         public IEnumerable<W> Tabs => tabs;
         public Action<W> OnSwitch { get; set; }
-
-        public override IEnumerable<Widget> Children => r < 1f ? new[] { tabs[selected], tabs[selectedPrev] } : new[] { tabs[selected] };
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -1057,43 +1067,16 @@ namespace Velo
             {
                 selectedPrev = selected;
                 selected = selector.Selected;
-                r = 0f;
+                float s = selected > selectedPrev ? 1f : -1f;
+                TransitionTo(tabs[selected], 8f, s * new Vector2(Size.X, 0), opposite: true);
                 OnSwitch?.Invoke(tabs[selected]);
             }
-
-            float dt = (float)Velo.Delta.TotalSeconds;
-            if (dt > 1f)
-                dt = 1f;
-            r += 8f * dt;
-            if (r > 1f)
-                r = 1f;
-
-            float s = selected > selectedPrev ? 1f : -1f;
-
-            tabs[selected].Position = Position + Offset + s * new Vector2((1f - r) * Size.X, 0f);
-            tabs[selected].Size = Size;
-            tabs[selected].UpdateBounds(this.crop);
-            if (r < 1f)
-            {
-                tabs[selectedPrev].Position = Position + Offset - s * new Vector2(r * Size.X, 0f);
-                tabs[selectedPrev].Size = Size;
-                tabs[selectedPrev].UpdateBounds(this.crop);
-            }
-        }
-
-        public override void Draw(Widget hovered, float scale, float opacity)
-        {
-            base.Draw(hovered, scale, opacity);
-
-            tabs[selected].Draw(hovered, scale, r * opacity * Opacity);
-            if (r < 1f)
-                tabs[selectedPrev].Draw(hovered, scale, (1f - r) * opacity * Opacity);
         }
 
         public W Current => tabs[selected];
     }
 
-    public class DualTabbedW<W> : Widget where W : Widget
+    public class DualTabbedW<W> : TransitionW<W> where W : Widget
     {
         private readonly W[] tabs;
         private readonly SelectorButton selector1;
@@ -1101,7 +1084,6 @@ namespace Velo
 
         private int selectedPrev;
         private int selected;
-        private float r = 1f;
 
         public DualTabbedW(SelectorButton selector1, SelectorButton selector2)
         {
@@ -1115,12 +1097,13 @@ namespace Velo
         public void SetTab(int i1, int i2, W tab)
         {
             tabs[i1 * selector2.Count + i2] = tab;
+
+            if (i1 * selector2.Count + i2 == selected)
+                GoTo(tab);
         }
 
         public IEnumerable<W> Tabs => tabs;
         public Action<W> OnSwitch { get; set; }
-
-        public override IEnumerable<Widget> Children => r < 1f ? new[] { tabs[selected], tabs[selectedPrev] } : new[] { tabs[selected] };
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -1130,37 +1113,10 @@ namespace Velo
             {
                 selectedPrev = selected;
                 selected = selector1.Selected * selector2.Count + selector2.Selected;
-                r = 0f;
+                float s = selected > selectedPrev ? 1f : -1f;
+                TransitionTo(tabs[selected], 8f, s * new Vector2(Size.X, 0), opposite: true);
                 OnSwitch?.Invoke(tabs[selected]);
             }
-
-            float dt = (float)Velo.Delta.TotalSeconds;
-            if (dt > 1f)
-                dt = 1f;
-            r += 8f * dt;
-            if (r > 1f)
-                r = 1f;
-
-            float s = selected > selectedPrev ? 1f : -1f;
-
-            tabs[selected].Position = Position + Offset + s * new Vector2((1f - r) * Size.X, 0f);
-            tabs[selected].Size = Size;
-            tabs[selected].UpdateBounds(this.crop);
-            if (r < 1f)
-            {
-                tabs[selectedPrev].Position = Position + Offset - s * new Vector2(r * Size.X, 0f);
-                tabs[selectedPrev].Size = Size;
-                tabs[selectedPrev].UpdateBounds(this.crop);
-            }
-        }
-
-        public override void Draw(Widget hovered, float scale, float opacity)
-        {
-            base.Draw(hovered, scale, opacity);
-
-            tabs[selected].Draw(hovered, scale, r * opacity * Opacity);
-            if (r < 1f)
-                tabs[selectedPrev].Draw(hovered, scale, (1f - r) * opacity * Opacity);
         }
 
         public W Current => tabs[selected];

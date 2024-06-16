@@ -79,6 +79,13 @@ namespace Velo
             BypassXl = AddBool("XL", false);
             BypassExcel = AddBool("Excel", false);
 
+            BypassPumpkinCosmo.Tooltip =
+                "Allows you to play Pumpkin Cosmo even when it's not ScreamRunners.";
+            BypassXl.Tooltip =
+                "Allows you to play XL even when it's not weekend.";
+            BypassExcel.Tooltip =
+                "Allows you to play Excel even when it's weekend.";
+
             NewCategory("hot reload");
             ReloadKey = AddHotkey("reload key", 0x97);
             Contents = AddStringList("contents", new string[] { "Speedrunner", "Moonraker", "Cosmonaut" });

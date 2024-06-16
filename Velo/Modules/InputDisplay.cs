@@ -45,6 +45,10 @@ namespace Velo
             FontSize = AddInt("font size", 18, 1, 50);
             Opacity = AddFloat("opacity", 1f, 0f, 1f);
 
+            Font.Tooltip =
+               "font " +
+               "(Root directory is the \"Content\" folder. For more fonts, see \"UI\\Font\" or add your own fonts.)";
+
             NewCategory("pressed");
             PressedBoxColor = AddColorTransition("box color", new ColorTransition(new Color(255, 100, 100, 175)));
             PressedTextColor = AddColorTransition("text color", new ColorTransition(Color.Black));

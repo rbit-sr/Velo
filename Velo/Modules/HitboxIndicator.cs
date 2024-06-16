@@ -4,7 +4,6 @@ using CEngine.World.Actor;
 using CEngine.World.Collision;
 using Microsoft.Xna.Framework;
 using System.Collections.Generic;
-using System.Windows.Forms;
 using CEngine.World.Collision.Shape;
 
 namespace Velo
@@ -88,7 +87,7 @@ namespace Velo
                 });
 
             IdList.Tooltip =
-                "List of actors to show the hitboxes of";
+                "list of actors to show the hitboxes of";
 
             NewCategory("color");
             LocalPlayersColor = AddColorTransition("local players", new ColorTransition(new Color(0, 255, 0, 128)));

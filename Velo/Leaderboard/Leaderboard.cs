@@ -17,17 +17,17 @@ namespace Velo
     public class LbMenuContext
     {
         private readonly WidgetContainer container;
-        private readonly TransitionW<Widget> stackTransition;
-        private readonly StackW stack;
-        private readonly TransitionW<LbMenu> menu;
+        private readonly TransitionW<Widget> menu;
+        private readonly StackW menuStack;
+        private readonly TransitionW<LbMenu> page;
         private readonly LabelW profileButton;
         private readonly LabelW versionText;
-        private readonly Stack<LbMenu> backStack;
 
+        private readonly Stack<LbMenu> backStack;
         public LeaderboardFonts Fonts;
         public string Error;
 
-        public LbMenu Menu => menu.Child; 
+        public LbMenu Menu => page.Child; 
 
         public LbMenuContext()
         {
@@ -45,10 +45,10 @@ namespace Velo
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    if (menu.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
+                    if (page.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
                         return;
 
-                    ChangeMenu(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
+                    ChangePage(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
                 }
             };
 
@@ -56,27 +56,50 @@ namespace Velo
             Style.ApplyText(versionText);
             versionText.Align = new Vector2(0f, 0.5f);
             versionText.Color = () => Color.Gray * 0.5f;
-            menu = new TransitionW<LbMenu>();
-            stack = new StackW();
-            stack.AddChild(menu, new Vector2(400f, 100f), new Vector2(1120f, 880f));
-            stack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
-            stack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            stackTransition = new TransitionW<Widget>();
-            container = new WidgetContainer(stackTransition, new Rectangle(0, 0, 1920, 1080));
+            page = new TransitionW<LbMenu>();
+            menuStack = new StackW();
+            menuStack.AddChild(page, new Vector2(400f, 100f), new Vector2(1120f, 880f));
+            menuStack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            menu = new TransitionW<Widget>();
+            container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
         }
 
-        private void TransitionTo(LbMenu newMenu)
+        public void EnterMenu(LbMenu menu)
         {
-            menu.TransitionTo(newMenu, 8f, Vector2.Zero);
+            this.menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
+            this.page.GoTo(menu);
+            ResetStateRerequest(menu);
         }
 
-        public void ChangeMenu(LbMenu newMenu)
+        public void ExitMenu(bool animation = true)
         {
-            if (menu.Child != null)
-                backStack.Push(menu.Child);
-            TransitionTo(newMenu);
+            Leaderboard.Instance.Enabled.Disable();
+            backStack.Clear();
+            if (animation)
+                menu.TransitionTo(null, 4f, new Vector2(-500f, 0f));
+            else
+                menu.GoTo(null);
+        }
 
-            ResetStateRerequest(menu.Child);
+        public void ChangePage(LbMenu newPage)
+        {
+            if (page.Child != null)
+                backStack.Push(page.Child);
+            page.TransitionTo(newPage, 8f, Vector2.Zero);
+
+            ResetStateRerequest(page.Child);
+        }
+
+        public void PushBackStack(LbMenu menu)
+        {
+            backStack.Push(menu);
+        }
+
+        public void PopPage()
+        {
+            page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
+            Rerequest(page.Child);
         }
 
         public void ResetStateRerequest(LbMenu menu)
@@ -104,37 +127,9 @@ namespace Velo
             menu.Refresh();
         }
 
-        public void PushBackStack(LbMenu menu)
-        {
-            backStack.Push(menu);
-        }
-
-        public void EnterMenu(LbMenu menu)
-        {
-            this.stackTransition.TransitionTo(stack, 4f, new Vector2(-500f, 0f));
-            this.menu.GoTo(menu);
-            ResetStateRerequest(menu);
-        }
-
-        public void ExitMenu(bool animation = true)
-        {
-            Leaderboard.Instance.Enabled.Disable();
-            backStack.Clear();
-            if (animation)
-                stackTransition.TransitionTo(null, 4f, new Vector2(-500f, 0f));
-            else
-                stackTransition.GoTo(null);
-        }
-
-        public void PopMenu()
-        {
-            TransitionTo(backStack.Pop());
-            Rerequest(menu.Child);
-        }
-
         public void Draw()
         {
-            if (stackTransition.Child == null && !stackTransition.Transitioning())
+            if (menu.Child == null && !menu.Transitioning())
                 return;
 
             CRectangleDrawComponent dimRecDraw = new CRectangleDrawComponent(0, 0, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height)
@@ -143,7 +138,7 @@ namespace Velo
                 OutlineEnabled = false,
                 OutlineThickness = 0,
                 FillEnabled = true,
-                FillColor = Leaderboard.Instance.DimColor.Value.Get() * (stackTransition.Child != null ? stackTransition.R : 1f - stackTransition.R)
+                FillColor = Leaderboard.Instance.DimColor.Value.Get() * (menu.Child != null ? menu.R : 1f - menu.R)
             };
             Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
             dimRecDraw.Draw(null);
@@ -198,7 +193,8 @@ namespace Velo
             GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
             LoopReplay = AddBool("loop replay", false);
 
-            DisableLeaderboard.Tooltip = "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
+            DisableLeaderboard.Tooltip = 
+                "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
             PreciseTimer.Tooltip =
                 "Makes the timer fully show all milliseconds (XX.XX:XXX)";
             ShowRunStatus.Tooltip = 
@@ -235,8 +231,8 @@ namespace Velo
             ButtonColor = AddColorTransition("button color", new ColorTransition(new Color(150, 150, 150, 150)));
             ButtonHoveredColor = AddColorTransition("button hovered color", new ColorTransition(new Color(200, 200, 200, 150)));
             ButtonSelectedColor = AddColorTransition("button selected color", new ColorTransition(new Color(240, 70, 100, 200)));
-            DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
             ScrollBarWidth = AddInt("scroll bar width", 10, 0, 20);
+            DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
             TimeFormat = AddEnum("time format", ETimeFormat.UNITS, new[] { "(XXm )(XXs )XXXms", "XX:XX:XXX", "XX.XX:XXX", "(XX:)XX:XXX", "(XX.)XX:XXX" });
         }
 

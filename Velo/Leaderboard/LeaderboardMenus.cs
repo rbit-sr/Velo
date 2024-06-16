@@ -270,9 +270,13 @@ namespace Velo
         private readonly ImageW image;
         private readonly LabelW label;
 
+        private readonly RunInfo run;
+
         public PlayerEntry(CFont font, RunInfo run, int maxNameLength = 100) :
             base(EOrientation.HORIZONTAL)
         {
+            this.run = run;
+            
             if (run.Id == -1)
                 return;
 
@@ -293,6 +297,17 @@ namespace Velo
             label.Text = SteamCache.GetName(run.PlayerId);
             if (label.Text.Length > maxNameLength)
                 label.Text = label.Text.Substring(0, maxNameLength) + "...";
+        }
+
+        public override void Draw(Widget hovered, float scale, float opacity)
+        {
+            if (run.Id == -1)
+                return;
+
+            image.Image = SteamCache.GetAvatar(run.PlayerId);
+            label.Text = SteamCache.GetName(run.PlayerId);
+
+            base.Draw(hovered, scale, opacity);
         }
     }
 
@@ -531,7 +546,7 @@ namespace Velo
                 {
                     if (wevent.Button == WEMouseClick.EButton.LEFT)
                     {
-                        context.ChangeMenu(new LbPlayerMenuPage(context, run.PlayerId));
+                        context.ChangePage(new LbPlayerMenuPage(context, run.PlayerId));
                     }
                 };
 
@@ -903,7 +918,7 @@ namespace Velo
             {
                 if (click.Button == WEMouseClick.EButton.LEFT)
                 {
-                    context.PopMenu();
+                    context.PopPage();
                 }
             };
 
@@ -978,7 +993,7 @@ namespace Velo
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    context.ChangeMenu(new LbMapMenuPage(context, runs.MapId));
+                    context.ChangePage(new LbMapMenuPage(context, runs.MapId));
                 }
             };
         }
@@ -1052,7 +1067,7 @@ namespace Velo
                 RunsDatabase.Instance.CancelAll();
                 if (click.Button == WEMouseClick.EButton.LEFT)
                 {
-                    context.PopMenu();
+                    context.PopPage();
                 }
             };
 
@@ -1164,7 +1179,7 @@ namespace Velo
                 {
                     if (wevent.Button == WEMouseClick.EButton.LEFT)
                     {
-                        context.ChangeMenu(new LbMapMenuPage(context, runs.MapId));
+                        context.ChangePage(new LbMapMenuPage(context, runs.MapId));
                     }
                 };
         }
@@ -1402,7 +1417,7 @@ namespace Velo
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    context.ChangeMenu(new LbPlayerMenuPage(context, player.PlayerId));
+                    context.ChangePage(new LbPlayerMenuPage(context, player.PlayerId));
                 }
             };
         }
@@ -1495,7 +1510,7 @@ namespace Velo
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    context.ChangeMenu(new LbPlayerMenuPage(context, player.PlayerId));
+                    context.ChangePage(new LbPlayerMenuPage(context, player.PlayerId));
                 }
             };
         }
@@ -1607,6 +1622,7 @@ A run is categorized as ""1 lap"" if any of the following apply:
   -A fall tile (black obstacle) was broken upon starting the lap
   -Lap did not start from countdown and reset lasers setting is disabled (powerplant and libary only)
   -Player pressed lap reset while climbing and reset wall boost setting is disabled
+  -Player pressed lap reset right after pressing jump and reset jump boost setting is disabled
 
 A run is categorized as ""Skip"" if any of the following apply:
   -Player missed a secondary checkpoint
@@ -1627,7 +1643,6 @@ A run is invalid if any of the following apply:
   -Map was not Velo curated
   -Option SuperSpeedRunners, SpeedRapture or Destructible Environment was enabled
   -Player paused the game
-  -Finish line was drifted by more than 100 units
   -Player missed a primary checkpoint
 
 Cooldowns last until running out or pressing reset.

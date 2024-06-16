@@ -10,8 +10,15 @@ namespace Velo
         public BoolSetting Enabled;
         public IntSetting Framelimit;
         public IntSetting FramelimitMethod;
+
         public BoolSetting DisableBubbles;
         public BoolSetting DisableRemotePlayersAfterimages;
+        public BoolSetting DisableBrakeParticles;
+        public BoolSetting DisableWallParticles;
+        public BoolSetting DisablePlusParticles;
+        public BoolSetting DisableGlitterParticles;
+        public BoolSetting DisableDrillSparkParticles;
+
         public BoolSetting DisableSteamInputApi;
         public IntSetting EnableControllerId;
         public BoolSetting LimitFramerateAfterRender;
@@ -42,12 +49,27 @@ namespace Velo
             NewCategory("particles");
             DisableBubbles = AddBool("disable bubbles", false);
             DisableRemotePlayersAfterimages = AddBool("disable remote players afterimages", false);
+            DisableBrakeParticles = AddBool("disable brake particles", false);
+            DisableWallParticles = AddBool("disable wall particles", false);
+            DisablePlusParticles = AddBool("disable plus particles", false);
+            DisableGlitterParticles = AddBool("disable glitter particles", false);
+            DisableDrillSparkParticles = AddBool("disable drill spark particles", false);
 
             DisableBubbles.Tooltip =
                 "Disabling bubbles gives a good performance boost on maps like SpeedCity Nights. " +
                 "The game does a collision detection for each bubble on every frame.";
             DisableRemotePlayersAfterimages.Tooltip =
                 "Disables afterimages for remote players and ghosts.";
+            DisableBrakeParticles.Tooltip =
+                "Disables small black particles that appear when braking/jumping/landing on ground.";
+            DisableWallParticles.Tooltip =
+                "Disables small white particles that appear when climbing on walls.";
+            DisablePlusParticles.Tooltip =
+                "Disables plus particles that appear when grabbing boost.";
+            DisableGlitterParticles.Tooltip =
+                "Disables glitter particles that appear when playing a golden character.";
+            DisableDrillSparkParticles.Tooltip =
+                "Disables drill spark particles that appear when using a drill.";
 
             NewCategory("input");
             DisableSteamInputApi = AddBool("disable Steam input API", false);
@@ -70,22 +92,33 @@ namespace Velo
 
         public static Performance Instance = new Performance();
 
-        public override void PostUpdate()
+        public void ParticleEngineUpdate()
         {
-            base.PostUpdate();
-
             if (!Velo.Ingame)
                 return;
 
-            if (DisableRemotePlayersAfterimages.Value)
+            Slot[] slots = Main.game.stack.gameInfo.slots;
+            foreach (Slot slot in slots)
             {
-                Slot[] slots = Main.game.stack.gameInfo.slots;
-                foreach (Slot slot in slots)
+                if (slot.Player != null)
                 {
-                    if (slot.Player != null && !slot.LocalPlayer)
-                    {
+                    if (DisableRemotePlayersAfterimages.Value && !slot.LocalPlayer)
                         slot.Player.afterImagesParticleEmitterProvider.Active = false;
+                    if (DisableBrakeParticles.Value)
+                    {
+                        slot.Player.brakeParticleEmitter.Active = false;
+                        slot.Player.brakeParticleEmitter2.time = 0f;
+                        slot.Player.brakeParticleEmitter2.Reset();
+                        slot.Player.brakeParticleEmitter3.Active = false;
                     }
+                    if (DisableWallParticles.Value)
+                        slot.Player.wallParticleEmitter.Active = false;
+                    if (DisablePlusParticles.Value)
+                        slot.Player.plusParticleEmitter.Active = false;
+                    if (DisableGlitterParticles.Value)
+                        slot.Player.glitterParticleEmitter.Active = false;
+                    if (DisableDrillSparkParticles.Value)
+                        slot.Player.drillSparkParticleEmitter.Active = false;
                 }
             }
         }
