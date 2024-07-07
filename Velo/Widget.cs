@@ -470,10 +470,12 @@ namespace Velo
     {
         private readonly HolderW<W> child;
         private readonly HolderW<W> childFadeout;
+        private TimeSpan lastTime;
         public float R;
         private float speed;
         private Vector2 offset;
         private Vector2 offsetFadeout;
+        private Action onFinish;
 
         public W Child => child.Child;
 
@@ -490,20 +492,33 @@ namespace Velo
 
         public override IEnumerable<Widget> Children => (R < 1f ? new[] { child, childFadeout } : new[] { child }).Where(child => child != null);
 
+        private static float Ease(float r)
+        {
+            return 1f - (1f - r) * (1f - r);
+        }
+
         public override void Draw(Widget hovered, float scale, float opacity)
         {
-            float dt = (float)Velo.Delta.TotalSeconds;
+            float dt = (float)(Velo.Time - lastTime).TotalSeconds;
+            lastTime = Velo.Time;
             if (dt > 1f)
                 dt = 1f;
 
             R += speed * dt;
             if (R > 1f)
+            {
                 R = 1f;
+                if (onFinish != null)
+                {
+                    onFinish();
+                    onFinish = null;
+                }
+            }
 
-            child.Opacity = R;
-            childFadeout.Opacity = 1f - R;
-            child.Offset = offset * (1 - R);
-            childFadeout.Offset = offsetFadeout * R;
+            child.Opacity = Ease(R);
+            childFadeout.Opacity = 1f - Ease(R);
+            child.Offset = offset * (1 - Ease(R));
+            childFadeout.Offset = offsetFadeout * Ease(R);
 
             if (R == 1f)
                 childFadeout.Child = null;
@@ -511,7 +526,7 @@ namespace Velo
             base.Draw(hovered, scale, opacity);
         }
 
-        public void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false)
+        public void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
         {
             this.speed = speed;
             this.offset = offset;
@@ -519,11 +534,13 @@ namespace Velo
             bool transitionBack = childFadeout.Child == widget;
             childFadeout.Child = child.Child;
             child.Child = widget;
+            lastTime = Velo.Time;
             R = transitionBack ? 1f - R : 0f;
             child.Opacity = R;
             childFadeout.Opacity = 1f - R;
             child.Offset = offset * (1 - R);
             childFadeout.Offset = offsetFadeout * R;
+            this.onFinish = onFinish;
         }
 
         public void GoTo(W widget)
@@ -600,13 +617,19 @@ namespace Velo
             {
                 if (targetScroll > root.Size.Y - Size.Y)
                 {
-                    scroll = root.Size.Y - Size.Y;
-                    targetScroll = scroll;
+                    targetScroll = root.Size.Y - Size.Y;
                 }
                 if (targetScroll < 0)
                 {
-                    scroll = 0;
                     targetScroll = 0;
+                }
+                if (scroll > root.Size.Y - Size.Y)
+                {
+                    scroll = root.Size.Y - Size.Y;
+                }
+                if (scroll < 0)
+                {
+                    scroll = 0;
                 }
 
                 float dt = (float)Velo.Delta.TotalSeconds;
@@ -920,15 +943,16 @@ namespace Velo
         }
     }
 
-    public class SelectorButton : LayoutW
+    public class SelectorButtonW : LayoutW
     {
         private readonly List<LabelW> buttons;
 
+        private TimeSpan lastTime;
         private float selectedRecR = 1f;
         private float selectedRecLeft = 0f;
         private float selectedRecInitX = 0f;
 
-        public SelectorButton(IEnumerable<string> labels, int selected, CFont font) :
+        public SelectorButtonW(IEnumerable<string> labels, int selected, CFont font) :
             base(EOrientation.HORIZONTAL)
         {
             buttons = new List<LabelW>();
@@ -979,9 +1003,15 @@ namespace Velo
             
             base.UpdateBounds(crop);
 
-            selectedRecR += 8f * (float)Velo.Delta.TotalSeconds;
+            selectedRecR += 8f * (float)(Velo.Time - lastTime).TotalSeconds;
+            lastTime = Velo.Time;
             if (selectedRecR > 1f)
                 selectedRecR = 1f;
+        }
+
+        private static float Ease(float r)
+        {
+            return 1f - (1f - r) * (1f - r);
         }
 
         public override void Draw(Widget hovered, float scale, float opacity)
@@ -995,7 +1025,7 @@ namespace Velo
             };
 
             float selectedRecTargetLeft = buttons[Selected].Position.X + buttons[Selected].Offset.X;
-            selectedRecLeft = (1f - selectedRecR) * selectedRecInitX + selectedRecR * selectedRecTargetLeft;
+            selectedRecLeft = (1f - Ease(selectedRecR)) * selectedRecInitX + Ease(selectedRecR) * selectedRecTargetLeft;
             float selectedRecRight = selectedRecLeft + buttons[Selected].Size.X;
 
             recDraw.SetPositionSize(new Vector2(selectedRecLeft, Position.Y + Offset.Y) * scale, new Vector2(buttons[Selected].Size.X, Size.Y) * scale);
@@ -1035,12 +1065,12 @@ namespace Velo
     public class TabbedW<W> : TransitionW<W> where W : Widget
     {
         private readonly W[] tabs;
-        private readonly SelectorButton selector;
+        private readonly SelectorButtonW selector;
 
         private int selectedPrev;
         private int selected;
 
-        public TabbedW(SelectorButton selector)
+        public TabbedW(SelectorButtonW selector)
         {
             tabs = new W[selector.Count];
             this.selector = selector;
@@ -1079,13 +1109,13 @@ namespace Velo
     public class DualTabbedW<W> : TransitionW<W> where W : Widget
     {
         private readonly W[] tabs;
-        private readonly SelectorButton selector1;
-        private readonly SelectorButton selector2;
+        private readonly SelectorButtonW selector1;
+        private readonly SelectorButtonW selector2;
 
         private int selectedPrev;
         private int selected;
 
-        public DualTabbedW(SelectorButton selector1, SelectorButton selector2)
+        public DualTabbedW(SelectorButtonW selector1, SelectorButtonW selector2)
         {
             tabs = new W[selector1.Count * selector2.Count];
             this.selector1 = selector1;
@@ -1241,7 +1271,7 @@ namespace Velo
             set => list.EntryCount = value;
         }
 
-        public Action<WEMouseClick, T, int> OnClickRow { get; set; }
+        public Action<WEMouseClick, Widget, T, int> OnClickRow { get; set; }
 
         public Func<T, int, LayoutW, Widget> Hook { get; set; }
 
@@ -1266,7 +1296,7 @@ namespace Velo
                     layout.AddSpace(column.Size);
             }
             if (OnClickRow != null)
-                layout.OnClick = (wevent) => OnClickRow(wevent, elem, i);
+                layout.OnClick = (wevent) => OnClickRow(wevent, layout, elem, i);
 
             if (Hook != null)
                 return Hook(elem, i, layout);

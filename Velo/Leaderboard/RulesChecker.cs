@@ -5,6 +5,7 @@ using CEngine.World.Collision.Shape;
 using System.Text.RegularExpressions;
 using CEngine.Graphics.Component;
 using System;
+using Microsoft.Xna.Framework;
 
 namespace Velo
 {
@@ -95,8 +96,9 @@ namespace Velo
 
     public class RulesChecker
     {
-        public static List<CRectangleDrawComponent> drawComps = new List<CRectangleDrawComponent>();
-        
+        public List<ICDrawComponent> drawComps = new List<ICDrawComponent>();
+        public CachedFont font;
+
         public static readonly string CHECKPOINTS_STR = @"
 0: { (1050, 2080, 100, 600), (9450, 920, 100, 450) }, { (860, 1115, 100, 70) },
 1: { (890, 1370, 100, 380), (5080, 1220, 100, 350), (1730, -10000, 100, 11330) }, { (5900, 1920, 100, 300) },
@@ -114,7 +116,7 @@ namespace Velo
 13: { (960, 3920, 100, 800), (7150, 2580, 100, 140), (650, 3300, 100, 600) }, { (11940, 1250, 100, 400), (6160, 3420, 100, 180) },
 14: { (1530, 1390, 100, 800), (14730, 2100, 270, 100), (1160, 930, 100, 450) }, { },
 15: { (480, 3280, 100, 400), (13705, 1900, 200, 100), (780, 2900, 200, 300) }, { },
-16: { (2270, 3680, 100, 400), (9260, 3040, 200, 100), (8970, 900, 350, 100), (1440, 2470, 100, 180), (1230, 3380, 100, 300) }, { },
+16: { (2270, 3680, 100, 400), (7300, 1880, 100, 750), (8970, 900, 350, 100), (1440, 2470, 100, 180), (1230, 3380, 100, 300) }, { },
 17: { (1300, -10000, 100, 11160), (11510, 920, 100, 450), (740, 1465, 1300, 100) }, { },
 18: { (7800, 20, 100, 480), (400, 850, 300, 100), (7880, 1580, 300, 100), (1940, 2060, 100, 600), (8940, 240, 100, 100) }, { },
 19: { (3950, 450, 100, 700), (14260, 2700, 700, 100), (3300, 300, 100, 850) }, { },
@@ -161,6 +163,7 @@ namespace Velo
         public string[] Violations = new string[(int)EViolations.COUNT];
 
         public int MapId = -1;
+        private int checkpointsVisibleMapId = -1;
         //private float mapProgress = 0f;
 
         private int primaryI = 0;
@@ -236,10 +239,16 @@ namespace Velo
         public void Update()
         {
             if (!Velo.Ingame)
+            {
+                MapId = -1;
+                UpdateDraws(MapId);
                 return;
+            }
+
+            UpdateDraws(MapId);
 
             //if (Velo.Pressed((ushort)Keys.F8))
-                //checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
+            //checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
 
             if (Velo.MainPlayer.gameInfo.options[(int)EGameOptions.SUPER_SPEED_RUNNERS])
                 Violations[(int)EViolations.ILLEGAL_GAME_OPTION] = "illegal game option SuperSpeedRunners";
@@ -377,6 +386,91 @@ namespace Velo
                 OneLapReasons[(int)E1LapReasons.JUMP_RESET_BOOST] = "lap reset right after jumping";
         }
 
+        private void UpdateDraws(int mapId)
+        {
+            if (!Leaderboard.Instance.ShowCheckpoints.Value)
+            {
+                if (mapId == checkpointsVisibleMapId)
+                {
+                    foreach (ICDrawComponent drawComp in drawComps)
+                    {
+                        CEngine.CEngine.Instance.LayerManager.RemoveDrawer(drawComp);
+                    }
+                    checkpointsVisibleMapId = -1;
+                }
+                return;
+            }
+
+            if (mapId == checkpointsVisibleMapId || mapId == -1)
+                return;
+
+            checkpointsVisibleMapId = mapId;
+
+            FontCache.Get(ref font, "UI\\Font\\ariblk.ttf:18");
+
+            Checkpoints current = checkpoints[mapId];
+            for (int j = 0; j < current.Primary.Count; j++)
+            {
+                CRectangleDrawComponent drawComp = new CRectangleDrawComponent(
+                    current.Primary[j].X,
+                    current.Primary[j].Y,
+                    current.Primary[j].W,
+                    current.Primary[j].H
+                    )
+                {
+                    IsVisible = true,
+                    FillEnabled = true,
+                    FillColor = Color.Red * 0.5f,
+                    OutlineEnabled = false,
+                    OutlineThickness = 0
+                };
+                drawComp.UpdateBounds();
+                CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawComp);
+                drawComps.Add(drawComp);
+
+                CTextDrawComponent drawCompText = new CTextDrawComponent("P" + j, font.Font, drawComp.Position + new Vector2(5f, current.Primary[j].H - 31f))
+                {
+                    IsVisible = true,
+                    Color = Color.White,
+                    HasDropShadow = true,
+                    DropShadowColor = Color.Black,
+                    DropShadowOffset = Vector2.One
+                };
+                CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawCompText);
+                drawComps.Add(drawCompText);
+            }
+            for (int j = 0; j < current.Secondary.Count; j++)
+            {
+                CRectangleDrawComponent drawComp = new CRectangleDrawComponent(
+                    current.Secondary[j].X,
+                    current.Secondary[j].Y,
+                    current.Secondary[j].W,
+                    current.Secondary[j].H
+                    )
+                {
+                    IsVisible = true,
+                    FillEnabled = true,
+                    FillColor = Color.Blue * 0.5f,
+                    OutlineEnabled = false,
+                    OutlineThickness = 0
+                };
+                drawComp.UpdateBounds();
+                CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawComp);
+                drawComps.Add(drawComp);
+
+                CTextDrawComponent drawCompText = new CTextDrawComponent("S" + j, font.Font, drawComp.Position + new Vector2(5f, current.Secondary[j].H - 31f))
+                {
+                    IsVisible = true,
+                    Color = Color.White,
+                    HasDropShadow = true,
+                    DropShadowColor = Color.Black,
+                    DropShadowOffset = Vector2.One
+                };
+                CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawCompText);
+                drawComps.Add(drawCompText);
+            }
+        }
+
         private static RectangleF ParseRecF(string str, ref int off)
         {
             off++;
@@ -450,55 +544,6 @@ namespace Velo
 
                 list[mapId] = new Checkpoints(primary, secondary);
             }
-
-            /*foreach (CRectangleDrawComponent drawComp in drawComps)
-            {
-                CEngine.CEngine.Instance.LayerManager.RemoveDrawer(drawComp);
-            }
-
-            int curMapId = Map.GetCurrentMapId();
-            if (curMapId != -1)
-            {
-                Checkpoints current = list[curMapId];
-                for (int j = 0; j < current.Primary.Count; j++)
-                {
-                    CRectangleDrawComponent drawComp = new CRectangleDrawComponent(
-                        current.Primary[j].X,
-                        current.Primary[j].Y,
-                        current.Primary[j].W,
-                        current.Primary[j].H
-                        )
-                    {
-                        IsVisible = true,
-                        FillEnabled = true,
-                        FillColor = Color.Red * 0.5f,
-                        OutlineEnabled = false,
-                        OutlineThickness = 0
-                    };
-                    drawComp.UpdateBounds();
-                    CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawComp);
-                    drawComps.Add(drawComp);
-                }
-                for (int j = 0; j < current.Secondary.Count; j++)
-                {
-                    CRectangleDrawComponent drawComp = new CRectangleDrawComponent(
-                        current.Secondary[j].X,
-                        current.Secondary[j].Y,
-                        current.Secondary[j].W,
-                        current.Secondary[j].H
-                        )
-                    {
-                        IsVisible = true,
-                        FillEnabled = true,
-                        FillColor = Color.Blue * 0.5f,
-                        OutlineEnabled = false,
-                        OutlineThickness = 0
-                    };
-                    drawComp.UpdateBounds();
-                    CEngine.CEngine.Instance.LayerManager.AddDrawer("LocalPlayersLayer", drawComp);
-                    drawComps.Add(drawComp);
-                }
-            }*/
 
             return list;
         }

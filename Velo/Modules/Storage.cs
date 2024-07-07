@@ -21,7 +21,7 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (modified.Count > 0 && new TimeSpan(DateTime.Now.Ticks) - lastSave >= TimeSpan.FromSeconds(1))
+            if (modified.Count > 0 && new TimeSpan(Velo.Time.Ticks) - lastSave >= TimeSpan.FromSeconds(1))
                 SaveModified();
         }
 
@@ -38,7 +38,7 @@ namespace Velo
             Save(modules);
 
             modified.Clear();
-            lastSave = new TimeSpan(DateTime.Now.Ticks);
+            lastSave = new TimeSpan(Velo.Time.Ticks);
         }
 
         public void Save(List<Module> modules)

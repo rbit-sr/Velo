@@ -6,6 +6,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Windows.Forms;
 using Microsoft.Xna.Framework;
 
 namespace Velo
@@ -302,10 +303,10 @@ namespace Velo
 
         public static bool IsFocused()
         {
-            if (DateTime.Now.Ticks >= lastFocusedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
+            if (Velo.Time.Ticks >= lastFocusedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
             {
                 focused = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
-                lastFocusedUpdate = new TimeSpan(DateTime.Now.Ticks);
+                lastFocusedUpdate = new TimeSpan(Velo.Time.Ticks);
             }
 
             return focused;
@@ -319,14 +320,17 @@ namespace Velo
 
         public static bool IsMinimized()
         {
-            if (DateTime.Now.Ticks >= lastMinimizedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
+            if (Velo.Time.Ticks >= lastMinimizedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
             {
                 minimized = IsIconic(Process.GetCurrentProcess().MainWindowHandle);
-                lastMinimizedUpdate = new TimeSpan(DateTime.Now.Ticks);
+                lastMinimizedUpdate = Velo.Time;
             }
 
             return minimized;
         }
+
+        [DllImport("User32.dll")]
+        public static extern short GetAsyncKeyState(Keys key);
     }
 
     public static class StreamUtil

@@ -155,6 +155,7 @@ namespace Velo
         public BoolSetting ShowRunStatus;
         public FloatSetting GhostOffsetTime;
         public BoolSetting LoopReplay;
+        public BoolSetting ShowCheckpoints;
 
         public HotkeySetting Refresh;
         public HotkeySetting StopReplay;
@@ -192,15 +193,17 @@ namespace Velo
             ShowRunStatus = AddBool("show run status", false);
             GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
             LoopReplay = AddBool("loop replay", false);
+            ShowCheckpoints = AddBool("show checkpoints", false);
 
             DisableLeaderboard.Tooltip = 
                 "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
             PreciseTimer.Tooltip =
                 "Makes the timer fully show all milliseconds (XX.XX:XXX)";
             ShowRunStatus.Tooltip = 
-                "Shows the categorization and validation status of the current run in the top left corner. " +
+                "Show the categorization and validation status of the current run in the top left corner. " +
                 "'1' means 1 lap and 'X' means invalid.";
             GhostOffsetTime.Tooltip = "ghost offset time in seconds";
+            ShowCheckpoints.Tooltip = "Show the primary and secondary checkpoints of Velo's rule checking system.";
 
             NewCategory("hotkeys");
             Refresh = AddHotkey("refresh", 0x97);

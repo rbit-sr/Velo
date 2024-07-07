@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System;
 using CEngine.World.Actor;
 using System.IO;
+using System.Threading.Tasks;
+using Newtonsoft.Json.Linq;
+using System.Drawing;
 
 namespace Velo
 {
@@ -34,8 +37,8 @@ namespace Velo
         public FloatSetting CameraZoom;
         public FloatSetting CameraMaxSpeed;
 
-        public HotkeySetting SaveKey;
-        public HotkeySetting LoadKey;
+        public HotkeySetting[] SaveKeys = new HotkeySetting[10];
+        public HotkeySetting[] LoadKeys = new HotkeySetting[10];
         public IntSetting LoadHaltDuration;
         public BoolSetting StoreAIVolumes;
 
@@ -45,7 +48,8 @@ namespace Velo
         public HotkeySetting Step1Key;
         public HotkeySetting Step10Key;
 
-        private readonly Savestate savestate;
+        private readonly Dictionary<string, Savestate> savestates = new Dictionary<string, Savestate>();
+        private readonly Dictionary<string, TimeSpan> savestatesFileModifiedTimes = new Dictionary<string, TimeSpan>();
         public long savestateLoadTime = 0;
 
         private int stepCount = 0;
@@ -125,15 +129,27 @@ namespace Velo
                 "maximum speed the camera can reach";
 
             NewCategory("savestates");
-            SaveKey = AddHotkey("save key", 0x97);
-            LoadKey = AddHotkey("load key", 0x97);
+            // nested categories are not directly supported so this might be a bit ugly
+            SettingCategory saveCategory = Add(new SettingCategory(this, "save"));
+            saveCategory.Tooltip = "Create a savestate.";
+            for (int i = 0; i < 10; i++)
+            {
+                SaveKeys[i] = new HotkeySetting(this, "save " + (i + 1) + " key", 0x97);
+                saveCategory.Children.Add(SaveKeys[i]);
+            }
+            SettingCategory loadCategory = Add(new SettingCategory(this, "load"));
+            loadCategory.Tooltip = "Load a savestate.";
+            for (int i = 0; i < 10; i++)
+            {
+                LoadKeys[i] = new HotkeySetting(this, "load " + (i + 1) + " key", 0x97);
+                loadCategory.Children.Add(LoadKeys[i]);
+            }
             LoadHaltDuration = AddInt("load halt duration", 0, 0, 2000);
             StoreAIVolumes = AddBool("store AI volumes", false);
 
-            SaveKey.Tooltip =
-                "Create a savestate.";
-            LoadKey.Tooltip =
-                "Load a savestate.";
+            CurrentCategory.Tooltip =
+                "Savestates allow you to save the current state of the player and level and to then restore it at any time by pressing a hotkey. " +
+                "Savestates are stored in \"Velo\\savestate\".";
             LoadHaltDuration.Tooltip =
                 "Duration in milliseconds the game will run in slow motion after loading a savestate.";
             StoreAIVolumes.Tooltip =
@@ -164,8 +180,6 @@ namespace Velo
                 "Steps 1 frame forward. Automatically freezes the game.";
             Step10Key.Tooltip =
                 "Steps 10 frames forward. Automatically freezes the game.";
-
-            savestate = new Savestate();
         }
 
         public static LocalGameMods Instance = new LocalGameMods();
@@ -190,7 +204,7 @@ namespace Velo
                     if (savestateLoadTime == 0 || LoadHaltDuration.Value == 0)
                         return TimeScale.Value;
 
-                    long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                    long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
                     float ratio = (float)Math.Min(milliseconds - savestateLoadTime, LoadHaltDuration.Value) / LoadHaltDuration.Value;
 
                     return TimeScale.Value * ratio;
@@ -230,20 +244,40 @@ namespace Velo
                 Freeze.ToggleState();
             }
 
-            if (SaveKey.Pressed())
+            for (int i = 0; i < 10; i++)
             {
-                if (StoreAIVolumes.Value)
-                    savestate.Save(new List<Savestate.ActorType> { Savestate.AIVolume }, Savestate.EListMode.EXCLUDE);
-                else
-                    savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
-            }
+                string key = "ss" + (i + 1);
 
-            if (LoadKey.Pressed())
-            {
-                if (savestate.Load(setGlobalTime: false))
+                if (SaveKeys[i].Pressed())
                 {
-                    Velo.LastUsedSavestateTime = 0f;
-                    recorder.Restart();
+                    if (!savestates.ContainsKey(key))
+                        savestates.Add(key, new Savestate());
+                    if (StoreAIVolumes.Value)
+                        savestates[key].Save(new List<Savestate.ActorType> { Savestate.AIVolume }, Savestate.EListMode.EXCLUDE);
+                    else
+                        savestates[key].Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
+                    Task.Run(() =>
+                    {
+                        if (!Directory.Exists("Velo\\savestate"))
+                            Directory.CreateDirectory("Velo\\savestate");
+                        using (FileStream stream = new FileStream("Velo\\savestate\\" + key + ".srss", FileMode.OpenOrCreate, FileAccess.Write))
+                        {
+                            stream.Write((int)savestates[key].Stream.Length);
+                            byte[] buffer = new byte[savestates[key].Stream.Length];
+                            savestates[key].Stream.Position = 0;
+                            savestates[key].Stream.Read(buffer, 0, buffer.Length);
+                            stream.Write(buffer, 0, buffer.Length);
+                        }
+                    });
+                }
+
+                if (savestates.ContainsKey(key) && LoadKeys[i].Pressed())
+                {
+                    if (savestates[key].Load(setGlobalTime: false))
+                    {
+                        Velo.LastUsedSavestateTime = 0f;
+                        recorder.Restart();
+                    }
                 }
             }
 
@@ -310,6 +344,34 @@ namespace Velo
                 recorder.PreUpdate();
                 playback.PreUpdate();
                 playbackGhost.PreUpdate();
+            }
+
+            if (Directory.Exists("Velo\\savestate"))
+            {
+                string[] files = Directory.GetFiles("Velo\\savestate");
+                foreach (string file in files)
+                {
+                    string key = Path.GetFileNameWithoutExtension(file);
+                    TimeSpan modified = new TimeSpan(File.GetLastWriteTime("Velo\\savestate\\" + key + ".srss").Ticks);
+
+                    if (!savestatesFileModifiedTimes.ContainsKey(file) || savestatesFileModifiedTimes[file] != modified)
+                    {
+                        savestatesFileModifiedTimes[file] = modified;
+                        Task.Run(() =>
+                        {
+                            if (!savestates.ContainsKey(key))
+                                savestates.Add(key, new Savestate());
+                            using (FileStream stream = new FileStream("Velo\\savestate\\" + key + ".srss", FileMode.Open, FileAccess.Read))
+                            {
+                                int size = stream.Read<int>();
+                                byte[] buffer = new byte[size];
+                                stream.ReadExactly(buffer, 0, size);
+                                savestates[key].Stream.Position = 0;
+                                savestates[key].Stream.Write(buffer, 0, size);
+                            }
+                        });
+                    }
+                }
             }
         }
 

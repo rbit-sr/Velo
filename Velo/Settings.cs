@@ -320,7 +320,7 @@ namespace Velo
             {
                 if (autoRepeat)
                 {
-                    pressTime = new TimeSpan(DateTime.Now.Ticks);
+                    pressTime = Velo.Time;
                     lastRepeat = TimeSpan.Zero;
                 }
                 return true;
@@ -329,7 +329,7 @@ namespace Velo
             if (!autoRepeat || !Input.Held(Value))
                 return false;
 
-            TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
+            TimeSpan now = Velo.Time;
 
             if ((now - pressTime).TotalSeconds >= 0.5 && (now - lastRepeat).TotalSeconds >= 0.05)
             {

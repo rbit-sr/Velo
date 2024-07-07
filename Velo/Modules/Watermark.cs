@@ -43,7 +43,7 @@ namespace Velo
                 if (LocalGameMods.Instance.DtFixed)
                     text += "\nTAS";
 
-                long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
                 if (milliseconds - LocalGameMods.Instance.savestateLoadTime <= 500)
                     text += "\nload";
 

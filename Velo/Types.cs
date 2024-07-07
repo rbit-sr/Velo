@@ -132,7 +132,7 @@ namespace Velo
             if (colors.Length == 1)
                 return Util.ApplyAlpha(colors[0]);
 
-            long milliseconds = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+            long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
 
             return Get(milliseconds, true);
         }

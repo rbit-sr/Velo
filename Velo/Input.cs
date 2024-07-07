@@ -5,8 +5,23 @@ namespace Velo
 {
     public static class Input
     {
+        private struct KeyboardOemState
+        {
+            public bool Oem1;
+            public bool Oem2;
+            public bool Oem3;
+            public bool Oem4;
+            public bool Oem5;
+            public bool Oem6;
+            public bool Oem7;
+            public bool Oem8;
+            public bool Oem102;
+        }
+
         private static KeyboardState keysPrev;
         private static KeyboardState keysCurr;
+        private static KeyboardOemState keysOemPrev;
+        private static KeyboardOemState keysOemCurr;
         private static GamePadState gamePadPrev;
         private static GamePadState gamePadCurr;
 
@@ -20,7 +35,7 @@ namespace Velo
             COUNT
         }
 
-        private static bool IsDown(KeyboardState keys, GamePadState gamePad, ushort key)
+        private static bool IsDown(KeyboardState keys, KeyboardOemState keysOem, GamePadState gamePad, ushort key)
         {
             if ((key & 0x400) != 0)
             {
@@ -72,26 +87,64 @@ namespace Velo
                 bool shiftDown = keys[Keys.LeftShift] == KeyState.Down || keys[Keys.RightShift] == KeyState.Down;
                 bool ctrlDown = keys[Keys.LeftControl] == KeyState.Down || keys[Keys.RightControl] == KeyState.Down;
 
-                return
-                    keys[(Keys)(key & 0xff)] == KeyState.Down &&
-                    isShift == shiftDown && isCtrl == ctrlDown;
+                if (isShift != shiftDown || isCtrl != ctrlDown)
+                    return false;
+
+                switch ((System.Windows.Forms.Keys)key)
+                {
+                    case System.Windows.Forms.Keys.Oem1:
+                        return keysOem.Oem1;
+                    case System.Windows.Forms.Keys.Oem2:
+                        return keysOem.Oem2;
+                    case System.Windows.Forms.Keys.Oem3:
+                        return keysOem.Oem3;
+                    case System.Windows.Forms.Keys.Oem4:
+                        return keysOem.Oem4;
+                    case System.Windows.Forms.Keys.Oem5:
+                        return keysOem.Oem5;
+                    case System.Windows.Forms.Keys.Oem6:
+                        return keysOem.Oem6;
+                    case System.Windows.Forms.Keys.Oem7:
+                        return keysOem.Oem7;
+                    case System.Windows.Forms.Keys.Oem8:
+                        return keysOem.Oem8;
+                    case System.Windows.Forms.Keys.Oem102:
+                        return keysOem.Oem102;
+                }
+
+                return keys[(Keys)(key & 0xff)] == KeyState.Down;
             }
         }
 
         public static bool Pressed(ushort key)
         {
-            return IsDown(keysCurr, gamePadCurr, key) && !IsDown(keysPrev, gamePadPrev, key);
+            return IsDown(keysCurr, keysOemCurr, gamePadCurr, key) && !IsDown(keysPrev, keysOemPrev, gamePadPrev, key);
         }
 
         public static bool Held(ushort key)
         {
-            return IsDown(keysCurr, gamePadCurr, key);
+            return IsDown(keysCurr, keysOemCurr, gamePadCurr, key);
         }
 
         public static void Update()
         {
             keysPrev = keysCurr;
             keysCurr = Keyboard.GetState();
+
+            keysOemPrev = keysOemCurr;
+            keysOemCurr = new KeyboardOemState();
+            if (Util.IsFocused())
+            {
+                keysOemCurr.Oem1 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem1) & 0x8000) > 0;
+                keysOemCurr.Oem2 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem2) & 0x8000) > 0;
+                keysOemCurr.Oem3 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem3) & 0x8000) > 0;
+                keysOemCurr.Oem4 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem4) & 0x8000) > 0;
+                keysOemCurr.Oem5 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem5) & 0x8000) > 0;
+                keysOemCurr.Oem6 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem6) & 0x8000) > 0;
+                keysOemCurr.Oem7 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem7) & 0x8000) > 0;
+                keysOemCurr.Oem8 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem8) & 0x8000) > 0;
+                keysOemCurr.Oem102 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem102) & 0x8000) > 0;
+            }
 
             gamePadPrev = gamePadCurr;
             gamePadCurr = GamePad.GetState((PlayerIndex)SettingsUI.Instance.ControllerIndex.Value);

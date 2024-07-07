@@ -152,7 +152,7 @@ namespace Velo
             ModuleManager.Instance.Add(this);
         }
 
-        private T Add<T>(T setting) where T : Setting
+        public T Add<T>(T setting) where T : Setting
         {
             if (currentCategory == null)
             {

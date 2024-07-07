@@ -720,7 +720,7 @@ namespace Velo
                 long time = recording[i].Time;
                 cengine.gameTime = new GameTime(new TimeSpan(time), new TimeSpan(delta));
 
-                TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
+                TimeSpan now = new TimeSpan(Velo.Time.Ticks);
                 if ((now - lastNotificationUpdate).TotalSeconds > 0.25)
                 {
                     lastNotificationUpdate = now;

@@ -25,14 +25,14 @@ namespace Velo
         {
             notificationQueue.Enqueue(message);
             if (notificationQueue.Count == 1)
-                notificationBegin = new TimeSpan(DateTime.Now.Ticks);
+                notificationBegin = Velo.Time;
         }
 
         public void PopNotification()
         {
             notificationQueue.Dequeue();
             if (notificationQueue.Count >= 1)
-                notificationBegin = new TimeSpan(DateTime.Now.Ticks);
+                notificationBegin = Velo.Time;
             textDraw = null;
         }
 
@@ -40,7 +40,7 @@ namespace Velo
         {
             notificationQueue.Clear();
             notificationQueue.Enqueue(message);
-            notificationBegin = new TimeSpan(DateTime.Now.Ticks);
+            notificationBegin = Velo.Time;
             textDraw = null;
         }
 
@@ -51,7 +51,7 @@ namespace Velo
             if (notificationQueue.Count == 0)
                 return;
 
-            TimeSpan age = new TimeSpan(DateTime.Now.Ticks) - notificationBegin;
+            TimeSpan age = Velo.Time - notificationBegin;
             if (age > TimeSpan.FromSeconds(3.0))
                 PopNotification();
 

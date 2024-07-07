@@ -17,6 +17,7 @@ namespace Velo
     {
         private static TimeSpan lastFrameTime = TimeSpan.Zero;
 
+        public static TimeSpan Time;
         public static TimeSpan Delta;
         public static CEngine.CEngine CEngineInst;
         public static SpriteBatch SpriteBatch;
@@ -204,10 +205,10 @@ namespace Velo
         // replaces the game's update call
         public static void game_update(GameTime gameTime)
         {
-            TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
+            Time = new TimeSpan(DateTime.Now.Ticks);
             if (lastFrameTime != new TimeSpan())
-                Delta = now - lastFrameTime;
-            lastFrameTime = now;
+                Delta = Time - lastFrameTime;
+            lastFrameTime = Time;
 
             Input.Update();
            

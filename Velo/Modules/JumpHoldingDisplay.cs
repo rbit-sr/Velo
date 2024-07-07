@@ -91,7 +91,7 @@ namespace Velo
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
             {
                 wasConnected = true;
-                if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && hasJumped)
+                if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && new Vector2(velPrev.X, Velo.MainPlayer.jump_vel.Y).Length() > 750f && hasJumped)
                 {
                     miss = Velo.CEngineInst.gameTime.TotalGameTime - releaseTime;
                     missChanged = true;
@@ -106,7 +106,7 @@ namespace Velo
             if (Velo.MainPlayer.on_ground && !wasOnGround)
             {
                 wasOnGround = true;
-                if (SlopeSurf.Value && velPrev.Y < 0.0f && hasJumped)
+                if (SlopeSurf.Value && velPrev.Y < -10.0f && Velo.MainPlayer.actor.Velocity.Y < -10.0f && hasJumped)
                 {
                     miss = timePrev - releaseTime;
                     missChanged = true;

@@ -94,7 +94,7 @@ namespace Velo
                 if (!InitImGui())
                 {
                     unsupportedWarned = true;
-                    unsupportedWarningTime = new TimeSpan(DateTime.Now.Ticks);
+                    unsupportedWarningTime = new TimeSpan(Velo.Time.Ticks);
                     CEngine.CEngine.Instance.Game.IsMouseVisible = false;
                     return;
                 }
@@ -243,7 +243,7 @@ namespace Velo
         {
             if (
                 DisableWarning.Value ||
-                new TimeSpan(DateTime.Now.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10))
+                new TimeSpan(Velo.Time.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10))
             {
                 FontCache.Release(ref unsupportedWarningFont);
                 return;

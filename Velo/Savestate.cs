@@ -1702,7 +1702,7 @@ namespace Velo
             stream.Position = 0;
 
             int valid = stream.Read<int>();
-            if (valid == -1)
+            if (valid == -1 || valid > 1)
                 return false;
 
             int prevIndex = (int)stream.Position;
@@ -1721,7 +1721,7 @@ namespace Velo
             }
 
             if (watermark)
-                LocalGameMods.Instance.savestateLoadTime = DateTime.Now.Ticks / TimeSpan.TicksPerMillisecond;
+                LocalGameMods.Instance.savestateLoadTime = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
             
             long time = stream.Read<long>();
             if (setGlobalTime)
