@@ -4,6 +4,8 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.IO;
 using System.Linq;
+using System.Diagnostics;
+using Microsoft.Xna.Framework;
 
 namespace Velo
 {
@@ -30,7 +32,11 @@ namespace Velo
         GET_SCORES,
         GET_ADDED_SINCE,
         GET_DELETED_SINCE,
-        CHECK_UPDATE
+        CHECK_UPDATE,
+        GET_PLAYER_PBS_NON_CURATED,
+        GET_WRS_NON_CURATED,
+        GET_NON_CURATED_ORDER,
+        SEND_MAP_NAME
     }
 
     public enum ERequestStatus
@@ -82,7 +88,7 @@ namespace Velo
             });
         }
 
-        public void Run(Action<Exception> onFailure = null)
+        public void Run(Action<Exception> onFailure = null, bool wait = false)
         {
             List<RequestEntry> requests2 = requests;
             requests = new List<RequestEntry>();
@@ -201,6 +207,8 @@ namespace Velo
                 }
                 return false;
             });
+            if (wait)
+                task.Wait();
         }
 
         public void Cancel()
@@ -211,6 +219,7 @@ namespace Velo
                 cancel.Dispose();
                 cancel = null;
             }
+            requests = new List<RequestEntry>();
         }
 
         public ERequestStatus Status
@@ -290,6 +299,42 @@ namespace Velo
         }
     }
 
+    public class GetPlayerPBsNonCuratedRequest : IRequest<List<RunInfo>>
+    {
+        private readonly ulong playerId;
+
+        public GetPlayerPBsNonCuratedRequest(ulong playerId)
+        {
+            this.playerId = playerId;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(playerId);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_PLAYER_PBS_NON_CURATED;
+        }
+    }
+
     public class GetWRsRequest : IRequest<List<RunInfo>>
     {
         public GetWRsRequest()
@@ -321,6 +366,74 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.GET_WRS;
+        }
+    }
+
+    public class GetWRsNonCuratedRequest : IRequest<List<RunInfo>>
+    {
+        public GetWRsNonCuratedRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_WRS_NON_CURATED;
+        }
+    }
+
+    public class GetNonCuratedOrder : IRequest<List<ulong>>
+    {
+        public GetNonCuratedOrder()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public List<ulong> Run(Client client)
+        {
+            List<ulong> result = new List<ulong>();
+            while (true)
+            {
+                ulong current = client.Receive<ulong>();
+                if (current == ulong.MaxValue)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_NON_CURATED_ORDER;
         }
     }
 
@@ -564,8 +677,36 @@ namespace Velo
 
         public NewPbInfo Run(Client client)
         {
+            long deltaSum = 0;
+            for (int i = recording.LapStart; i < recording.Count; i++)
+            {
+                deltaSum += recording[i].Delta;
+            }
+            float avgFramerate = 1f / (float)new TimeSpan(deltaSum / (recording.Count - 1 - recording.LapStart)).TotalSeconds;
+
             client.Send(recording.Info);
+            client.Send(recording.Timepoints[recording.LapStart].Ticks);
+            client.Send(recording.Timepoints[recording.Count - 1].Ticks);
+            client.Send(avgFramerate);
             client.SendCrc();
+
+            if (!Velo.CheckForVerifier(error: true))
+                return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
+
+            int salt = client.Receive<int>();
+            Task<int> verification = Task.Run(() =>
+            {
+                try
+                {
+                    Process process = Process.Start("VeloVerifier.exe", salt + "");
+                    process.WaitForExit();
+                    return process.ExitCode;
+                }
+                catch (Exception)
+                {
+                    return 0;
+                }
+            });
 
             int timeSave = client.Receive<int>();
             
@@ -574,7 +715,7 @@ namespace Velo
                 client.VerifyCrc();
                 return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
             }
-
+            
             int newWr = client.Receive<int>();
             client.VerifyCrc();
 
@@ -585,7 +726,33 @@ namespace Velo
             client.Send(bytes.Length);
             client.Send(bytes);
 
+            verification.Wait();
+            if (verification.Result == 0)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Unable to check for client modifications!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.Lime, TimeSpan.FromSeconds(6d));
+            }
+            client.Send(verification.Result);
+
             client.SendCrc();
+
+            int verificationResult = client.Receive<int>();
+            if (verificationResult == -1)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Time manipulation detected!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.Lime, TimeSpan.FromSeconds(6d));
+            }
+            if (verificationResult == -2)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Client modifications detected!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.Lime, TimeSpan.FromSeconds(6d));
+            }
 
             RunInfo result = client.Receive<RunInfo>();
             client.VerifyCrc();
@@ -659,7 +826,7 @@ namespace Velo
         {
             ulong steamId = Steamworks.SteamUser.GetSteamID().m_SteamID;
             client.Send(steamId);
-            client.Send(SteamCache.GetName(steamId));
+            client.Send(SteamCache.GetPlayerName(steamId));
             client.SendCrc();
 
             return "";
@@ -668,6 +835,35 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.SEND_PLAYER_NAME;
+        }
+    }
+
+    public class SendMapNameRequest : IRequest<string>
+    {
+        private readonly ulong mapId;
+
+        public SendMapNameRequest(ulong mapId)
+        {
+            this.mapId = mapId; 
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public string Run(Client client)
+        {
+            client.Send(mapId);
+            client.Send(Map.MapIdToName(mapId));
+            client.SendCrc();
+
+            return "";
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.SEND_MAP_NAME;
         }
     }
 

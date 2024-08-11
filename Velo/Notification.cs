@@ -7,9 +7,16 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace Velo
 {
+    public struct Notification
+    {
+        public string Text;
+        public Color Color;
+        public TimeSpan Duration;
+    }
+
     public class Notifications : Module
     {
-        private readonly Queue<string> notificationQueue = new Queue<string>();
+        private readonly Queue<Notification> notificationQueue = new Queue<Notification>();
         private TimeSpan notificationBegin = TimeSpan.Zero;
         private CachedFont font;
         private CTextDrawComponent textDraw;
@@ -21,11 +28,16 @@ namespace Velo
 
         public static Notifications Instance = new Notifications();
 
-        public void PushNotification(string message)
+        public void PushNotification(string message, Color color, TimeSpan duration)
         {
-            notificationQueue.Enqueue(message);
+            notificationQueue.Enqueue(new Notification { Text = message, Color = color, Duration = duration });
             if (notificationQueue.Count == 1)
                 notificationBegin = Velo.Time;
+        }
+
+        public void PushNotification(string message)
+        {
+            PushNotification(message, Color.LightGreen, TimeSpan.FromSeconds(3d));
         }
 
         public void PopNotification()
@@ -36,12 +48,17 @@ namespace Velo
             textDraw = null;
         }
 
-        public void ForceNotification(string message)
+        public void ForceNotification(string message, Color color, TimeSpan duration)
         {
             notificationQueue.Clear();
-            notificationQueue.Enqueue(message);
+            notificationQueue.Enqueue(new Notification { Text = message, Color = color, Duration = duration });
             notificationBegin = Velo.Time;
             textDraw = null;
+        }
+
+        public void ForceNotification(string message)
+        {
+            ForceNotification(message, Color.LightGreen, TimeSpan.FromSeconds(3d));
         }
 
         public override void PostRender()
@@ -52,7 +69,7 @@ namespace Velo
                 return;
 
             TimeSpan age = Velo.Time - notificationBegin;
-            if (age > TimeSpan.FromSeconds(3.0))
+            if (age > notificationQueue.Peek().Duration)
                 PopNotification();
 
             if (notificationQueue.Count == 0)
@@ -62,9 +79,9 @@ namespace Velo
 
             if (textDraw == null)
             {
-                textDraw = new CTextDrawComponent(notificationQueue.Peek(), font.Font, Vector2.Zero)
+                textDraw = new CTextDrawComponent(notificationQueue.Peek().Text, font.Font, Vector2.Zero)
                 {
-                    Color = Color.LightGreen,
+                    Color = notificationQueue.Peek().Color,
                     HasDropShadow = true,
                     DropShadowColor = Color.Black,
                     DropShadowOffset = Vector2.One,
@@ -73,7 +90,9 @@ namespace Velo
                 };
                 textDraw.UpdateBounds();
             }
-            textDraw.Opacity = age.TotalSeconds <= 2.0 ? 1f : (float)(3.0 - age.TotalSeconds);
+            textDraw.Opacity = age <= notificationQueue.Peek().Duration - TimeSpan.FromSeconds(1d) ? 
+                1f : 
+                (float)(notificationQueue.Peek().Duration - age).TotalSeconds;
             textDraw.Scale = CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height / 1080f * Vector2.One;
 
             float screenWidth = Velo.GraphicsDevice.Viewport.Width;

@@ -7,6 +7,7 @@ using CEngine.Graphics.Component;
 using System.Linq;
 
 using Microsoft.Xna.Framework.Input;
+using Newtonsoft.Json.Linq;
 
 namespace Velo
 {
@@ -517,7 +518,7 @@ namespace Velo
 
             child.Opacity = Ease(R);
             childFadeout.Opacity = 1f - Ease(R);
-            child.Offset = offset * (1 - Ease(R));
+            child.Offset = offset * (1f - Ease(R));
             childFadeout.Offset = offsetFadeout * Ease(R);
 
             if (R == 1f)
@@ -857,7 +858,7 @@ namespace Velo
 
         public LabelW(string text, CFont font)
         {
-            textDraw = new CTextDrawComponent(text, font, Vector2.Zero)
+            textDraw = new CTextDrawComponent("", font, Vector2.Zero)
             {
                 IsVisible = true,
                 Align = 0.5f * Vector2.One,
@@ -865,6 +866,7 @@ namespace Velo
                 DropShadowColor = Microsoft.Xna.Framework.Color.Black,
                 DropShadowOffset = Vector2.One
             };
+            Text = text;
         }
 
         public Vector2 Align
@@ -875,11 +877,7 @@ namespace Velo
 
         public Func<Color> Color { get; set; }
         
-        public string Text
-        {
-            get => textDraw.StringText;
-            set => textDraw.StringText = value;
-        }
+        public string Text { get; set; }
 
         public Vector2 Padding { get; set; }
 
@@ -898,6 +896,20 @@ namespace Velo
             if (!Visible)
                 return;
 
+            if (Text == null)
+                Text = "";
+
+            string[] textLines = Text.Split('\n');
+
+            for (int i = 0; i < textLines.Length; i++)
+            {
+                while (textDraw.Font.MeasureString(textLines[i]).X > Size.X)
+                {
+                    textLines[i] = textLines[i].Substring(0, textLines[i].Length - 1);
+                }
+            }
+
+            textDraw.StringText = string.Join("\n", textLines);
             textDraw.color_replace = false;
             textDraw.Offset = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Padding + Offset;
             textDraw.Scale = Vector2.One * scale;

@@ -43,15 +43,10 @@ namespace Velo
                 if (LocalGameMods.Instance.DtFixed)
                     text += "\nTAS";
 
-                long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
-                if (milliseconds - LocalGameMods.Instance.savestateLoadTime <= 500)
+                if ((Velo.Time - LocalGameMods.Instance.SavestateLoadTime).TotalSeconds <= 0.5f)
                     text += "\nload";
-
-                int status = LocalGameMods.Instance.CurrentRunStatus();
-                if (Leaderboard.Instance.ShowRunStatus.Value && status != 0)
-                    text += "\n" + (status == 1 ? "1" : "X");
             }
-            else
+            else if (!LocalGameMods.Instance.IsOwnPlaybackFromLeaderboard())
             {
                 text = "\nreplay";
             }

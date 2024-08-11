@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using Microsoft.Xna.Framework.Graphics;
+using Steamworks;
 
 namespace Velo
 {
@@ -8,7 +9,7 @@ namespace Velo
         private static readonly Dictionary<ulong, string> names = new Dictionary<ulong, string>();
         private static readonly Dictionary<ulong, Texture2D> avatars = new Dictionary<ulong, Texture2D>();
 
-        public static string GetName(ulong id)
+        public static string GetPlayerName(ulong id)
         {
             if (names.ContainsKey(id))
             {
@@ -59,6 +60,29 @@ namespace Velo
             if (avatar == CEngine.CEngine.Instance.WhitePixel)
                 Steamworks.SteamFriends.RequestUserInformation(new Steamworks.CSteamID(id), false);
             return avatar;
+        }
+
+        private static readonly Dictionary<ulong, string> fileNames = new Dictionary<ulong, string>();
+
+        public static string FileIdToName(ulong id)
+        {
+            if (id == ulong.MaxValue)
+                return "[unknown]";
+
+            if (fileNames.ContainsKey(id))
+                return fileNames[id];
+
+            CallResult<RemoteStorageGetPublishedFileDetailsResult_t> callback = CallResult<RemoteStorageGetPublishedFileDetailsResult_t>.Create((res, failure) =>
+            {
+                fileNames[id] = res.m_rgchTitle != "" ? res.m_rgchTitle : "[deleted]";
+            });
+
+            fileNames.Add(id, "[" + id + "]");
+
+            var apiCall = SteamRemoteStorage.GetPublishedFileDetails(new PublishedFileId_t(id), 0);
+            callback.Set(apiCall, null);
+
+            return fileNames[id];
         }
     }
 }

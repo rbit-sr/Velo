@@ -6,108 +6,12 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System.Linq;
 using Steamworks;
-using CEngine.Util.UI.Widget;
-using System.Runtime.CompilerServices;
-using CEngine.Graphics.Layer;
+using static Velo.Playback;
+using System.Threading.Tasks;
 
 namespace Velo
 {
-    public static class Style
-    {
-        public static void ApplyText(LabelW text)
-        {
-            text.Color = () => Leaderboard.Instance.TextColor.Value.Get();
-        }
-
-        public static void ApplyTextHeader(LabelW text)
-        {
-            text.Color = () => Leaderboard.Instance.HeaderTextColor.Value.Get();
-        }
-
-        public static void ApplyButton(LabelW button)
-        {
-            button.Hoverable = true;
-            button.BackgroundVisible = true;
-            button.BackgroundVisibleHovered = true;
-            button.Color = () => Leaderboard.Instance.TextColor.Value.Get();
-            button.BackgroundColor = () => Leaderboard.Instance.ButtonColor.Value.Get();
-            button.BackgroundColorHovered = () => Leaderboard.Instance.ButtonHoveredColor.Value.Get();
-        }
-
-        public static void ApplySelectorButton(SelectorButtonW button)
-        {
-            button.ButtonBackgroundVisible = true;
-            button.ButtonBackgroundVisibleHovered = true;
-            button.ButtonBackgroundVisibleSelected = true;
-            button.Color = () => Leaderboard.Instance.TextColor.Value.Get();
-            button.ButtonBackgroundColor = () => Leaderboard.Instance.ButtonColor.Value.Get();
-            button.ButtonBackgroundColorHovered = () => Leaderboard.Instance.ButtonHoveredColor.Value.Get();
-            button.ButtonBackgroundColorSelected = () => Leaderboard.Instance.ButtonSelectedColor.Value.Get();
-        }
-    }
-
-    public static class LoadSymbol
-    {
-        public static readonly int SIZE = 50;
-        private static readonly float RADIUS = 20f;
-        private static readonly float WIDTH = 4f;
-        private static Texture2D texture;
-
-        public static Texture2D Get()
-        {
-            if (texture != null)
-                return texture;
-
-            texture = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, SIZE, SIZE);
-            Color[] pixels = new Color[SIZE * SIZE];
-
-            for (int y = 0; y < SIZE; y++)
-            {
-                for (int x = 0; x < SIZE; x++)
-                {
-                    Vector2 diff = new Vector2(x, y) + 0.5f * Vector2.One - new Vector2(SIZE, SIZE) / 2;
-                    float length = diff.Length();
-                    if (length <= RADIUS + 0.5 && length >= RADIUS - WIDTH - 0.5)
-                    {
-                        float factor = 1f;
-                        if (length >= RADIUS - 0.5f)
-                        {
-                            factor *= RADIUS - length + 0.5f;
-                        }
-                        if (length <= RADIUS - WIDTH + 0.5)
-                        {
-                            factor *= length - RADIUS + WIDTH + 0.5f;
-                        }
-
-                        pixels[x + SIZE * y] = Color.Lerp(Color.Black, Color.White, (float)(Math.Atan2(diff.Y, diff.X) / (2.0 * Math.PI) + 0.5)) * factor;
-                    }
-                    else
-                    {
-                        pixels[x + SIZE * y] = Color.Transparent;
-                    }
-                }
-            }
-            texture.SetData(pixels);
-            return texture;
-        }
-    }
-
-    public abstract class LbMenu : HolderW<Widget>
-    {
-        protected LbMenuContext context;
-
-        public LbMenu(LbMenuContext context) :
-            base()
-        {
-            this.context = context;
-        }
-
-        public abstract void Refresh();
-        public abstract void Rerequest();
-        public abstract void ResetState();
-    }
-
-    public abstract class LbMenuPage : LbMenu
+    public abstract class LbMenuPage : Menu
     {
         protected LabelW title;
         protected LayoutW titleBar;
@@ -133,7 +37,7 @@ namespace Velo
                 this.title = new LabelW(title, context.Fonts.FontLarge.Font)
                 {
                     Align = new Vector2(0f, 0.5f),
-                    Color = () => Leaderboard.Instance.HeaderTextColor.Value.Get()
+                    Color = Leaderboard.Instance.HeaderTextColor.Value.Get
                 };
                 titleBar = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
                 titleBar.AddChild(this.title, LayoutW.FILL);
@@ -217,7 +121,7 @@ namespace Velo
         }
     }
 
-    public abstract class LbTable<T> : LbMenu, ITableEntryFactory<T> where T : struct
+    public abstract class LbTable<T> : Menu, ITableEntryFactory<T> where T : struct
     {
         protected readonly TableW<T> table;
 
@@ -227,13 +131,13 @@ namespace Velo
             table = new TableW<T>(context.Fonts.FontMedium.Font, 0, 40, this)
             {
                 HeaderAlign = new Vector2(0f, 0.5f),
-                HeaderColor = () => Leaderboard.Instance.HeaderTextColor.Value.Get(),
+                HeaderColor = Leaderboard.Instance.HeaderTextColor.Value.Get,
                 EntryBackgroundVisible = true,
-                EntryBackgroundColor1 = () => Leaderboard.Instance.EntryColor1.Value.Get(),
-                EntryBackgroundColor2 = () => Leaderboard.Instance.EntryColor2.Value.Get(),
+                EntryBackgroundColor1 = Leaderboard.Instance.EntryColor1.Value.Get,
+                EntryBackgroundColor2 = Leaderboard.Instance.EntryColor2.Value.Get,
                 EntryHoverable = true,
-                EntryBackgroundColorHovered = () => Leaderboard.Instance.EntryHoveredColor.Value.Get(),
-                ScrollBarColor = () => Leaderboard.Instance.ButtonColor.Value.Get(),
+                EntryBackgroundColorHovered = Leaderboard.Instance.EntryHoveredColor.Value.Get,
+                ScrollBarColor = Leaderboard.Instance.ButtonColor.Value.Get,
                 ScrollBarWidth = Leaderboard.Instance.ScrollBarWidth.Value
             };
             table.AddSpace(10f);
@@ -274,7 +178,7 @@ namespace Velo
 
         private readonly RunInfo run;
 
-        public PlayerEntry(CFont font, RunInfo run, int maxNameLength = 100) :
+        public PlayerEntry(CFont font, RunInfo run) :
             base(EOrientation.HORIZONTAL)
         {
             this.run = run;
@@ -296,9 +200,7 @@ namespace Velo
                 label.Color = Leaderboard.Instance.HighlightTextColor.Value.Get;
 
             image.Image = SteamCache.GetAvatar(run.PlayerId);
-            label.Text = SteamCache.GetName(run.PlayerId);
-            if (label.Text.Length > maxNameLength)
-                label.Text = label.Text.Substring(0, maxNameLength) + "...";
+            label.Text = SteamCache.GetPlayerName(run.PlayerId);
         }
 
         public override void Draw(Widget hovered, float scale, float opacity)
@@ -307,7 +209,7 @@ namespace Velo
                 return;
 
             image.Image = SteamCache.GetAvatar(run.PlayerId);
-            label.Text = SteamCache.GetName(run.PlayerId);
+            label.Text = SteamCache.GetPlayerName(run.PlayerId);
 
             base.Draw(hovered, scale, opacity);
         }
@@ -369,22 +271,31 @@ namespace Velo
 
     public class MapEntry : LabelW
     {
+        private RunInfo run;
+        
         public MapEntry(CFont font, RunInfo run) :
             base("", font)
         {
+            this.run = run;
+            
             Align = new Vector2(0f, 0.5f);
             Style.ApplyText(this);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Color = Leaderboard.Instance.HighlightTextColor.Value.Get;
+        }
 
+        public override void Draw(Widget hovered, float scale, float opacity)
+        {
             if (run.Id == -1)
             {
                 Text = "";
             }
             else
             {
-                Text = Map.MapIdToName[run.Category.MapId];
+                Text = Map.MapIdToName(run.Category.MapId);
             }
+
+            base.Draw(hovered, scale, opacity);
         }
     }
 
@@ -411,12 +322,22 @@ namespace Velo
 
     public class AllMapEntry : LabelW
     {
-        public AllMapEntry(CFont font, int mapId) :
+        private readonly ulong mapId;
+
+        public AllMapEntry(CFont font, ulong mapId) :
             base("", font)
         {
+            this.mapId = mapId;
+
             Align = new Vector2(0f, 0.5f);
             Style.ApplyText(this);
-            Text = Map.MapIdToName[mapId];
+        }
+
+        public override void Draw(Widget hovered, float scale, float opacity)
+        {
+            Text = Map.MapIdToName(mapId);
+
+            base.Draw(hovered, scale, opacity);
         }
     }
 
@@ -426,19 +347,28 @@ namespace Velo
 
         private readonly LabelW time;
 
-        public PlayerTimeEntry(CFont font, RunInfo run) :
-            base(EOrientation.VERTICAL)
+        public PlayerTimeEntry(CFont font, RunInfo run, bool compact = false) :
+            base(!compact ? EOrientation.VERTICAL : EOrientation.HORIZONTAL)
         {
-            player = new PlayerEntry(font, run, 13);
+            player = new PlayerEntry(font, run);
 
             time = new LabelW("", font)
             {
-                Align = new Vector2(0f, 0.5f)
+                Align = new Vector2(!compact ? 0f : 1f, 0.5f)
             };
 
-            AddChild(time, 40);
-            AddSpace(4);
-            AddChild(player, 40);
+            if (!compact)
+            {
+                AddChild(time, 40);
+                AddSpace(4);
+                AddChild(player, 40);
+            }
+            else
+            {
+                AddChild(player, FILL);
+                AddSpace(10);
+                AddChild(time, 170);
+            }
             Style.ApplyText(time);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 time.Color = Leaderboard.Instance.HighlightTextColor.Value.Get;
@@ -480,18 +410,23 @@ namespace Velo
     {
         private class ExpandedRow : TransitionW<Widget>
         {
+            private readonly RunInfo run;
+
             private readonly Widget original;
             private readonly LabelW viewProfile;
+            private readonly LabelW mapPage;
             private readonly LabelW setGhost;
             private readonly LabelW viewReplay;
             private readonly LabelW verify;
+            private readonly LabelW comments;
             private readonly LayoutW layout;
 
             public Widget Original => original;
             public Widget Expanded => layout;
 
-            public ExpandedRow(Widget original, LbMenuContext context, RunInfo run, Action<int, Playback.EPlaybackType> requestRecording)
+            public ExpandedRow(Widget original, LbMenuContext context, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
             {
+                this.run = run;
                 this.original = original;
 
                 LabelW generalLabels = new LabelW("", context.Fonts.FontMedium.Font)
@@ -506,13 +441,13 @@ namespace Velo
                 {
                     Align = Vector2.Zero,
                     Text =
-                        SteamCache.GetName(run.PlayerId) + "\n" +
-                        Map.MapIdToName[run.Category.MapId] + "\n" +
+                        SteamCache.GetPlayerName(run.PlayerId) + "\n" +
+                        Map.MapIdToName(run.Category.MapId) + "\n" +
                         ((ECategoryType)run.Category.TypeId).Label() + "\n" +
                         Util.FormatTime(run.RunTime, Leaderboard.Instance.TimeFormat.Value) + "\n" +
                         (run.Place != -1 ? "" + (run.Place + 1) : "-") + "\n" +
                         (run.WasWR == 1 ? "Yes" : "No") + "\n" +
-                        DateTimeOffset.FromUnixTimeSeconds(run.CreateTime).LocalDateTime.ToString("dd MMM yyyy") + "\n" +
+                        DateTimeOffset.FromUnixTimeSeconds(run.CreateTime).LocalDateTime.ToString("dd MMM yyyy - HH:mm") + "\n" +
                         run.Id
                 };
                 Style.ApplyText(generalValues);
@@ -548,12 +483,19 @@ namespace Velo
                 viewProfile.OnClick = (wevent) =>
                 {
                     if (wevent.Button == WEMouseClick.EButton.LEFT)
-                    {
                         context.ChangePage(new LbPlayerMenuPage(context, run.PlayerId));
-                    }
+                };
+                mapPage = new LabelW("Map page", context.Fonts.FontMedium.Font);
+                Style.ApplyButton(mapPage);
+                mapPage.Hoverable = false;
+                mapPage.OnClick = (wevent) =>
+                {
+                    if (wevent.Button == WEMouseClick.EButton.LEFT)
+                        context.ChangePage(new LbMapMenuPage(context, run.Category.MapId));
                 };
 
                 LayoutW avatarLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+                avatarLayout.AddSpace(20f);
                 avatarLayout.AddChild(avatar, 180f);
                 avatarLayout.AddSpace(10f);
                 avatarLayout.AddChild(viewProfile, 40f);
@@ -562,13 +504,13 @@ namespace Velo
                 LayoutW infos = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
                 infos.AddSpace(40f);
                 infos.AddChild(generalLabels, 120f);
-                infos.AddChild(generalValues, 150f);
-                infos.AddSpace(100f);
+                infos.AddChild(generalValues, 280f);
+                infos.AddSpace(20f);
                 infos.AddChild(statsLabels, 200f);
                 infos.AddChild(statsValues, 150f);
                 infos.AddSpace(LayoutW.FILL);
-                infos.AddChild(avatarLayout, 180f);
-                infos.AddSpace(20f);
+                infos.AddChild(avatarLayout, 200f);
+                infos.AddSpace(40f);
 
                 setGhost = new LabelW("Set ghost", context.Fonts.FontMedium.Font);
                 Style.ApplyButton(setGhost);
@@ -594,7 +536,7 @@ namespace Velo
                     if (wevent.Button == WEMouseClick.EButton.LEFT)
                         requestRecording(run.Id, Playback.EPlaybackType.VERIFY);
                 };
-
+                
                 LayoutW buttons = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
                 buttons.AddSpace(40f);
                 buttons.AddChild(setGhost, 240f);
@@ -603,6 +545,11 @@ namespace Velo
                 buttons.AddSpace(10f);
                 buttons.AddChild(verify, 240f);
                 buttons.AddSpace(LayoutW.FILL);
+                if (mapPageButton)
+                {
+                    buttons.AddChild(mapPage, 200f);
+                    buttons.AddSpace(40f);
+                }
 
                 layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
                 layout.AddSpace(10f);
@@ -610,7 +557,7 @@ namespace Velo
                 layout.AddSpace(10f);
                 if (run.HasComments != 0)
                 {
-                    LabelW comments = new LabelW(RunsDatabase.Instance.GetComment(run.Id), context.Fonts.FontMedium.Font);
+                    comments = new LabelW(RunsDatabase.Instance.GetComment(run.Id), context.Fonts.FontMedium.Font);
                     Style.ApplyText(comments);
                     comments.Align = Vector2.Zero;
                     comments.Padding = 10f * Vector2.One;
@@ -622,9 +569,9 @@ namespace Velo
                     };
 
                     LayoutW commentsLayout = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-                    commentsLayout.AddSpace(10f);
+                    commentsLayout.AddSpace(20f);
                     commentsLayout.AddChild(scroll, LayoutW.FILL);
-                    commentsLayout.AddSpace(10f);
+                    commentsLayout.AddSpace(20f);
 
                     layout.AddChild(commentsLayout, 200f);
                     layout.AddSpace(10f);
@@ -633,7 +580,7 @@ namespace Velo
                 layout.AddSpace(10f);
 
                 Crop = true;
-
+                
                 original.BackgroundVisible = false;
                 original.Hoverable = false;
                 GoTo(original);
@@ -646,21 +593,36 @@ namespace Velo
                 if (widget == Original)
                 {
                     viewProfile.Hoverable = false;
+                    mapPage.Hoverable = false;
                     setGhost.Hoverable = false;
                     viewReplay.Hoverable = false;
                     verify.Hoverable = false;
+                }
+                else
+                {
+                    Crop = true;
                 }
                 TransitionTo(widget, 8f, Vector2.Zero, onFinish: () =>
                 {
                     if (widget == Expanded)
                     {
                         viewProfile.Hoverable = true;
+                        mapPage.Hoverable = true;
                         setGhost.Hoverable = true;
                         viewReplay.Hoverable = true;
                         verify.Hoverable = true;
                     }
+                    else
+                    {
+                        Crop = false;
+                    }
                     onFinish?.Invoke();
                 });
+            }
+
+            public void RefreshComments()
+            {
+                comments.Text = RunsDatabase.Instance.GetComment(run.Id);
             }
         }
 
@@ -671,9 +633,9 @@ namespace Velo
         private readonly Dictionary<int, ExpandedRow> expanded = new Dictionary<int, ExpandedRow>();
 
         private int requestedId = -1;
-        private Playback.EPlaybackType requestedPlaybackType = default;
+        private EPlaybackType requestedPlaybackType = default;
 
-        public LbRunsTable(LbMenuContext context) :
+        public LbRunsTable(LbMenuContext context, bool mapPageButton) :
             base(context)
         {
             table.OnClickRow = (wevent, row, elem, i) =>
@@ -695,7 +657,7 @@ namespace Velo
                         expandedId = elem.Id;
                         if (!expanded.TryGetValue(expandedId, out ExpandedRow expandedRow) || expandedRow == null)
                         {
-                            expandedRow = new ExpandedRow(row, context, elem, RequestRecording)
+                            expandedRow = new ExpandedRow(row, context, elem, mapPageButton, InitiatePlayback)
                             {
                                 OnClick = row.OnClick
                             };
@@ -703,12 +665,12 @@ namespace Velo
                         }
 
                         expandedRow.TransitionTo(expandedRow.Expanded);
-                    }
 
-                    if (expandedId != -1 && elem.HasComments != 0)
-                        RunsDatabase.Instance.RequestComment(elem.Id, null, (error) => context.Error = error.Message);
-                    else
-                        RunsDatabase.Instance.CancelRequestComment();
+                        if (expandedId != -1 && elem.HasComments != 0)
+                            RunsDatabase.Instance.RequestComment(elem.Id, expandedRow.RefreshComments, (error) => context.Error = error.Message);
+                        else
+                            RunsDatabase.Instance.CancelRequestComment();
+                    }
 
                     table.Refresh(i);
                 }
@@ -721,7 +683,7 @@ namespace Velo
             };
         }
 
-        private void RequestRecording(int id, Playback.EPlaybackType type)
+        private void InitiatePlayback(int id, Playback.EPlaybackType type)
         {
             if (id == requestedId && type == requestedPlaybackType)
                 return;
@@ -730,38 +692,32 @@ namespace Velo
             requestedPlaybackType = type;
 
             RunsDatabase.Instance.CancelRequestRecording();
-            int currentMapId = Map.GetCurrentMapId();
-            if (currentMapId == -1 || RunsDatabase.Instance.Get(id).Category.MapId != currentMapId)
+            ulong currentMapId = Map.GetCurrentMapId();
+            if (currentMapId == ulong.MaxValue || RunsDatabase.Instance.Get(id).Category.MapId != currentMapId)
             {
                 context.Error = "Please enter the respective map first!";
                 return;
             }
-            if (type == Playback.EPlaybackType.SET_GHOST && Velo.Ghost == null)
-            {
-                context.Error = "Please spawn a ghost by finishing a lap first!";
-                return;
-            }
 
-            Recording cachedRecording = RunsDatabase.Instance.GetRecording(id);
-            if (cachedRecording != null)
-            {
-                Velo.AddOnPreUpdate(() =>
+            int ghostIndex = !Leaderboard.Instance.EnableMultiGhost.Value ? 0 : LocalGameMods.Instance.GhostPlaybackCount();
+            if (type == EPlaybackType.SET_GHOST)
+                Ghosts.Instance.GetOrSpawn(!Leaderboard.Instance.EnableMultiGhost.Value ? 0 : LocalGameMods.Instance.GhostPlaybackCount(), Leaderboard.Instance.GhostDifferentColors.Value);
+           
+            RunsDatabase.Instance.RequestRecordingCached(id, (recording) =>
                 {
-                    context.ExitMenu(false);
-                    LocalGameMods.Instance.StartPlayback(cachedRecording, type);
-                });
-            }
-            else
-            {
-                RunsDatabase.Instance.RequestRecording(id,
-                    (recording) =>
+                    Task.Run(() =>
                     {
-                        context.ExitMenu(false);
-                        LocalGameMods.Instance.StartPlayback(recording, type);
-                    },
-                    (error) => context.Error = error.Message
-                );
-            }
+                        if (type == EPlaybackType.SET_GHOST)
+                            Ghosts.Instance.WaitForGhost(ghostIndex);
+                        Velo.AddOnPreUpdate(() =>
+                        {
+                            context.ExitMenu(false);
+                            LocalGameMods.Instance.StartPlayback(recording, type, notification: !Leaderboard.Instance.DisableReplayNotifications.Value);
+                        });
+                    });
+                },
+                (error) => context.Error = error.Message
+            );
         }
 
         public override void Refresh()
@@ -830,7 +786,7 @@ namespace Velo
         private readonly EFilter filter;
 
         public LbMapRunsTable(LbMenuContext context, Category category, EFilter filter) :
-            base(context)
+            base(context, mapPageButton: false)
         {
             this.category = category;
             this.filter = filter;
@@ -882,13 +838,18 @@ namespace Velo
         private readonly LabelW backButton;
         private readonly LabelW workshopPageButton;
         private readonly LayoutW workshopPageButtonLayout;
+        private readonly LabelW enterMapButton;
+        private readonly LayoutW enterMapButtonLayout;
 
-        public LbMapMenuPage(LbMenuContext context, int mapId) :
-            base(context, Map.MapIdToName[mapId], buttonRowUpper: true, buttonRowLower: true)
+        public LbMapMenuPage(LbMenuContext context, ulong mapId) :
+            base(context, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
         {
-            string[] categories = Map.HasSkip(mapId) ?
+            string[] categories = !Map.IsOrigins(mapId) ? Map.HasSkip(mapId) ?
                 new string[] { "New Lap", "1 Lap", "New Lap (Skip)", "1 Lap (Skip)" } :
-                new string[] { "New Lap", "1 Lap" };
+                new string[] { "New Lap", "1 Lap" } :
+                Map.Has100Perc(mapId) ? 
+                new string[] { "Any%", "100%" } :
+                new string[] { "Any%" };
 
             categorySelect = new SelectorButtonW(categories, 0, context.Fonts.FontMedium.Font);
             Style.ApplySelectorButton(categorySelect);
@@ -903,10 +864,10 @@ namespace Velo
             {
                 for (int i2 = 0; i2 < filters.Length; i2++)
                 {
-                    tables.SetTab(i1, i2, new LbMapRunsTable(context, new Category { MapId = (byte)mapId, TypeId = (byte)i1 }, (LbMapRunsTable.EFilter)i2));
+                    tables.SetTab(i1, i2, new LbMapRunsTable(context, new Category { MapId = mapId, TypeId = (ulong)(!Map.IsOrigins(mapId) ? i1 : i1 + 4) }, (LbMapRunsTable.EFilter)i2));
                 }
             }
-            tables.OnSwitch = context.Rerequest;
+            tables.OnSwitch = _ => context.Rerequest();
 
             content.Child = tables;
             
@@ -921,13 +882,14 @@ namespace Velo
             };
 
             buttonRowUpper.AddSpace(LayoutW.FILL);
-            buttonRowUpper.AddChild(filterSelect, 600);
+            buttonRowUpper.AddChild(filterSelect, 570);
 
-            buttonRowLower.AddChild(backButton, 200);
+            buttonRowLower.AddChild(backButton, 190);
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(categorySelect, Map.HasSkip(mapId) ? 800 : 400);
+            buttonRowLower.AddChild(categorySelect, categories.Length * 190);
 
-            if (Map.MapIdToFileId.TryGetValue(mapId, out ulong fileId))
+            ulong fileId = mapId;
+            if (Map.IsOther(mapId) || Map.MapIdToFileId.TryGetValue(mapId, out fileId))
             {
                 workshopPageButton = new LabelW("Workshop page", context.Fonts.FontMedium.Font);
                 Style.ApplyButton(workshopPageButton);
@@ -942,8 +904,25 @@ namespace Velo
                 workshopPageButtonLayout.AddSpace(LayoutW.FILL);
                 workshopPageButtonLayout.AddChild(workshopPageButton, 35f);
 
-                titleBar.AddSpace(LayoutW.FILL);
                 titleBar.AddChild(workshopPageButtonLayout, 220f);
+            }
+            if (Map.IsOrigins(mapId))
+            {
+                enterMapButton = new LabelW("Enter map", context.Fonts.FontMedium.Font);
+                Style.ApplyButton(enterMapButton);
+                enterMapButton.OnClick = click =>
+                {
+                    if (click.Button == WEMouseClick.EButton.LEFT)
+                    {
+                        Origins.Instance.SelectOrigins(mapId);
+                        context.ExitMenu(animation: false);
+                    }
+                };
+                enterMapButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+                enterMapButtonLayout.AddSpace(LayoutW.FILL);
+                enterMapButtonLayout.AddChild(enterMapButton, 35);
+
+                titleBar.AddChild(enterMapButtonLayout, 190f);
             }
         }
 
@@ -967,7 +946,7 @@ namespace Velo
     {
         public enum EFilter
         {
-            OFFICIAL, RWS, OLD_RWS,
+            OFFICIAL, RWS, OLD_RWS, ORIGINS, OTHER,
             COUNT
         }
 
@@ -982,11 +961,23 @@ namespace Velo
             this.playerId = playerId;
             this.filter = filter;
 
+            int colWidth = filter != EFilter.OTHER && filter != EFilter.ORIGINS ? 230 : 280;
             table.AddColumn("Map", LayoutW.FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium.Font, runs.MapId));
-            table.AddColumn("New Lap", 220, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.NewLap));
-            table.AddColumn("1 Lap", 220, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.OneLap));
-            table.AddColumn("New Lap (Skip)", 220, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.NewLapSkip));
-            table.AddColumn("1 Lap (Skip)", 220, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.OneLapSkip));
+            if (filter != EFilter.ORIGINS)
+            {
+                table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.NewLap));
+                table.AddColumn("1 Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.OneLap));
+                if (filter != EFilter.OTHER)
+                {
+                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.NewLapSkip));
+                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.OneLapSkip));
+                }
+            }
+            else
+            {
+                table.AddColumn("Any%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.AnyPerc));
+                table.AddColumn("100%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium.Font, runs.HundredPerc));
+            }
             table.OnClickRow = (wevent, row, runs, i) =>
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
@@ -1001,11 +992,15 @@ namespace Velo
             switch (filter)
             {
                 case EFilter.OFFICIAL:
-                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId).Where((infos) => Map.IsOfficial(infos.MapId));
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, true).Where((infos) => Map.IsOfficial(infos.MapId));
                 case EFilter.RWS:
-                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId).Where((infos) => Map.IsRWS(infos.MapId));
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, true).Where((infos) => Map.IsRWS(infos.MapId));
                 case EFilter.OLD_RWS:
-                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId).Where((infos) => Map.IsOldRWS(infos.MapId));
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, true).Where((infos) => Map.IsOldRWS(infos.MapId));
+                case EFilter.ORIGINS:
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, true).Where((infos) => Map.IsOrigins(infos.MapId));
+                case EFilter.OTHER:
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, false).Where((infos) => infos.NewLap.Id != -1 || infos.OneLap.Id != -1);
                 default:
                     return null;
             }
@@ -1023,7 +1018,9 @@ namespace Velo
 
         public override void Rerequest()
         {
+            RunsDatabase.Instance.PushRequestNonCuratedOrder(null);
             RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(PlayerId), null);
+            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(PlayerId), null);
         }
     }
 
@@ -1045,7 +1042,7 @@ namespace Velo
         public ulong PlayerId => playerId;
 
         public LbPlayerMenuPage(LbMenuContext context, ulong playerId) :
-            base(context, SteamCache.GetName(playerId), buttonRowLower: true)
+            base(context, SteamCache.GetPlayerName(playerId), buttonRowLower: true)
         {
             this.playerId = playerId;
 
@@ -1057,7 +1054,7 @@ namespace Velo
             statsValues1 = new LabelW("", context.Fonts.FontMedium.Font);
             Style.ApplyText(statsValues1);
             statsValues1.Align = new Vector2(0f, 0.5f);
-            statsTitles2 = new LabelW("Score:\n", context.Fonts.FontMedium.Font);
+            statsTitles2 = new LabelW("Score:\nPerfection:", context.Fonts.FontMedium.Font);
             Style.ApplyText(statsTitles2);
             statsTitles2.Align = new Vector2(0f, 0.5f);
             statsValues2 = new LabelW("", context.Fonts.FontMedium.Font);
@@ -1078,7 +1075,7 @@ namespace Velo
                 }
             };
 
-            string[] filters = new string[] { "Official", "RWS", "Old RWS" };
+            string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
 
             filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium.Font);
             Style.ApplySelectorButton(filterSelect);
@@ -1088,13 +1085,13 @@ namespace Velo
             {
                 tables.SetTab(i, new LbPlayerRunsTable(context, playerId, (LbPlayerRunsTable.EFilter)i));
             }
-            tables.OnSwitch = context.Rerequest;
+            tables.OnSwitch = _ => context.Rerequest();
 
             content.Child = tables;
 
-            buttonRowLower.AddChild(backButton, 200f);
+            buttonRowLower.AddChild(backButton, 190f);
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(filterSelect, 600f);
+            buttonRowLower.AddChild(filterSelect, 950f);
 
             steamPageButton = new LabelW("Steam page", context.Fonts.FontMedium.Font);
             Style.ApplyButton(steamPageButton);
@@ -1110,11 +1107,11 @@ namespace Velo
             steamPageButtonLayout.AddChild(steamPageButton, 35f);
             steamPageButtonLayout.Offset = new Vector2(0f, 7f);
 
-            titleBar.AddChild(steamPageButtonLayout, 180f);
+            titleBar.AddChild(steamPageButtonLayout, 190f);
             titleBar.AddSpace(10f);
             titleBar.AddChild(statsTitles1, 65f);
-            titleBar.AddChild(statsValues1, 65f);
-            titleBar.AddChild(statsTitles2, 80f);
+            titleBar.AddChild(statsValues1, 95f);
+            titleBar.AddChild(statsTitles2, 130f);
             titleBar.AddChild(statsValues2, 80f);
         }
 
@@ -1125,15 +1122,33 @@ namespace Velo
             statsValues1.Text = "";
             statsValues2.Text = "";
 
-            int count = 0;
-            foreach (MapRunInfos info in RunsDatabase.Instance.GetPlayerPBs(playerId))
+            int pbs = 0;
+            int pbsNonCurated = 0;
+            long perfectTimeSum = 0;
+            long timeSum = 0;
+            foreach (MapRunInfos infos in RunsDatabase.Instance.GetPlayerPBs(playerId, true))
             {
-                if (info.NewLap.Id != -1) count++;
-                if (info.OneLap.Id != -1) count++;
-                if (info.NewLapSkip.Id != -1) count++;
-                if (info.OneLapSkip.Id != -1) count++;
+                for (int t = 0; t < 4; t++)
+                {
+                    RunInfo info = infos.Get((ECategoryType)t);
+                    if (info.Id != -1)
+                    {
+                        pbs++;
+                        perfectTimeSum += RunsDatabase.Instance.GetWR(info.Category).RunTime;
+                        timeSum += info.RunTime;
+                    }
+                }
             }
-            statsValues1.Text += "" + count;
+            foreach (MapRunInfos infos in RunsDatabase.Instance.GetPlayerPBs(playerId, false))
+            {
+                for (int t = 0; t < 4; t++)
+                {
+                    RunInfo info = infos.Get((ECategoryType)t);
+                    if (info.Id != -1)
+                        pbsNonCurated++;
+                }
+            }
+            statsValues1.Text += "" + pbs + (pbsNonCurated > 0 ? "+" + pbsNonCurated : "");
 
             bool found = false;
             foreach (PlayerInfoWRs wrs in RunsDatabase.Instance.GetWRCounts())
@@ -1162,6 +1177,11 @@ namespace Velo
                 statsValues2.Text += "0";
 
             statsValues2.Text += "\n";
+
+            if (perfectTimeSum == 0)
+                statsValues2.Text += "-";
+            else
+                statsValues2.Text += new RoundingMultiplier("0.1").ToStringRounded((float)((double)perfectTimeSum / timeSum * 100.0)) + "%";
         }
 
         public override void Rerequest()
@@ -1182,7 +1202,7 @@ namespace Velo
     {
         public enum EFilter
         {
-            OFFICIAL, RWS, OLD_RWS,
+            OFFICIAL, RWS, OLD_RWS, ORIGINS, OTHER,
             COUNT
         }
 
@@ -1193,11 +1213,29 @@ namespace Velo
         {
             this.filter = filter;
 
+            int colWidth = (filter != EFilter.OTHER && filter != EFilter.ORIGINS) ? 230 : 380;
             table.AddColumn("Map", LayoutW.FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium.Font, runs.MapId));
-            table.AddColumn("New Lap",        220, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.NewLap));
-            table.AddColumn("1 Lap",          220, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.OneLap));
-            table.AddColumn("New Lap (Skip)", 220, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.NewLapSkip));
-            table.AddColumn("1 Lap (Skip)",   220, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.OneLapSkip));
+            if (filter != EFilter.ORIGINS)
+            {
+                table.AddColumn("New Lap", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.NewLap, compact: filter == EFilter.OTHER));
+                if (filter == EFilter.OTHER)
+                    table.AddSpace(40f);
+                table.AddColumn("1 Lap", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.OneLap, compact: filter == EFilter.OTHER));
+                if (filter == EFilter.OTHER)
+                    table.AddSpace(15f);
+                if (filter != EFilter.OTHER)
+                {
+                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.NewLapSkip));
+                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.OneLapSkip));
+                }
+            }
+            else
+            {
+                table.AddColumn("Any%", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.AnyPerc, compact: true));
+                table.AddSpace(40f);
+                table.AddColumn("100%", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium.Font, runs.HundredPerc, compact: true));
+                table.AddSpace(15f);
+            }
             table.OnClickRow = (wevent, row, runs, i) =>
                 {
                     if (wevent.Button == WEMouseClick.EButton.LEFT)
@@ -1212,11 +1250,15 @@ namespace Velo
             switch (filter)
             {
                 case EFilter.OFFICIAL:
-                    return RunsDatabase.Instance.GetWRs().Where((infos) => Map.IsOfficial(infos.MapId));
+                    return RunsDatabase.Instance.GetWRs(true).Where((infos) => Map.IsOfficial(infos.MapId));
                 case EFilter.RWS:
-                    return RunsDatabase.Instance.GetWRs().Where((infos) => Map.IsRWS(infos.MapId));
+                    return RunsDatabase.Instance.GetWRs(true).Where((infos) => Map.IsRWS(infos.MapId));
                 case EFilter.OLD_RWS:
-                    return RunsDatabase.Instance.GetWRs().Where((infos) => Map.IsOldRWS(infos.MapId));
+                    return RunsDatabase.Instance.GetWRs(true).Where((infos) => Map.IsOldRWS(infos.MapId));
+                case EFilter.ORIGINS:
+                    return RunsDatabase.Instance.GetWRs(true).Where((infos) => Map.IsOrigins(infos.MapId));
+                case EFilter.OTHER:
+                    return RunsDatabase.Instance.GetWRs(false);
                 default:
                     return null;
             }
@@ -1224,7 +1266,7 @@ namespace Velo
 
         public override float Height(MapRunInfos elem, int i)
         {
-            return 84f;
+            return filter != EFilter.ORIGINS && filter != EFilter.OTHER ? 84f : 40f;
         }
 
         public override void Refresh()
@@ -1234,7 +1276,12 @@ namespace Velo
 
         public override void Rerequest()
         {
-            RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(), Refresh);
+            if (filter == EFilter.OTHER)
+                RunsDatabase.Instance.PushRequestNonCuratedOrder(null);
+            if (filter != EFilter.OTHER)
+                RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(), Refresh);
+            else
+                RunsDatabase.Instance.PushRequestRuns(new GetWRsNonCuratedRequest(), Refresh);
             RunsDatabase.Instance.RunRequestRuns((error) => context.Error = error.Message);
         }
     }
@@ -1247,7 +1294,7 @@ namespace Velo
         public LbTopRunsMenuPage(LbMenuContext context) :
             base(context, "Top runs", buttonRowLower: true, showStatus: false)
         {
-            string[] filters = new string[] { "Official", "RWS", "Old RWS" };
+            string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
 
             filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium.Font);
             Style.ApplySelectorButton(filterSelect);
@@ -1257,12 +1304,12 @@ namespace Velo
             {
                 tables.SetTab(i, new LbTopRunsTable(context, (LbTopRunsTable.EFilter)i));
             }
-            tables.OnSwitch = context.Rerequest;
+            tables.OnSwitch = _ => context.Rerequest();
 
             content.Child = tables;
 
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(filterSelect, 600f);
+            buttonRowLower.AddChild(filterSelect, 950f);
         }
 
         public override void Refresh()
@@ -1292,7 +1339,7 @@ namespace Velo
         private readonly EFilter filter;
 
         public LbRecentRunsTable(LbMenuContext context, EFilter filter) :
-            base(context)
+            base(context, mapPageButton: true)
         {
             this.filter = filter;
 
@@ -1350,12 +1397,12 @@ namespace Velo
             {
                 tables.SetTab(i, new LbRecentRunsTable(context, (LbRecentRunsTable.EFilter)i));
             }
-            tables.OnSwitch = context.Rerequest;
+            tables.OnSwitch = _ => context.Rerequest();
 
             content.Child = tables;
 
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(filterSelect, 400f);
+            buttonRowLower.AddChild(filterSelect, 380f);
         }
 
         public override void Refresh()
@@ -1418,7 +1465,7 @@ namespace Velo
             public override void Draw(Widget hovered, float scale, float opacity)
             {
                 image.Image = SteamCache.GetAvatar(player.PlayerId);
-                label.Text = SteamCache.GetName(player.PlayerId);
+                label.Text = SteamCache.GetPlayerName(player.PlayerId);
 
                 base.Draw(hovered, scale, opacity);
             }
@@ -1520,7 +1567,7 @@ namespace Velo
             public override void Draw(Widget hovered, float scale, float opacity)
             {
                 image.Image = SteamCache.GetAvatar(player.PlayerId);
-                label.Text = SteamCache.GetName(player.PlayerId);
+                label.Text = SteamCache.GetPlayerName(player.PlayerId);
 
                 base.Draw(hovered, scale, opacity);
             }
@@ -1587,7 +1634,7 @@ namespace Velo
         }
 
         private readonly SelectorButtonW typeSelector;
-        private readonly TabbedW<LbMenu> tables;
+        private readonly TabbedW<Menu> tables;
 
         public LbTopPlayersMenuPage(LbMenuContext context) :
             base(context, "Top players", buttonRowLower: true, showStatus: false)
@@ -1597,15 +1644,15 @@ namespace Velo
             typeSelector = new SelectorButtonW(types, 0, context.Fonts.FontMedium.Font);
             Style.ApplySelectorButton(typeSelector);
 
-            tables = new TabbedW<LbMenu>(typeSelector);
+            tables = new TabbedW<Menu>(typeSelector);
             tables.SetTab((int)EType.SCORE, new LbTopPlayersScoreTable(context));
             tables.SetTab((int)EType.WR_COUNT, new LbTopPlayersWRsTable(context));
-            tables.OnSwitch = context.Rerequest;
+            tables.OnSwitch = _ => context.Rerequest();
 
             content.Child = tables;
 
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(typeSelector, 400f);
+            buttonRowLower.AddChild(typeSelector, 380f);
         }
 
         public override void Refresh()
@@ -1651,9 +1698,10 @@ namespace Velo
             layout.AddSpace(10f);
             
             rules.Text =
-@"All runs are automatically verified and categorized by Velo itself before being automatically submitted
-as you play. In case an invalid run still manages to get submitted either by a bug or in a cheated 
-manner, contact a leaderboard moderator and they will be able to remove the run.
+@"All runs are automatically verified and categorized by Velo itself before being automatically submitted as
+you play. In case an invalid run still manages to get submitted either by a bug or in a cheated manner, 
+contact a leaderboard moderator and they will be able to remove the run.
+Maps in the ""other"" category do not count towards score or WRs.
 
 A run is categorized as ""1 lap"" if any of the following apply:
   -Lap was started by finishing a previous lap
@@ -1670,35 +1718,42 @@ A run is categorized as ""Skip"" if any of the following apply:
 
 A run is categorized as ""New lap"" if none of the above apply.
 
+""Any%"" and ""100%"" categories only apply to Origins maps. ""Any%"" just requires you to complete the level, 
+whereas ""100%"" requires you to also collect all winged sandals. The ""100%"" category does not exist for 
+levels without winged sandals and it will be counted as ""Any%"" instead.
+
 A run is invalid if any of the following apply:
   -An obstacle was broken upon starting the lap
   -Player used an item (5 second cooldown, infinite cooldown for bombs)
   -Player was in a drill state (5 second cooldown)
   -An item actor was still alive upon starting the lap
-  -A Ghost blocked a laser (use ""disable ghost laser interaction"")
+  -A ghost blocked a laser (use ""disable ghost laser interaction"")
+  -A ghost hit a fall tile (use ""disable ghost fall tile interaction"")
   -Player had boostacoke upon starting the lap (any except laboratory)
   -Player modified their boostacoke by pressing + or -
-  -Time of the run is longer than 2 minutes
+  -Time of the run is longer than 30 minutes
   -An illegal Velo mod was used
-   (1 second cooldown for savestates, infinite cooldown for any other)
-  -Map was not Velo curated
+   (1 second cooldown for savestates, infinite cooldown for any other, changing camera zoom on Origins is allowed)
+  -Map was neither official, nor Origins, nor published Workshop
   -Option SuperSpeedRunners, SpeedRapture or Destructible Environment was enabled
   -Player paused the game
   -Player missed a primary checkpoint
+  -Player missed a secondary checkpoint and a ternary checkpoint
 
 Cooldowns last until running out or pressing reset.
 
 The checkpoint system:
-In order to differentiate between Skip and non-Skip runs and to further improve validation, Velo makes
-use of a checkpoint system comprised of primary and secondary checkpoints (not to be confused with
-the game's own checkpoint system). These checkpoints are made up of rectangular sections scattered
-around each map. In order for a run to be valid, the player needs to hit all primary checkpoints,
-and to be categorized as non-Skip, the player needs to hit all secondary checkpoints.
+In order to differentiate between Skip and non-Skip runs and to further improve validation, Velo makes use 
+of a checkpoint system comprised of primary, secondary and ternary checkpoints (not to be confused
+with the game's own checkpoint system). These checkpoints are made up of rectangular sections scattered
+around each map. In order for a run to be valid, the player needs to hit all primary checkpoints
+and either all secondary or all ternary checkpoints. To be categorized as non-Skip, the player needs
+to hit all secondary checkpoints.
 
 The score system:
-Each PB run grants you somewhere between 1 to 1000 points, depending on how close it is to the WR
-run. If we denote WR time as 'wr' and your PB time as 'pb', you get 1000 * wr / (wr + 25 * (wr - pb))
-points per run.";
+Each PB run grants you somewhere between 1 to 1000 (or 500) points, depending on how close it is to the
+WR run. If we denote WR time as 'wr' and your PB time as 'pb', you get M * wr / (wr + 25 * (pb - wr)) points
+per run where M = 1000 on all maps except for old RWS and Origins with M = 500.";
         }
 
         public override void Refresh()
@@ -1740,12 +1795,12 @@ points per run.";
             this.pages.SetTab((int)EPages.RECENT_RUNS, new LbRecentMenuPage(context));
             this.pages.SetTab((int)EPages.TOP_PLAYERS, new LbTopPlayersMenuPage(context));
             this.pages.SetTab((int)EPages.RULES, new LbRulesMenuPage(context));
-            this.pages.OnSwitch = context.Rerequest;
+            this.pages.OnSwitch = _ => context.Rerequest();
 
             content.Child = this.pages;
 
             buttonRowLower.AddSpace(LayoutW.FILL);
-            buttonRowLower.AddChild(pageSelector, 800f);
+            buttonRowLower.AddChild(pageSelector, 760f);
         }
 
         public override void Refresh()

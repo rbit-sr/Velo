@@ -640,6 +640,15 @@ namespace Velo
 
         public bool Draw(CBufferedTileMapLayer tilemap, Vector2 pos, int x, int y)
         {
+            if (Origins.Instance.IsOrigins())
+                return false;
+
+            if (tilemap.tileImage == null)
+                return true;
+
+            if (tilemap.tileImage.Image == null)
+                return true;
+
             if (!EnableVeloCustomTiles.Value && OutlineWidth.Value == 0 || tilemap.Id != "Collision")
                 return false;
 

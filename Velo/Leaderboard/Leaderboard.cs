@@ -3,42 +3,18 @@ using CEngine.Graphics.Component;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using System.Collections.Generic;
+using System;
+using System.Linq;
 
 namespace Velo
 {
-    public class LeaderboardFonts
+    public class LbMenuContext : MenuContext
     {
-        public CachedFont FontSmall;
-        public CachedFont FontMedium;
-        public CachedFont FontLarge;
-    }
-
-    public class LbMenuContext
-    {
-        private readonly WidgetContainer container;
-        private readonly TransitionW<Widget> menu;
-        private readonly StackW menuStack;
-        private readonly TransitionW<LbMenu> page;
         private readonly LabelW profileButton;
         private readonly LabelW versionText;
 
-        private readonly Stack<LbMenu> backStack;
-        public LeaderboardFonts Fonts;
-        public string Error;
-
-        public LbMenu Menu => page.Child; 
-
         public LbMenuContext()
         {
-            Fonts = new LeaderboardFonts();
-
-            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15");
-            FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
-            FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
-
-            backStack = new Stack<LbMenu>();
-
             profileButton = new LabelW("My profile", Fonts.FontMedium.Font);
             Style.ApplyButton(profileButton);
             profileButton.OnClick = wevent =>
@@ -56,95 +32,25 @@ namespace Velo
             Style.ApplyText(versionText);
             versionText.Align = new Vector2(0f, 0.5f);
             versionText.Color = () => Color.Gray * 0.5f;
-            page = new TransitionW<LbMenu>();
-            menuStack = new StackW();
-            menuStack.AddChild(page, new Vector2(400f, 100f), new Vector2(1120f, 880f));
             menuStack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
             menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            menu = new TransitionW<Widget>();
-            container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
         }
 
-        public void EnterMenu(LbMenu menu)
-        {
-            this.menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
-            this.page.GoTo(menu);
-            ResetStateRerequest(menu);
-        }
-
-        public void ExitMenu(bool animation = true)
+        public override void OnExit()
         {
             Leaderboard.Instance.Enabled.Disable();
-            backStack.Clear();
-            if (animation)
-                menu.TransitionTo(null, 4f, new Vector2(-500f, 0f));
-            else
-                menu.GoTo(null);
         }
 
-        public void ChangePage(LbMenu newPage)
-        {
-            if (page.Child != null)
-                backStack.Push(page.Child);
-            page.TransitionTo(newPage, 8f, Vector2.Zero);
-
-            ResetStateRerequest(page.Child);
-        }
-
-        public void PushBackStack(LbMenu menu)
-        {
-            backStack.Push(menu);
-        }
-
-        public void PopPage()
-        {
-            page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
-            Rerequest(page.Child);
-        }
-
-        public void ResetStateRerequest(LbMenu menu)
+        public override void OnCancelAllRequests()
         {
             RunsDatabase.Instance.CancelAll();
-            menu.ResetState();
-            menu.Rerequest();
-            menu.Refresh();
         }
 
-        public void Rerequest(LbMenu menu)
+        public override void OnClearCache()
         {
-            RunsDatabase.Instance.CancelAll();
-            menu.Rerequest();
-            menu.Refresh();
-        }
-
-        public void ClearCacheRerequest(LbMenu menu)
-        {
-            RunsDatabase.Instance.CancelAll();
             RunsDatabase.Instance.Clear();
             RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-            menu.ResetState();
-            menu.Rerequest();
-            menu.Refresh();
-        }
-
-        public void Draw()
-        {
-            if (menu.Child == null && !menu.Transitioning())
-                return;
-
-            CRectangleDrawComponent dimRecDraw = new CRectangleDrawComponent(0, 0, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height)
-            {
-                IsVisible = true,
-                OutlineEnabled = false,
-                OutlineThickness = 0,
-                FillEnabled = true,
-                FillColor = Leaderboard.Instance.DimColor.Value.Get() * (menu.Child != null ? menu.R : 1f - menu.R)
-            };
-            Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            dimRecDraw.Draw(null);
-            Velo.SpriteBatch.End();
-
-            container.Draw();
+            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
         }
     }
 
@@ -152,10 +58,12 @@ namespace Velo
     {
         public BoolSetting DisableLeaderboard;
         public BoolSetting PreciseTimer;
-        public BoolSetting ShowRunStatus;
         public FloatSetting GhostOffsetTime;
+        public BoolSetting EnableMultiGhost;
+        public BoolSetting GhostDifferentColors;
         public BoolSetting LoopReplay;
         public BoolSetting ShowCheckpoints;
+        public BoolSetting DisableReplayNotifications;
 
         public HotkeySetting Refresh;
         public HotkeySetting StopReplay;
@@ -179,9 +87,17 @@ namespace Velo
         public IntSetting ScrollBarWidth;
         public EnumSetting<ETimeFormat> TimeFormat;
 
+        public BoolSetting ShowRunStatus;
+        public FloatSetting RunStatusScale;
+        public EnumSetting<EOrientation> RunStatusOrientation;
+        public VectorSetting RunStatusOffset;
+        public ColorTransitionSetting RunStatusColor;
+
         private bool initialized = false;
 
         private LbMenuContext context;
+
+        private CachedFont runStatusFont;
 
         private Leaderboard() : base("Leaderboard")
         {
@@ -190,20 +106,22 @@ namespace Velo
             NewCategory("general");
             DisableLeaderboard = AddBool("disable leaderboard", false);
             PreciseTimer = AddBool("precise timer", false);
-            ShowRunStatus = AddBool("show run status", false);
             GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
+            EnableMultiGhost = AddBool("enable multighost", false);
+            GhostDifferentColors = AddBool("ghosts different colors", true);
             LoopReplay = AddBool("loop replay", false);
             ShowCheckpoints = AddBool("show checkpoints", false);
+            DisableReplayNotifications = AddBool("disable replay notifications", false);
 
             DisableLeaderboard.Tooltip = 
                 "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
             PreciseTimer.Tooltip =
-                "Makes the timer fully show all milliseconds (XX.XX:XXX)";
-            ShowRunStatus.Tooltip = 
-                "Show the categorization and validation status of the current run in the top left corner. " +
-                "'1' means 1 lap and 'X' means invalid.";
+                "Makes the timer fully show all milliseconds (XX.XX:XXX).";
             GhostOffsetTime.Tooltip = "ghost offset time in seconds";
+            EnableMultiGhost.Tooltip = "Allows you to have multiple ghosts at the same time.";
+            GhostDifferentColors.Tooltip = "Color multiple ghosts differently or use the same color.";
             ShowCheckpoints.Tooltip = "Show the primary and secondary checkpoints of Velo's rule checking system.";
+            DisableReplayNotifications.Tooltip = "Disables \"replay start/stop\" notifications.";
 
             NewCategory("hotkeys");
             Refresh = AddHotkey("refresh", 0x97);
@@ -237,6 +155,18 @@ namespace Velo
             ScrollBarWidth = AddInt("scroll bar width", 10, 0, 20);
             DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
             TimeFormat = AddEnum("time format", ETimeFormat.UNITS, new[] { "(XXm )(XXs )XXXms", "XX:XX:XXX", "XX.XX:XXX", "(XX:)XX:XXX", "(XX.)XX:XXX" });
+
+            NewCategory("run status");
+            ShowRunStatus = AddBool("show run status", false);
+            RunStatusScale = AddFloat("scale", 1f, 0f, 10f);
+            RunStatusOrientation = AddEnum("orientation", EOrientation.TOP_LEFT,
+                Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Where(orientation => orientation != EOrientation.PLAYER).Select(orientation => orientation.Label()).ToArray());
+            RunStatusOffset = AddVector("offset", new Vector2(32, 32), new Vector2(-500f, -500f), new Vector2(500f, 500f));
+            RunStatusColor = AddColorTransition("color", new ColorTransition(Color.Red));
+
+            CurrentCategory.Tooltip =
+                "Show the categorization and validation status of the current run in the top left corner. " +
+                "'1' means 1 lap and 'X' means invalid.";
         }
 
         public static Leaderboard Instance = new Leaderboard();
@@ -261,7 +191,7 @@ namespace Velo
             }
             if (StopReplay.Pressed() && LocalGameMods.Instance.IsPlaybackRunning())
             {
-                LocalGameMods.Instance.StopPlayback();
+                LocalGameMods.Instance.StopPlayback(notification: !DisableReplayNotifications.Value);
             }
             if (SaveRun.Pressed())
             {
@@ -271,7 +201,7 @@ namespace Velo
             {
                 Recording rec = LocalGameMods.Instance.LoadSaved();
                 if (rec != null)
-                    LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.VIEW_REPLAY, showTime: true);
+                    LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.VIEW_REPLAY, notification: !DisableReplayNotifications.Value, showTime: true);
             }
             if (VerifySavedRun.Pressed())
             {
@@ -281,7 +211,10 @@ namespace Velo
             }
             if (SetGhostSavedRun.Pressed())
             {
+                int ghostIndex = !EnableMultiGhost.Value ? 0 : LocalGameMods.Instance.GhostPlaybackCount();
+                Ghosts.Instance.GetOrSpawn(ghostIndex, Instance.GhostDifferentColors.Value);
                 Recording rec = LocalGameMods.Instance.LoadSaved();
+                Ghosts.Instance.WaitForGhost(ghostIndex);
                 if (rec != null)
                     LocalGameMods.Instance.StartPlayback(rec, Playback.EPlaybackType.SET_GHOST);
             }
@@ -291,6 +224,40 @@ namespace Velo
         {
             base.PostRender();
 
+            FontCache.Get(ref runStatusFont, "UI\\Font\\ariblk.ttf:24");
+            CTextDrawComponent runStatus = new CTextDrawComponent("", runStatusFont.Font, Vector2.Zero)
+            {
+                color_replace = false,
+                IsVisible = true
+            };
+
+            int status = LocalGameMods.Instance.CurrentRunStatus();
+            if (ShowRunStatus.Value && status != 0 && !LocalGameMods.Instance.IsPlaybackRunning())
+            {
+                runStatus.StringText = (status == 1 ? "1" : "X");
+                runStatus.Color = RunStatusColor.Value.Get();
+                runStatus.Offset = RunStatusOffset.Value / (CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height / 1080f) * Vector2.One;
+                runStatus.Scale = RunStatusScale.Value * CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height / 1080f * Vector2.One;
+                runStatus.HasDropShadow = true;
+                runStatus.DropShadowColor = Color.Black;
+                runStatus.DropShadowOffset = Vector2.One;
+                runStatus.DropShadowColor *= runStatus.Color.A / 255f;
+                runStatus.UpdateBounds();
+
+                float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
+                float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
+
+                float width = runStatus.Bounds.Width;
+                float height = runStatus.Bounds.Height;
+
+                runStatus.Position = RunStatusOrientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.MainPlayer != null ? Velo.MainPlayer.actor.Position : Vector2.Zero);
+                runStatus.UpdateBounds();
+
+                Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
+                runStatus.Draw(null);
+                Velo.SpriteBatch.End();
+            }
+
             if (DisableLeaderboard.Value || AutoUpdate.Instance.Enabled)
                 Enabled.Disable();
 
@@ -299,9 +266,9 @@ namespace Velo
             if (modified)
             {
                 if (Enabled.Value.Enabled)
-                    Velo.EnableCursor(this);
+                    Cursor.EnableCursor(this);
                 else
-                    Velo.DisableCursor(this);
+                    Cursor.DisableCursor(this);
             }
 
             if (Enabled.Value.Enabled && !initialized)
@@ -309,7 +276,7 @@ namespace Velo
 
             if (Refresh.Pressed() && Enabled.Value.Enabled)
             {
-                context.ClearCacheRerequest(context.Menu);
+                context.ClearCacheRerequest();
             }
 
             if (!Enabled.Value.Enabled && !initialized)
@@ -319,8 +286,8 @@ namespace Velo
             {
                 if (Enabled.Value.Enabled)
                 {
-                    int mapId = Map.GetCurrentMapId();
-                    if (Velo.Ingame && Velo.ModuleSolo != null && mapId != -1)
+                    ulong mapId = Map.GetCurrentMapId();
+                    if (Velo.Ingame && Velo.ModuleSolo != null && mapId != ulong.MaxValue)
                     {
                         context.PushBackStack(new LbMainMenuPage(context));
                         context.EnterMenu(new LbMapMenuPage(context, mapId));

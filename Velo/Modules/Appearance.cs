@@ -62,6 +62,9 @@ namespace Velo
         public ColorTransitionSetting UIGrayColor;
         public ColorTransitionSetting UIBlackColor;
         public ColorTransitionSetting UIYellowColor;
+        public ColorTransitionSetting UIGreenColor;
+        public ColorTransitionSetting UIOrangeColor;
+        public ColorTransitionSetting UIRedColor;
         public ColorTransitionSetting[] UIBlueColors;
 
         private readonly ConditionalWeakTable<object, ColorTransitionSetting> chatColors = new ConditionalWeakTable<object, ColorTransitionSetting>();
@@ -157,13 +160,19 @@ namespace Velo
             UIGrayColor = AddColorTransition("UI gray", new ColorTransition(Color.Gray));
             UIBlackColor = AddColorTransition("UI black", new ColorTransition(Color.Black));
             UIYellowColor = AddColorTransition("UI yellow", new ColorTransition(Color.Yellow));
+            UIGreenColor = AddColorTransition("UI green", new ColorTransition(Color.Lime));
+            UIOrangeColor = AddColorTransition("UI orange", new ColorTransition(new Color(255, 128, 0)));
+            UIRedColor = AddColorTransition("UI red", new ColorTransition(Color.Red));
 
             colorReplLookup = new Dictionary<uint, ColorTransitionSetting>
             {
                 { Color.White.PackedValue, UIWhiteColor },
                 { Color.Gray.PackedValue, UIGrayColor },
                 { Color.Black.PackedValue, UIBlackColor },
-                { Color.Yellow.PackedValue, UIYellowColor }
+                { Color.Yellow.PackedValue, UIYellowColor },
+                { Color.Lime.PackedValue, UIGreenColor },
+                { new Color(255, 128, 0).PackedValue, UIOrangeColor },
+                { Color.Red.PackedValue, UIRedColor }
             };
 
             Color[] blueTones = new Color[]
@@ -172,6 +181,7 @@ namespace Velo
                 new Color(17, 17, 77),
                 new Color(17, 17, 78),
                 new Color(29, 56, 114),
+                new Color(51, 51, 153),
                 new Color(21, 73, 165),
                 new Color(15, 86, 174),
                 new Color(40, 116, 145),
@@ -200,14 +210,15 @@ namespace Velo
                 new Color(1, 204, 254),
                 new Color(101, 204, 255),
                 new Color(102, 204, 255),
+                new Color(141, 222, 255),
                 new Color(163, 238, 247),
                 new Color(167, 242, 251)
             };
             
-            UIBlueColors = new ColorTransitionSetting[34];
-            for (int i = 0; i < 34; i++)
+            UIBlueColors = new ColorTransitionSetting[blueTones.Length];
+            for (int i = 0; i < UIBlueColors.Length; i++)
             {
-                UIBlueColors[i] = AddColorTransition("UI blue tone " + i, new ColorTransition(blueTones[i]));
+                UIBlueColors[i] = AddColorTransition("UI blue " + i, new ColorTransition(blueTones[i]));
                 colorReplLookup.Add(blueTones[i].PackedValue, UIBlueColors[i]);
             }
 
@@ -224,36 +235,38 @@ namespace Velo
             UIBlueColors[1].Tooltip = "story level select menu title text shadow";
             UIBlueColors[2].Tooltip = "level select workshop list separator bar and main menu news text background";
             UIBlueColors[3].Tooltip = "level select workshop list background";
-            UIBlueColors[4].Tooltip = "main menu text shadow";
-            UIBlueColors[5].Tooltip = "level select map description and \"Game options\"";
-            UIBlueColors[6].Tooltip = "level select workshop list separator text";
-            UIBlueColors[7].Tooltip = "level select \"Workshop Levels\" text";
-            UIBlueColors[8].Tooltip = "story chapter select menu text";
-            UIBlueColors[9].Tooltip = "chat \"SUPERCHAT\" text and \"SEND\" text";
-            UIBlueColors[10].Tooltip = "main menu news image background";
-            UIBlueColors[11].Tooltip = "XP Level text";
-            UIBlueColors[12].Tooltip = "edit controls menu text";
-            UIBlueColors[13].Tooltip = "leaderboard player names, league, points text";
-            UIBlueColors[14].Tooltip = "leaderboard \"Rank Progress\", your points and season text";
-            UIBlueColors[15].Tooltip = "trail editor menu trail selected background";
-            UIBlueColors[16].Tooltip = "story level select menu level description text and level icon background";
-            UIBlueColors[17].Tooltip = "XP screen XP event points text";
-            UIBlueColors[18].Tooltip = "story villain speech bubble text";
-            UIBlueColors[19].Tooltip = "leaderboard \"Back\" text";
-            UIBlueColors[20].Tooltip = "main menu news text";
-            UIBlueColors[21].Tooltip = "XP Level \"XP\" text";
-            UIBlueColors[22].Tooltip = "confirmation popup \"Cancel\" and \"Ok\" text";
-            UIBlueColors[23].Tooltip = "main menu text";
-            UIBlueColors[24].Tooltip = "story level select menu title text";
-            UIBlueColors[25].Tooltip = "trail editor menu trail name";
-            UIBlueColors[26].Tooltip = "level select workshop list selected background";
-            UIBlueColors[27].Tooltip = "leaderboard \"Friends\", \"My League\" and \"World\" text";
-            UIBlueColors[28].Tooltip = "story chapter select difficulty text";
-            UIBlueColors[29].Tooltip = "XP screen \"Points!!!\" text and XP event name text";
-            UIBlueColors[30].Tooltip = "level select menu level name text and \"Press Y to save this replay!\" text";
-            UIBlueColors[31].Tooltip = "level select menu level icon background";
-            UIBlueColors[32].Tooltip = "main menu button tooltip text";
-            UIBlueColors[33].Tooltip = "level editor info text";
+            UIBlueColors[4].Tooltip = "TAB screen text";
+            UIBlueColors[5].Tooltip = "main menu text shadow";
+            UIBlueColors[6].Tooltip = "level select map description and \"Game options\"";
+            UIBlueColors[7].Tooltip = "level select workshop list separator text";
+            UIBlueColors[8].Tooltip = "level select \"Workshop Levels\" text";
+            UIBlueColors[9].Tooltip = "story chapter select menu text";
+            UIBlueColors[10].Tooltip = "chat \"SUPERCHAT\" text and \"SEND\" text";
+            UIBlueColors[11].Tooltip = "main menu news image background";
+            UIBlueColors[12].Tooltip = "XP Level text";
+            UIBlueColors[13].Tooltip = "edit controls menu text";
+            UIBlueColors[14].Tooltip = "leaderboard player names, league, points text";
+            UIBlueColors[15].Tooltip = "leaderboard \"Rank Progress\", your points and season text";
+            UIBlueColors[16].Tooltip = "trail editor menu trail selected background";
+            UIBlueColors[17].Tooltip = "story level select menu level description text and level icon background";
+            UIBlueColors[18].Tooltip = "XP screen XP event points text";
+            UIBlueColors[19].Tooltip = "story villain speech bubble text";
+            UIBlueColors[20].Tooltip = "leaderboard \"Back\" text";
+            UIBlueColors[21].Tooltip = "main menu news text";
+            UIBlueColors[22].Tooltip = "XP Level \"XP\" text";
+            UIBlueColors[23].Tooltip = "confirmation popup \"Cancel\" and \"Ok\" text";
+            UIBlueColors[24].Tooltip = "main menu text";
+            UIBlueColors[25].Tooltip = "story level select menu title text";
+            UIBlueColors[26].Tooltip = "trail editor menu trail name";
+            UIBlueColors[27].Tooltip = "level select workshop list selected background";
+            UIBlueColors[28].Tooltip = "leaderboard \"Friends\", \"My League\" and \"World\" text";
+            UIBlueColors[29].Tooltip = "story chapter select difficulty text";
+            UIBlueColors[30].Tooltip = "XP screen \"Points!!!\" text and XP event name text";
+            UIBlueColors[31].Tooltip = "level select menu level name text and \"Press Y to save this replay!\" text";
+            UIBlueColors[32].Tooltip = "level select menu level icon background";
+            UIBlueColors[33].Tooltip = "TAB screen lower leagues symbols";
+            UIBlueColors[34].Tooltip = "main menu button tooltip text";
+            UIBlueColors[35].Tooltip = "level editor info text";
         }
 
         public static Appearance Instance = new Appearance();
@@ -301,6 +314,8 @@ namespace Velo
 
         public void UpdatePopup(Player player)
         {
+            if (player.popup == null)
+                return;
             player.popup.Offset = PopupOffset.Value;
             player.popup.Color = Util.FullAlpha(PopupColor.Value.Get());
             if (!PopupEnabled())
@@ -324,7 +339,7 @@ namespace Velo
             {
                 grapple.spriteDrawComp1.Color = GrappleHookColor.DefaultValue.Get();
                 grapple.animSpriteDrawComp1.Color = GrappleHookBreakColor.DefaultValue.Get();
-                if (grapple.owner == Velo.Ghost)
+                if (!Velo.Online)
                 {
                     grapple.spriteDrawComp1.Color *= GhostOpacity.Value;
                     grapple.animSpriteDrawComp1.Color *= GhostOpacity.Value;
@@ -383,7 +398,7 @@ namespace Velo
                         rope.line1.thickness = 1;
                         rope.line2.thickness = 3;
                     }
-                    if (rope.owner == Velo.Ghost)
+                    if (!Velo.Online)
                     {
                         rope.line1.color *= GhostOpacity.Value;
                         rope.line2.color *= GhostOpacity.Value;

@@ -190,10 +190,11 @@ namespace Velo
 
     public class Recording
     {
-        public static readonly int VERSION = 0;
+        public static readonly int VERSION = 1;
 
         public CircArray<Frame> Frames;
         public CircArray<Savestate> Savestates;
+        public CircArray<TimeSpan> Timepoints;
         public RunInfo Info;
         public RulesChecker Rules;
         public int LapStart;
@@ -204,6 +205,7 @@ namespace Velo
         {
             Frames = new CircArray<Frame>();
             Savestates = new CircArray<Savestate>();
+            Timepoints = new CircArray<TimeSpan>();
             Info = new RunInfo();
             Rules = new RulesChecker();
             Clear();
@@ -215,6 +217,7 @@ namespace Velo
             {
                 Frames = Frames.Clone(),
                 Savestates = Savestates.Clone(),
+                Timepoints = Timepoints.Clone(),
                 Info = Info,
                 Rules = Rules.Clone(),
                 LapStart = LapStart,
@@ -238,6 +241,7 @@ namespace Velo
         {
             Frames.Clear();
             Savestates.Clear();
+            Timepoints.Clear();
             Info.Id = -1;
             LapStart = 0;
             ClearStats();
@@ -248,16 +252,18 @@ namespace Velo
             Stats = default;
         }
 
-        public void PushBack(Frame frame, Savestate savestate)
+        public void PushBack(Frame frame, Savestate savestate, TimeSpan timepoint)
         {
             Frames.PushBack(frame);
             Savestates.PushBack(savestate);
+            Timepoints.PushBack(timepoint);
         }
 
         public void PopFront()
         {
             Frames.PopFront();
             Savestates.PopFront();
+            Timepoints.PopFront();
             LapStart--;
         }
 
@@ -268,8 +274,8 @@ namespace Velo
             TrimBeginningFromLapStart(4f);
             Rules.Finish(time);
             Info.PlayerId = Steamworks.SteamUser.GetSteamID().m_SteamID;
-            Info.Category.MapId = (byte)Rules.MapId;
-            Info.Category.TypeId = (byte)Rules.CategoryType;
+            Info.Category.MapId = Rules.MapId;
+            Info.Category.TypeId = (ulong)Rules.CategoryType;
             Info.RunTime = (int)(time * 1000f);
             Info.CreateTime = DateTimeOffset.Now.ToUnixTimeSeconds();
             Info.Dist = (int)(Stats.Dist + 0.5);
@@ -364,6 +370,7 @@ namespace Velo
             int versionInt = stream.Read<int>();
 
             bool compressed = (versionInt & (1 << 31)) == 0;
+            versionInt &= ~(1 << 31);
 
             SevenZip.Compression.LZMA.Decoder decoder = new SevenZip.Compression.LZMA.Decoder();
             if (compressed)
@@ -383,7 +390,11 @@ namespace Velo
                 raw.Position = 0;
             }
 
-            Info = raw.Read<RunInfo>();
+            if (versionInt == 0)
+                Info = raw.Read<RunInfoBWC1>().Get();
+            else
+                Info = raw.Read<RunInfo>();
+
             LapStart = raw.Read<int>();
 
             int size = raw.Read<int>();
@@ -391,7 +402,7 @@ namespace Velo
             for (int i = 0; i < frameCount; i++)
             {
                 Frame frame = raw.Read<Frame>();
-                PushBack(frame, null);
+                PushBack(frame, null, TimeSpan.Zero);
             }
 
             Savestates[0] = new Savestate();
@@ -423,7 +434,7 @@ namespace Velo
         private long lastSavestate = 0;
         private Savestate nextSavestate = null;
 
-        public int MaxFrames = 120 * 300;
+        public int MaxFrames = 40 * 60 * 300;
         public float SavestateInterval = 1.0f;
 
         private Vector2 prevPos = Vector2.Zero;
@@ -455,7 +466,7 @@ namespace Velo
 
         public void PreUpdate()
         {
-            if (Velo.MainPlayer == null || Velo.MainPlayer.grapple == null)
+            if (Velo.MainPlayer == null || Velo.MainPlayer.destroyed)
                 return;
             prevPos = Velo.MainPlayer.actor.Position;
             prevBoost = Velo.MainPlayer.boost;
@@ -472,13 +483,13 @@ namespace Velo
             {
                 lastSavestate = gameTime.TotalGameTime.Ticks;
                 nextSavestate = new Savestate();
-                nextSavestate.Save(new List<Savestate.ActorType> { Savestate.AIVolume }, Savestate.EListMode.EXCLUDE, moduleProgressOnly: true);
+                nextSavestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE, moduleProgressOnly: true);
             }
         }
 
         public void PostUpdate()
         {
-            if (Velo.MainPlayer == null || Velo.MainPlayer.grapple == null)
+            if (Velo.MainPlayer == null || Velo.MainPlayer.destroyed)
                 return;
             if (recording == null)
                 return;
@@ -495,7 +506,8 @@ namespace Velo
                     gameTime: gameTime, 
                     deltaSum: recording.Count >= 1 ? recording[recording.Count - 1].DeltaSum + recording[recording.Count - 1].Delta : 0L
                 ),
-                nextSavestate
+                nextSavestate,
+                Velo.Time
             );
 
             recording.Stats.Dist += (Velo.MainPlayer.actor.Position - prevPos).Length();
@@ -561,6 +573,7 @@ namespace Velo
         private TimeSpan lastNotificationUpdate = TimeSpan.Zero;
 
         public EPlaybackType Type;
+        public int GhostIndex;
 
         public Action<Recording, EPlaybackType> OnFinish;
 
@@ -571,12 +584,14 @@ namespace Velo
 
         }
 
-        public void Start(Recording recording, EPlaybackType type)
+        public Recording Recording { get => recording; }
+
+        public void Start(Recording recording, EPlaybackType type, int ghostIndex)
         {
             if (type == EPlaybackType.VERIFY && (Finished || Type != EPlaybackType.VERIFY))
-                savestatePreVerify.Save(new List<Savestate.ActorType> { Savestate.AIVolume }, Savestate.EListMode.EXCLUDE);
+                savestatePreVerify.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
             else if (Type == EPlaybackType.VERIFY && !Finished && type != EPlaybackType.VERIFY)
-                savestatePreVerify.Load(true, watermark: false);
+                savestatePreVerify.Load(true);
 
             this.recording = recording;
             switch (type)
@@ -586,10 +601,11 @@ namespace Velo
                     player = Velo.MainPlayer;
                     break;
                 case EPlaybackType.SET_GHOST:
-                    player = Velo.Ghost;
+                    player = Ghosts.Instance.Get(ghostIndex);
                     break;
             }
             Type = type;
+            GhostIndex = ghostIndex;
             Restart();
         }
 
@@ -603,7 +619,7 @@ namespace Velo
                 startI = recording.LapStart;
             i = startI;
 
-            recording.Savestates[i].Load(setGlobalTime: Type == EPlaybackType.VERIFY, ghostOnly: Type == EPlaybackType.SET_GHOST, watermark: false);
+            recording.Savestates[i].Load(setGlobalTime: Type == EPlaybackType.VERIFY, GhostIndex);
             if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.VERIFY)
                 Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
             deltaSum = 0;
@@ -614,7 +630,7 @@ namespace Velo
         {
             recording = null;
             if (Type == EPlaybackType.VERIFY)
-                savestatePreVerify.Load(true, watermark: false);
+                savestatePreVerify.Load(true);
         }
 
         public void Finish()
@@ -697,7 +713,7 @@ namespace Velo
                 return;
             if (Finished)
                 return;
-            if (Type == EPlaybackType.SET_GHOST && (Velo.Ghost == null || Velo.Ghost.grapple == null))
+            if (player.destroyed)
             {
                 Stop();
                 return;
@@ -738,7 +754,7 @@ namespace Velo
                 return;
             if (Finished)
                 return;
-            if (Type == EPlaybackType.SET_GHOST && (Velo.Ghost == null || Velo.Ghost.grapple == null))
+            if (player.destroyed)
             {
                 Stop();
                 return;
@@ -850,13 +866,9 @@ namespace Velo
 
         public bool SkipUpdateSprite(Player player)
         {
-            if (Finished)
+            if (Finished || Type == EPlaybackType.VERIFY)
                 return false;
-            if (Type == EPlaybackType.SET_GHOST)
-                return player == Velo.Ghost;
-            if (Type == EPlaybackType.VIEW_REPLAY)
-                return player == Velo.MainPlayer;
-            return false;
+            return player == this.player;
         }
     }
 }

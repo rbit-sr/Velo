@@ -5,8 +5,6 @@ using System.Reflection.Emit;
 using SDL2;
 using System.Runtime.CompilerServices;
 using System.Text;
-using CEngine.Graphics.Component;
-using CEngine.Graphics.Library;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 
@@ -22,8 +20,6 @@ namespace Velo
 
         private string selectedDriver = "";
         private bool unsupportedWarned = false;
-        private TimeSpan unsupportedWarningTime = TimeSpan.Zero;
-        private CachedFont unsupportedWarningFont;
 
         public bool SendUpdates = false;
 
@@ -64,7 +60,6 @@ namespace Velo
                 if (Enabled.Modified())
                     Storage.Instance.Load();
                 Enabled.Disable();
-                DrawWarning();
                 return;
             }
 
@@ -74,9 +69,9 @@ namespace Velo
             if (Enabled.Modified())
             {
                 if (Enabled.Value.Enabled)
-                    Velo.EnableCursor(this);
+                    Cursor.EnableCursor(this);
                 else
-                    Velo.DisableCursor(this);
+                    Cursor.DisableCursor(this);
 
                 if (!Enabled.Value.Enabled && initialized)
                     unfocusAll();
@@ -94,8 +89,14 @@ namespace Velo
                 if (!InitImGui())
                 {
                     unsupportedWarned = true;
-                    unsupportedWarningTime = new TimeSpan(Velo.Time.Ticks);
                     CEngine.CEngine.Instance.Game.IsMouseVisible = false;
+                    if (!DisableWarning.Value)
+                    {
+                        Notifications.Instance.ForceNotification(
+                            "WARNING: Cannot open UI, unsupported driver \"" + selectedDriver + "\"!\n" +
+                            "This hotkey will now serve as a way to reload settings from file.",
+                            Color.Red, TimeSpan.FromSeconds(10d));
+                    }
                     return;
                 }
                 string json = ModuleManager.Instance.ToJson(ToJsonArgs.ForUIInit).ToString(false);
@@ -237,44 +238,6 @@ namespace Velo
             {
                 ProcessEvent((IntPtr)Unsafe.AsPointer(ref sdl_event));
             }
-        }
-
-        private void DrawWarning()
-        {
-            if (
-                DisableWarning.Value ||
-                new TimeSpan(Velo.Time.Ticks) - unsupportedWarningTime > TimeSpan.FromSeconds(10))
-            {
-                FontCache.Release(ref unsupportedWarningFont);
-                return;
-            }
-            FontCache.Get(ref unsupportedWarningFont, "UI\\Font\\ariblk.ttf:24");
-
-            CTextDrawComponent warning = new CTextDrawComponent("", unsupportedWarningFont.Font, Vector2.Zero)
-            {
-                StringText =
-                "WARNING: Cannot open UI, unsupported driver \"" + selectedDriver + "\"!\n" +
-                "This hotkey will now serve as a way to reload settings from file.",
-                IsVisible = true,
-                color = Color.Red,
-                DropShadowColor = Color.Black,
-                HasDropShadow = true,
-                DropShadowOffset = Vector2.One
-            };
-            warning.UpdateBounds();
-
-            float screenWidth = Velo.GraphicsDevice.Viewport.Width;
-            float screenHeight = Velo.GraphicsDevice.Viewport.Height;
-
-            float width = warning.Bounds.Width;
-            float height = warning.Bounds.Height;
-
-            warning.Position = new Vector2(
-                (screenWidth - width) / 2, (screenHeight - height) / 2);
-
-            Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            warning.Draw(null);
-            Velo.SpriteBatch.End();
         }
 
         [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d11")]

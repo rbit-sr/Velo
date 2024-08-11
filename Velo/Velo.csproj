@@ -78,6 +78,8 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BackwardsCompatibility.cs" />
+    <Compile Include="Cursor.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="FontCache.cs" />
     <Compile Include="Input.cs" />
@@ -87,6 +89,10 @@
     <Compile Include="Leaderboard\Leaderboard.cs" />
     <Compile Include="Leaderboard\LeaderboardMenus.cs" />
     <Compile Include="Leaderboard\Map.cs" />
+    <Compile Include="Leaderboard\Cooldowns.cs" />
+    <Compile Include="Modules\Ghosts.cs" />
+    <Compile Include="Modules\Origins.cs" />
+    <Compile Include="Modules\Savestates.cs" />
     <Compile Include="Notification.cs" />
     <Compile Include="Leaderboard\Recording.cs" />
     <Compile Include="Leaderboard\RecordingSubmitter.cs" />
@@ -94,7 +100,8 @@
     <Compile Include="Leaderboard\RulesChecker.cs" />
     <Compile Include="Leaderboard\RunsDatabase.cs" />
     <Compile Include="Leaderboard\SteamCache.cs" />
-    <Compile Include="Widget.cs" />
+    <Compile Include="UI\Menu.cs" />
+    <Compile Include="UI\Widget.cs" />
     <Compile Include="Module.cs" />
     <Compile Include="Modules\AngleDisplay.cs" />
     <Compile Include="Modules\Appearance.cs" />

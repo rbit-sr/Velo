@@ -1,4 +1,7 @@
 ﻿using CEngine.Content;
+using CEngine.World.Actor;
+using CEngine.World.Collision;
+using Microsoft.Xna.Framework;
 using System;
 using System.IO;
 using System.Linq;
@@ -63,6 +66,12 @@ namespace Velo
 
         public BoolSetting DisableGhostGrappleSound;
         public BoolSetting DisableRemoteGrappleSound;
+        public BoolSetting DisableSawSound;
+        public BoolSetting DisableLaserSound;
+
+        public BoolSetting FixDanceHallGate;
+
+        public ToggleSetting OriginsMenu;
 
         public bool contentsReloaded = false;
 
@@ -103,24 +112,116 @@ namespace Velo
             NewCategory("sounds");
             DisableGhostGrappleSound = AddBool("disable ghost grapple", false);
             DisableRemoteGrappleSound = AddBool("disable remote grapple", false);
+            DisableSawSound = AddBool("disable saw", false);
+            DisableLaserSound = AddBool("disable laser", false);
 
             DisableGhostGrappleSound.Tooltip = "Disable ghost players' grapple sounds.";
             DisableRemoteGrappleSound.Tooltip = "Disable remote players' grapple sounds.";
+
+            NewCategory("bug fixes");
+            FixDanceHallGate = AddBool("fix dance hall gate", true);
+
+            FixDanceHallGate.Tooltip =
+                "The map Dance Hall has an oversight where players in multiplayer mode can get stuck indefinitely in the top right section right after the booster. " +
+                "This fix increases size of the trigger for the gate in the top right section, " +
+                "so that you are still able to reopen the gate after respawning right behind it.";
+
+            NewCategory("Origins");
+            OriginsMenu = AddToggle("menu", new Toggle());
         }
 
         public static Miscellaneous Instance = new Miscellaneous();
+
+        public override void Init()
+        {
+            base.Init();
+
+            Origins.Instance.Init();
+        }
 
         public override void PreUpdate()
         {
             base.PreUpdate();
 
+            if (Input.Pressed(OriginsMenu.Value.Hotkey))
+            {
+                OriginsMenu.ToggleState();
+            }
+
             if (ReloadKey.Pressed())
                 ReloadContents();
+
+            if (FixDanceHallGate.Value && !Velo.IngamePrev && Velo.Ingame && Map.GetCurrentMapId() == 22)
+            {
+                CCollisionEngine col = CEngine.CEngine.Instance.World.CollisionEngine;
+                foreach (CActor actor in col.actors)
+                {
+                    if (actor.Controller is Trigger)
+                    {
+                        if (actor.Position.X >= 10000f)
+                        {
+                            actor.Position -= new Vector2(0f, 1000f);
+                            actor.Size += new Vector2(0f, 1000f);
+                            CEngine.World.Collision.Shape.CAABB rec = (CEngine.World.Collision.Shape.CAABB)actor.Collision;
+                            rec.MinY -= 1000f;
+                            actor.SetBoundsFromShape(rec);
+                            actor.UpdateCollision();
+                        }
+                    }
+                }
+            }
+        }
+
+        public override void PostUpdate()
+        {
+            base.PostUpdate();
+
+            Origins.Instance.PostUpdate();
+
+            CCollisionEngine col = CEngine.CEngine.Instance.World.CollisionEngine;
+            
+            if (DisableSawSound.Value || DisableLaserSound.Value)
+            {
+                foreach (CActor actor in col.actors)
+                {
+                    if (DisableSawSound.Value && actor.Controller is TriggerSaw saw) 
+                    {
+                        saw.soundEmitter.Pause();
+                    }
+                    if (DisableLaserSound.Value && actor.Controller is Laser laser)
+                    {
+                        laser.soundEmitter.Pause();
+                    }
+                }
+            }
+
+            if (DisableSawSound.Modified() && !DisableSawSound.Value)
+            {
+                foreach (CActor actor in col.actors)
+                {
+                    if (actor.Controller is TriggerSaw saw)
+                    {
+                        saw.soundEmitter.Unpause();
+                    }
+                }
+            }
+            if (DisableLaserSound.Modified() && !DisableLaserSound.Value)
+            {
+                foreach (CActor actor in col.actors)
+                {
+                    if (actor.Controller is Laser laser)
+                    {
+                        laser.soundEmitter.Unpause();
+                    }
+                }
+            }
         }
 
         public override void PostRender()
         {
             base.PostRender();
+
+            Origins.Instance.PostRender();
 
             contentsReloaded = false;
         }
@@ -182,11 +283,13 @@ namespace Velo
 
         public bool DisableGrappleSound(Player player)
         {
-            if (player == Velo.Ghost)
+            if (player.slot.LocalPlayer && !player.slot.IsBot)
+                return false;
+
+            if (!Velo.Online)
                 return DisableGhostGrappleSound.Value;
-            else if (!player.slot.LocalPlayer || player.slot.IsBot)
+            else
                 return DisableRemoteGrappleSound.Value;
-            return false;
         }
     }
 }

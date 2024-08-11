@@ -70,7 +70,7 @@ namespace Velo
                     string[] args = Environment.GetCommandLineArgs();
                     Main.game.Dispose();
                     SteamAPI.Shutdown();
-                    Process.Start("VeloUpdater.exe", "Velo\\update\\" + update.Filename + " " + string.Join(" ", args));
+                    Process.Start("VeloUpdater2.exe", "Velo\\update\\" + update.Filename + " " + string.Join(" ", args));
                     Environment.Exit(0);
                 }
             };
@@ -82,7 +82,7 @@ namespace Velo
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
                     updateRefused = true;
-                    Velo.DisableCursor(this);
+                    Cursor.DisableCursor(this);
                 }
             };
 
@@ -135,7 +135,7 @@ namespace Velo
             {
                 Initialize();
                 initialized = true;
-                Velo.EnableCursor(this);
+                Cursor.EnableCursor(this);
             }
 
             container.Draw();

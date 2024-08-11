@@ -283,14 +283,50 @@ namespace Velo
             }
         }
 
+        [DllImport("ntdll.dll", SetLastError = true)]
+        internal static extern uint RtlGetVersion(out OsVersionInfo versionInformation);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal readonly struct OsVersionInfo
+        {
+            private readonly uint OsVersionInfoSize;
+
+            internal readonly uint MajorVersion;
+            internal readonly uint MinorVersion;
+
+            private readonly uint BuildNumber;
+
+            private readonly uint PlatformId;
+
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+            private readonly string CSDVersion;
+
+            public static readonly OsVersionInfo Value = new Func<OsVersionInfo>(() =>
+            {
+                RtlGetVersion(out OsVersionInfo value);
+                return value;
+            })();
+        }
+
         [DllImport("Kernel32.dll", CallingConvention = CallingConvention.Winapi)]
         private static extern void GetSystemTimePreciseAsFileTime(out long filetime);
+
+        [DllImport("Kernel32.dll", CallingConvention = CallingConvention.Winapi)]
+        private static extern void GetSystemTimeAsFileTime(out long filetime);
 
         public static long UtcNow
         {
             get
             {
-                GetSystemTimePreciseAsFileTime(out long filetime);
+                long filetime;
+                if (
+                    (OsVersionInfo.Value.MajorVersion == 6 && OsVersionInfo.Value.MinorVersion >= 2) ||
+                    OsVersionInfo.Value.MajorVersion > 6
+                    )
+                    GetSystemTimePreciseAsFileTime(out filetime);
+                else
+                    GetSystemTimeAsFileTime(out filetime);
+
                 return DateTime.FromFileTimeUtc(filetime).Ticks;
             }
         }

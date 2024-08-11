@@ -1,6 +1,7 @@
 ﻿using Lidgren.Network;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 
 namespace Velo
@@ -97,28 +98,28 @@ namespace Velo
             if (!Velo.Ingame)
                 return;
 
-            Slot[] slots = Main.game.stack.gameInfo.slots;
-            foreach (Slot slot in slots)
+            IEnumerable<Player> players = Main.game.stack.gameInfo.slots.Select(slot => slot.Player).Concat(Ghosts.Instance.All().Skip(1));
+            foreach (Player player in players)
             {
-                if (slot.Player != null)
+                if (player != null)
                 {
-                    if (DisableRemotePlayersAfterimages.Value && !slot.LocalPlayer)
-                        slot.Player.afterImagesParticleEmitterProvider.Active = false;
+                    if (DisableRemotePlayersAfterimages.Value && !player.slot.LocalPlayer)
+                        player.afterImagesParticleEmitterProvider.Active = false;
                     if (DisableBrakeParticles.Value)
                     {
-                        slot.Player.brakeParticleEmitter.Active = false;
-                        slot.Player.brakeParticleEmitter2.time = 0f;
-                        slot.Player.brakeParticleEmitter2.Reset();
-                        slot.Player.brakeParticleEmitter3.Active = false;
+                        player.brakeParticleEmitter.Active = false;
+                        player.brakeParticleEmitter2.time = 0f;
+                        player.brakeParticleEmitter2.Reset();
+                        player.brakeParticleEmitter3.Active = false;
                     }
                     if (DisableWallParticles.Value)
-                        slot.Player.wallParticleEmitter.Active = false;
+                        player.wallParticleEmitter.Active = false;
                     if (DisablePlusParticles.Value)
-                        slot.Player.plusParticleEmitter.Active = false;
+                        player.plusParticleEmitter.Active = false;
                     if (DisableGlitterParticles.Value)
-                        slot.Player.glitterParticleEmitter.Active = false;
+                        player.glitterParticleEmitter.Active = false;
                     if (DisableDrillSparkParticles.Value)
-                        slot.Player.drillSparkParticleEmitter.Active = false;
+                        player.drillSparkParticleEmitter.Active = false;
                 }
             }
         }

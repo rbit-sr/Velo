@@ -640,7 +640,7 @@ namespace Velo
             drawComp.HasDropShadow = true;
             drawComp.DropShadowColor = Color.Black;
             drawComp.DropShadowOffset = Vector2.One;
-            drawComp.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup.Flipped;
+            drawComp.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup != null && Velo.MainPlayer.popup.Flipped;
             drawComp.Scale = Scale.Value * Vector2.One;
             drawComp.Rotation = Rotation.Value;
             drawComp.StringText = GetText();

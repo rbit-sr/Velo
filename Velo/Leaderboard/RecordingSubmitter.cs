@@ -56,6 +56,10 @@ namespace Velo
                 });
                 tempInfo = recording.Info;
                 RunsDatabase.Instance.AddPending(ref tempInfo);
+                if (Map.IsOther(recording.Info.Category.MapId))
+                {
+                    handler.Push(new SendMapNameRequest(recording.Info.Category.MapId));
+                }
                 handler.Push(new SubmitRunRequest(recording), result =>
                 {
                     Result = result;

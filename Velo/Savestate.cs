@@ -1,7 +1,6 @@
 ﻿using CEngine.Graphics.Camera;
 using CEngine.Graphics.Camera.Modifier;
 using CEngine.Graphics.Component;
-using CEngine.Graphics.Library;
 using CEngine.Util.Draw;
 using CEngine.World;
 using CEngine.World.Actor;
@@ -263,7 +262,7 @@ namespace Velo
                 stream.Write(player.actor.Id);
             else if (obj.target is GoldenHook goldenHook)
             {
-                if (!include[GoldenHook.Id])
+                if (!include[ATGoldenHook.Id])
                     stream.Write(-2);
                 else
                     stream.Write(goldenHook.actor.Id);
@@ -305,7 +304,7 @@ namespace Velo
             Write(stream, obj.spriteDraw1);
             Write(stream, obj.bounds);
             stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
                 stream.Write(obj.aiVolume != null ? obj.aiVolume.actor.Id : -1);
         }
 
@@ -319,7 +318,7 @@ namespace Velo
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = stream.Read<int>();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
             {
                 int aiVolumeId = stream.Read<int>();
                 applyPtr.Add(() => obj.aiVolume = (AIVolume)contrLookup[aiVolumeId]);
@@ -340,7 +339,7 @@ namespace Velo
             else
                 stream.Write(2);
             stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
-            if (include[Shockwave.Id])
+            if (include[ATShockwave.Id])
                 stream.Write(obj.shockwave != null ? obj.shockwave.actor.Id : -1);
         }
 
@@ -360,7 +359,7 @@ namespace Velo
             contrLookup.Add(obj.actor.Id, obj);
             int ownerId = stream.Read<int>();
             applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
-            if (include[Shockwave.Id])
+            if (include[ATShockwave.Id])
             {
                 int shockwaveId = stream.Read<int>();
                 applyPtr.Add(() => obj.shockwave = (Shockwave)contrLookup[shockwaveId]);
@@ -500,7 +499,7 @@ namespace Velo
             stream.Write(obj, 0x54 + 0x14, 0x20);
             Write(stream, obj.spriteDraw);
             Write(stream, obj.groupDraw);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
             {
                 stream.Write(obj.aiVolume1 != null ? obj.aiVolume1.actor.Id : -1);
                 stream.Write(obj.aiVolume2 != null ? obj.aiVolume2.actor.Id : -1);
@@ -514,7 +513,7 @@ namespace Velo
             Read(stream, obj.spriteDraw);
             Read(stream, obj.groupDraw);
             obj.timespan1 = new TimeSpan(obj.timespan1.Ticks + dt);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
             {
                 int aiVolume1Id = stream.Read<int>();
                 int aiVolume2Id = stream.Read<int>();
@@ -622,21 +621,21 @@ namespace Velo
                 }
                 else if (contr is DroppedBomb dropped)
                 {
-                    if (include[DroppedBomb.Id])
+                    if (include[ATDroppedBomb.Id])
                         stream.Write(dropped.actor.Id);
                     else
                         stream.Write(-2);
                 }
                 else if (contr is Fireball fireball)
                 {
-                    if (include[Fireball.Id])
+                    if (include[ATFireball.Id])
                         stream.Write(fireball.actor.Id);
                     else
                         stream.Write(-2);
                 }
                 else if (contr is Rocket rocket)
                 {
-                    if (include[Rocket.Id])
+                    if (include[ATRocket.Id])
                         stream.Write(rocket.actor.Id);
                     else
                         stream.Write(-2);
@@ -657,21 +656,21 @@ namespace Velo
                 }
                 else if (contr is DroppedBomb droppedBomb)
                 {
-                    if (include[DroppedBomb.Id])
+                    if (include[ATDroppedBomb.Id])
                         stream.Write(droppedBomb.actor.Id);
                     else
                         stream.Write(-2);
                 }
                 else if (contr is Fireball fireball)
                 {
-                    if (include[Fireball.Id])
+                    if (include[ATFireball.Id])
                         stream.Write(fireball.actor.Id);
                     else
                         stream.Write(-2);
                 }
                 else if (contr is Rocket rocket)
                 {
-                    if (include[Rocket.Id])
+                    if (include[ATRocket.Id])
                         stream.Write(rocket.actor.Id);
                     else
                         stream.Write(-2);
@@ -791,7 +790,7 @@ namespace Velo
             Write(stream, obj.animSpriteDraw2);
             Write(stream, obj.groupDraw);
             stream.Write(obj.target != null ? obj.target.actor.Id : -1);
-            if (include[Rocket.Id])
+            if (include[ATRocket.Id])
             {
                 stream.Write(obj.rockets.Count);
                 foreach (Rocket rocket in obj.rockets)
@@ -808,7 +807,7 @@ namespace Velo
             Read(stream, obj.groupDraw);
             int targetId = stream.Read<int>();
             applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
-            if (include[Rocket.Id])
+            if (include[ATRocket.Id])
             {
                 int count = stream.Read<int>();
                 while (obj.rockets.Count < count) obj.rockets.Add(null);
@@ -868,7 +867,7 @@ namespace Velo
             Write(stream, obj.line1);
             Write(stream, obj.line2);
             Write(stream, obj.groupDraw);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
                 stream.Write(obj.aiVolume != null ? obj.aiVolume.actor.Id : -1);
         }
 
@@ -881,7 +880,7 @@ namespace Velo
             Read(stream, obj.line1);
             Read(stream, obj.line2);
             Read(stream, obj.groupDraw);
-            if (include[AIVolume.Id])
+            if (include[ATAIVolume.Id])
             {
                 int aiVolumeId = stream.Read<int>();
                 applyPtr.Add(() => obj.aiVolume = (AIVolume)contrLookup[aiVolumeId]);
@@ -1005,6 +1004,134 @@ namespace Velo
             obj.actor.UpdateCollision();
         }
 
+        private static unsafe void WriteBb(MemoryStream stream, BossBase obj)
+        {
+            stream.Write(obj, 0x18, 0xC);
+            Write(stream, obj.actor);
+            Write(stream, obj.bounds);
+        }
+
+        private static unsafe void ReadBb(MemoryStream stream, BossBase obj)
+        {
+            stream.Read(obj, 0x18, 0xC);
+            Read(stream, obj.actor);
+            Read(stream, obj.bounds);
+            contrLookup.Add(obj.actor.Id, obj);
+        }
+
+        private static unsafe void Write(MemoryStream stream, Boss1 obj)
+        {
+            WriteBb(stream, obj);
+            stream.Write(obj, 0x24 + 0x18, 0x10);
+            Write(stream, obj.drawComp);
+            foreach (CConvexPolygon polygon in obj.polygons)
+                Write(stream, polygon);
+        }
+
+        private static unsafe void Read(MemoryStream stream, Boss1 obj)
+        {
+            ReadBb(stream, obj);
+            stream.Read(obj, 0x24 + 0x18, 0x10);
+            Read(stream, obj.drawComp);
+            foreach (CConvexPolygon polygon in obj.polygons)
+                Read(stream, polygon);
+            obj.actor.UpdateCollision();
+        }
+
+        private static unsafe void Write(MemoryStream stream, Boss2 obj)
+        {
+            WriteBb(stream, obj);
+            stream.Write(obj, 0x24 + 0x14, 0x18);
+            Write(stream, obj.groupDraw);
+            Write(stream, obj.animSpriteDraw);
+        }
+
+        private static unsafe void Read(MemoryStream stream, Boss2 obj)
+        {
+            ReadBb(stream, obj);
+            stream.Read(obj, 0x24 + 0x14, 0x18);
+            Read(stream, obj.groupDraw);
+            Read(stream, obj.animSpriteDraw);
+            obj.actor.UpdateCollision();
+        }
+
+        private static unsafe void Write(MemoryStream stream, Boss4 obj)
+        {
+            WriteBb(stream, obj);
+            stream.Write(obj, 0x24 + 0x18, 0x10);
+            Write(stream, obj.groupDraw);
+            foreach (CConvexPolygon polygon in obj.polygons)
+                Write(stream, polygon);
+        }
+
+        private static unsafe void Read(MemoryStream stream, Boss4 obj)
+        {
+            ReadBb(stream, obj);
+            stream.Read(obj, 0x24 + 0x18, 0x10);
+            Read(stream, obj.groupDraw);
+            foreach (CConvexPolygon polygon in obj.polygons)
+                Read(stream, polygon);
+            obj.actor.UpdateCollision();
+        }
+
+        private static unsafe void Write(MemoryStream stream, BossSaw obj)
+        {
+            stream.Write(obj, 0x20, 0x34);
+            Write(stream, obj.actor);
+            Write(stream, obj.bounds);
+            Write(stream, obj.drawComp);
+        }
+
+        private static unsafe void Read(MemoryStream stream, BossSaw obj)
+        {
+            stream.Read(obj, 0x20, 0x34);
+            Read(stream, obj.actor);
+            Read(stream, obj.bounds);
+            Read(stream, obj.drawComp);
+            contrLookup.Add(obj.actor.Id, obj);
+            obj.actor.UpdateCollision();
+        }
+
+        private static unsafe void Write(MemoryStream stream, FallBlock obj)
+        {
+            stream.Write(obj, 0x14, 0x28);
+            Write(stream, obj.actor);
+            Write(stream, obj.polygon);
+            Write(stream, obj.imageDrawComp);
+        }
+
+        private static unsafe void Read(MemoryStream stream, FallBlock obj)
+        {
+            stream.Read(obj, 0x14, 0x28);
+            Read(stream, obj.actor);
+            Read(stream, obj.polygon);
+            Read(stream, obj.imageDrawComp);
+            obj.timespan = new TimeSpan(obj.timespan.Ticks + dt);
+            contrLookup.Add(obj.actor.Id, obj);
+            obj.actor.UpdateCollision();
+        }
+
+        private static unsafe void Write(MemoryStream stream, MovingPlatform obj)
+        {
+            stream.Write(obj, 0x24, 0x38);
+            Write(stream, obj.actor);
+            Write(stream, obj.bounds);
+            Write(stream, obj.imageDrawComp);
+            stream.Write(obj.player != null ? obj.player.actor.Id : -1);
+        }
+
+        private static unsafe void Read(MemoryStream stream, MovingPlatform obj)
+        {
+            stream.Read(obj, 0x24, 0x38);
+            Read(stream, obj.actor);
+            Read(stream, obj.bounds);
+            Read(stream, obj.imageDrawComp);
+            int playerId = stream.Read<int>();
+            applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
+            contrLookup.Add(obj.actor.Id, obj);
+            obj.actor.UpdateCollision();
+        }
+
         private static unsafe void Write(MemoryStream stream, Player obj)
         {
             stream.Write(obj, 0x1D4, 0x214);
@@ -1046,45 +1173,45 @@ namespace Velo
 
             stream.Write(obj.grapple != null ? obj.grapple.actor.Id : -1);
             stream.Write(obj.rope != null ? obj.rope.actor.Id : -1);
-            if (include[GoldenHook.Id])
+            if (include[ATGoldenHook.Id])
                 stream.Write(obj.goldenHook != null ? obj.goldenHook.actor.Id : -1);
-            if (include[Shockwave.Id])
+            if (include[ATShockwave.Id])
                 stream.Write(obj.shockwave != null ? obj.shockwave.actor.Id : -1);
-            if (include[DroppedBomb.Id])
+            if (include[ATDroppedBomb.Id])
                 stream.Write(obj.droppedBomb != null ? obj.droppedBomb.actor.Id : -1);
-            if (include[FreezeRay.Id])
+            if (include[ATFreezeRay.Id])
                 stream.Write(obj.freezeRay != null ? obj.freezeRay.actor.Id : -1);
             stream.Write(obj.hooked != null ? obj.hooked.actor.Id : -1);
             stream.Write(obj.unknown1 != null ? obj.unknown1.actor.Id : -1);
-            if (include[Trigger.Id])
+            if (include[ATTrigger.Id])
             {
                 stream.Write(obj.trigger1 != null ? obj.trigger1.actor.Id : -1);
                 stream.Write(obj.trigger2 != null ? obj.trigger2.actor.Id : -1);
             }
-            if (include[Checkpoint.Id])
+            if (include[ATCheckpoint.Id])
             {
                 stream.Write(obj.checkpoint1 != null ? obj.checkpoint1.actor.Id : -1);
                 stream.Write(obj.checkpoint2 != null ? obj.checkpoint2.actor.Id : -1);
             }
-            if (include[DroppedObstacle.Id])
+            if (include[ATDroppedObstacle.Id])
             {
                 stream.Write(obj.droppedObstacles.Count);
                 foreach (DroppedObstacle droppedObstacle in obj.droppedObstacles)
                     stream.Write(droppedObstacle != null ? droppedObstacle.actor.Id : -1);
             }
-            if (include[Fireball.Id])
+            if (include[ATFireball.Id])
             {
                 stream.Write(obj.fireballs.Count);
                 foreach (Fireball fireball in obj.fireballs)
                     stream.Write(fireball != null ? fireball.actor.Id : -1);
             }
-            if (include[Rocket.Id])
+            if (include[ATRocket.Id])
             {
                 stream.Write(obj.rockets.Count);
                 foreach (Rocket rocket in obj.rockets)
                     stream.Write(rocket != null ? rocket.actor.Id : -1);
             }
-            if (include[BoostaCoke.Id])
+            if (include[ATBoostaCoke.Id])
             {
                 stream.Write(obj.boostaCokes.Count);
                 foreach (BoostaCoke boostaCoke in obj.boostaCokes)
@@ -1100,7 +1227,7 @@ namespace Velo
             obj.charId = charId;
             obj.skinId = skinId;
             Read(stream, obj.actor);
-            if (!ghostOnly)
+            if (ghostIndex == -1)
                 Read(stream, obj.slot);
             else
                 stream.Position += 0x3C;
@@ -1157,22 +1284,22 @@ namespace Velo
             applyPtr.Add(() => obj.grapple = (Grapple)contrLookup[grappleId]);
             int ropeId = stream.Read<int>();
             applyPtr.Add(() => obj.rope = (Rope)contrLookup[ropeId]);
-            if (include[GoldenHook.Id])
+            if (include[ATGoldenHook.Id])
             {
                 int goldenHookId = stream.Read<int>();
                 applyPtr.Add(() => obj.goldenHook = (GoldenHook)contrLookup[goldenHookId]);
             }
-            if (include[Shockwave.Id])
+            if (include[ATShockwave.Id])
             {
                 int shockwaveId = stream.Read<int>();
                 applyPtr.Add(() => obj.shockwave = (Shockwave)contrLookup[shockwaveId]);
             }
-            if (include[DroppedBomb.Id])
+            if (include[ATDroppedBomb.Id])
             {
                 int droppedBombId = stream.Read<int>();
                 applyPtr.Add(() => obj.droppedBomb = (DroppedBomb)contrLookup[droppedBombId]);
             }
-            if (include[FreezeRay.Id])
+            if (include[ATFreezeRay.Id])
             {
                 int freezeRayId = stream.Read<int>();
                 applyPtr.Add(() => obj.freezeRay = (FreezeRay)contrLookup[freezeRayId]);
@@ -1181,21 +1308,21 @@ namespace Velo
             applyPtr.Add(() => obj.hooked = (Player)contrLookup[hookedId]);
             int unknown1Id = stream.Read<int>();
             applyPtr.Add(() => obj.unknown1 = (Player)contrLookup[unknown1Id]);
-            if (include[Trigger.Id])
+            if (include[ATTrigger.Id])
             {
                 int trigger1Id = stream.Read<int>();
                 int trigger2Id = stream.Read<int>();
                 applyPtr.Add(() => obj.trigger1 = (Trigger)contrLookup[trigger1Id]);
                 applyPtr.Add(() => obj.trigger2 = (Trigger)contrLookup[trigger2Id]);
             }
-            if (include[Checkpoint.Id])
+            if (include[ATCheckpoint.Id])
             {
                 int checkpoint1Id = stream.Read<int>();
                 int checkpoint2Id = stream.Read<int>();
                 applyPtr.Add(() => obj.checkpoint1 = (Checkpoint)contrLookup[checkpoint1Id]);
                 applyPtr.Add(() => obj.checkpoint1 = (Checkpoint)contrLookup[checkpoint2Id]);
             }
-            if (include[DroppedObstacle.Id])
+            if (include[ATDroppedObstacle.Id])
             {
                 int droppedObstacles = stream.Read<int>();
                 while (obj.droppedObstacles.Count < droppedObstacles) obj.droppedObstacles.Add(null);
@@ -1207,7 +1334,7 @@ namespace Velo
                     applyPtr.Add(() => obj.droppedObstacles[j] = (DroppedObstacle)contrLookup[droppedObstacleId]);
                 }
             }
-            if (include[Fireball.Id])
+            if (include[ATFireball.Id])
             {
                 int fireballs = stream.Read<int>();
                 while (obj.fireballs.Count < fireballs) obj.fireballs.Add(null);
@@ -1219,7 +1346,7 @@ namespace Velo
                     applyPtr.Add(() => obj.fireballs[j] = (Fireball)contrLookup[fireballId]);
                 }
             }
-            if (include[Rocket.Id])
+            if (include[ATRocket.Id])
             {
                 int rockets = stream.Read<int>();
                 while (obj.rockets.Count < rockets) obj.rockets.Add(null);
@@ -1231,7 +1358,7 @@ namespace Velo
                     applyPtr.Add(() => obj.rockets[j] = (Rocket)contrLookup[rocketId]);
                 }
             }
-            if (include[BoostaCoke.Id])
+            if (include[ATBoostaCoke.Id])
             {
                 int boostaCokes = stream.Read<int>();
                 while (obj.boostaCokes.Count < boostaCokes) obj.boostaCokes.Add(null);
@@ -1250,7 +1377,7 @@ namespace Velo
         {
             Write(stream, (Player)obj);
             stream.Write(obj, 0x1D4 + 0x214 + 0x4, 0x48);
-            if (include[GoldenHook.Id])
+            if (include[ATGoldenHook.Id])
                 stream.Write(obj.goldenHookBot != null ? obj.goldenHookBot.actor.Id : -1);
         }
 
@@ -1258,7 +1385,7 @@ namespace Velo
         {
             Read(stream, (Player)obj);
             stream.Read(obj, 0x1D4 + 0x214 + 0x4, 0x48);
-            if (include[GoldenHook.Id])
+            if (include[ATGoldenHook.Id])
             {
                 int hookId = stream.Read<int>();
                 applyPtr.Add(() => obj.goldenHookBot = (GoldenHook)contrLookup[hookId]);
@@ -1384,36 +1511,42 @@ namespace Velo
         private static readonly List<ActorType> actorTypes = new List<ActorType>();
 
         // don't ever change the order
-        public static readonly ActorType Player = new ActorType<Player>(Write, Read);
-        public static readonly ActorType PlayerBot = new ActorType<PlayerBot>(Write, Read);
-        public static readonly ActorType Grapple = new ActorType<Grapple, GrappleDef>(Write, Read, () => new GrappleDef(0, null));
-        public static readonly ActorType Rope = new ActorType<Rope, RopeDef>(Write, Read, () => new RopeDef());
-        public static readonly ActorType Fireball = new ActorType<Fireball, FireballDef>(Write, Read, () => new FireballDef(Vector2.Zero));
-        public static readonly ActorType DroppedObstacle = new ActorType<DroppedObstacle, DroppedObstacleDef>(Write, Read, () => new DroppedObstacleDef(null, false));
-        public static readonly ActorType Rocket = new ActorType<Rocket, RocketDef>(Write, Read, () => new RocketDef(null, Main.game.stack.gameInfo));
-        public static readonly ActorType GoldenHook = new ActorType<GoldenHook, GoldenHookDef>(Write, Read, () => new GoldenHookDef(0, null));
-        public static readonly ActorType Shockwave = new ActorType<Shockwave, ShockwaveDef>(Write, Read, () => new ShockwaveDef(null));
-        public static readonly ActorType DroppedBomb = new ActorType<DroppedBomb, DroppedBombDef>(Write, Read, () => new DroppedBombDef(Microsoft.Xna.Framework.Color.White, null));
-        public static readonly ActorType Obstacle = new ActorType<Obstacle>(Write, Read);
-        public static readonly ActorType FreezeRay = new ActorType<FreezeRay, FreezeRayDef>(Write, Read, () => new FreezeRayDef(Vector2.Zero, null));
-        public static readonly ActorType Pickup = new ActorType<Pickup>(Write, Read);
-        public static readonly ActorType Trigger = new ActorType<Trigger>(Write, Read);
-        public static readonly ActorType SwitchBlock = new ActorType<SwitchBlock>(Write, Read);
-        public static readonly ActorType Lever = new ActorType<Lever>(Write, Read);
-        public static readonly ActorType FallTile = new ActorType<FallTile>(Write, Read);
-        public static readonly ActorType TriggerSaw = new ActorType<TriggerSaw>(Write, Read);
-        public static readonly ActorType RocketLauncher = new ActorType<RocketLauncher>(Write, Read);
-        public static readonly ActorType BoostaCoke = new ActorType<BoostaCoke>(Write, Read);
-        public static readonly ActorType Laser = new ActorType<Laser>(Write, Read);
-        public static readonly ActorType AIVolume = new ActorType<AIVolume, AIVolumeDef>(Write, Read, () => new AIVolumeDef(Vector2.Zero, Vector2.Zero, 0));
-        public static readonly ActorType Timer = new ActorType<Timer>(Write, Read);
-        public static readonly ActorType Checkpoint = new ActorType<Checkpoint>(Write, Read);
-        public static readonly ActorType StraightRocket = new ActorType<StraightRocket, StraightRocketDef>(Write, Read, () => new StraightRocketDef(Main.game.stack.gameInfo));
+        public static readonly ActorType ATPlayer = new ActorType<Player>(Write, Read);
+        public static readonly ActorType ATPlayerBot = new ActorType<PlayerBot>(Write, Read);
+        public static readonly ActorType ATGrapple = new ActorType<Grapple, GrappleDef>(Write, Read, () => new GrappleDef(0, null));
+        public static readonly ActorType ATRope = new ActorType<Rope, RopeDef>(Write, Read, () => new RopeDef());
+        public static readonly ActorType ATFireball = new ActorType<Fireball, FireballDef>(Write, Read, () => new FireballDef(Vector2.Zero));
+        public static readonly ActorType ATDroppedObstacle = new ActorType<DroppedObstacle, DroppedObstacleDef>(Write, Read, () => new DroppedObstacleDef(null, false));
+        public static readonly ActorType ATRocket = new ActorType<Rocket, RocketDef>(Write, Read, () => new RocketDef(null, Main.game.stack.gameInfo));
+        public static readonly ActorType ATGoldenHook = new ActorType<GoldenHook, GoldenHookDef>(Write, Read, () => new GoldenHookDef(0, null));
+        public static readonly ActorType ATShockwave = new ActorType<Shockwave, ShockwaveDef>(Write, Read, () => new ShockwaveDef(null));
+        public static readonly ActorType ATDroppedBomb = new ActorType<DroppedBomb, DroppedBombDef>(Write, Read, () => new DroppedBombDef(Microsoft.Xna.Framework.Color.White, null));
+        public static readonly ActorType ATObstacle = new ActorType<Obstacle>(Write, Read);
+        public static readonly ActorType ATFreezeRay = new ActorType<FreezeRay, FreezeRayDef>(Write, Read, () => new FreezeRayDef(Vector2.Zero, null));
+        public static readonly ActorType ATPickup = new ActorType<Pickup>(Write, Read);
+        public static readonly ActorType ATTrigger = new ActorType<Trigger>(Write, Read);
+        public static readonly ActorType ATSwitchBlock = new ActorType<SwitchBlock>(Write, Read);
+        public static readonly ActorType ATLever = new ActorType<Lever>(Write, Read);
+        public static readonly ActorType ATFallTile = new ActorType<FallTile>(Write, Read);
+        public static readonly ActorType ATTriggerSaw = new ActorType<TriggerSaw>(Write, Read);
+        public static readonly ActorType ATRocketLauncher = new ActorType<RocketLauncher>(Write, Read);
+        public static readonly ActorType ATBoostaCoke = new ActorType<BoostaCoke>(Write, Read);
+        public static readonly ActorType ATLaser = new ActorType<Laser>(Write, Read);
+        public static readonly ActorType ATAIVolume = new ActorType<AIVolume, AIVolumeDef>(Write, Read, () => new AIVolumeDef(Vector2.Zero, Vector2.Zero, 0));
+        public static readonly ActorType ATTimer = new ActorType<Timer>(Write, Read);
+        public static readonly ActorType ATCheckpoint = new ActorType<Checkpoint>(Write, Read);
+        public static readonly ActorType ATStraightRocket = new ActorType<StraightRocket, StraightRocketDef>(Write, Read, () => new StraightRocketDef(Main.game.stack.gameInfo));
+        public static readonly ActorType ATBoss1 = new ActorType<Boss1>(Write, Read);
+        public static readonly ActorType ATBoss2 = new ActorType<Boss2>(Write, Read);
+        public static readonly ActorType ATBoss4 = new ActorType<Boss4>(Write, Read);
+        public static readonly ActorType ATBossSaw = new ActorType<BossSaw>(Write, Read);
+        public static readonly ActorType ATFallBlock = new ActorType<FallBlock>(Write, Read);
+        public static readonly ActorType ATMovingPlatform = new ActorType<MovingPlatform>(Write, Read);
 
         private readonly MemoryStream stream;
 
         private static long dt;
-        private static bool ghostOnly;
+        private static int ghostIndex;
         private static bool moduleProgressOnly;
         private static bool[] include = new bool[actorTypes.Count];
         private static readonly NullSafeDict<int, ICActorController> contrLookup = new NullSafeDict<int, ICActorController>();
@@ -1509,20 +1642,21 @@ namespace Velo
 
             Savestate.moduleProgressOnly = moduleProgressOnly;
 
-            int count = collisionEngine.ActorCount;
-
             int playerOffset = 0;
 
             stream.Position = 0;
 
-            stream.Write(1);
-            if (Velo.ModuleSolo != null)
+            int version = 2;
+
+            stream.Write(version);
+            stream.Write(Map.GetCurrentMapId());
+            /*if (Velo.ModuleSolo != null && Velo.ModuleSolo.LevelData != null)
             {
                 stream.Write(1);
                 stream.WriteStr(Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author);
             }
             else
-                stream.Write(-1);
+                stream.Write(-1);*/
             stream.Write(CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks);
 
             if (listMode == EListMode.EXCLUDE)
@@ -1540,38 +1674,40 @@ namespace Velo
 
             stream.WriteBoolArr(include);
 
-            if (Velo.Ghost != null && Velo.Ghost.grapple != null && Velo.Ghost.rope != null)
+            foreach (Player ghost in Ghosts.Instance.All())
             {
-                Velo.Ghost.grapple.actor.ghostOwnedItem = true;
-                Velo.Ghost.rope.actor.ghostOwnedItem = true;
+                if (ghost != null && ghost.grapple != null && ghost.rope != null)
+                {
+                    ghost.grapple.actor.ghostOwnedItem = true;
+                    ghost.rope.actor.ghostOwnedItem = true;
+                }
             }
 
-            for (int i = 0; i < count; i++)
+            foreach (CActor actor in collisionEngine.actors)
             {
-                CActor actor = collisionEngine.GetActor(i);
                 if (actor.ghostOwnedItem)
                     continue;
                 ICActorController controller = actor.Controller;
 
-                if (controller is Player player)
+                if (controller is Player player && !(controller is PlayerBot))
                 {
                     if (!player.slot.LocalPlayer && !player.slot.IsBot)
                         continue;
-                    if (!include[Player.Id]) continue;
-                    stream.Write(Player.Id);
+                    if (!include[ATPlayer.Id]) continue;
+                    stream.Write(ATPlayer.Id);
                     stream.Write<int>(player.slot.Index);
                     if (player == Velo.MainPlayer)
                         playerOffset = (int)stream.Position;
-                    Player.Write(stream, player);
+                    ATPlayer.Write(stream, player);
                 } 
                 else if (controller is PlayerBot playerBot)
                 {
                     if (!playerBot.slot.LocalPlayer && !playerBot.slot.IsBot)
                         continue;
-                    if (!include[PlayerBot.Id]) continue;
-                    stream.Write(PlayerBot.Id);
+                    if (!include[ATPlayerBot.Id]) continue;
+                    stream.Write(ATPlayerBot.Id);
                     stream.Write<int>(playerBot.slot.Index);
-                    PlayerBot.Write(stream, playerBot);
+                    ATPlayerBot.Write(stream, playerBot);
                 } 
                 else
                 {
@@ -1598,9 +1734,9 @@ namespace Velo
                     Write(stream, moduleMP);
             }
 
-            stream.Write(Velo.LastUsedItemTime);
-            stream.Write(Velo.LastUsedDrillTime);
-            stream.Write(Velo.LastUsedModTime);
+            stream.Write(Cooldowns.Instance.ItemCooldown);
+            stream.Write(Cooldowns.Instance.DrillCooldown);
+            stream.Write(Cooldowns.Instance.ModCooldown);
 
             stream.Write(playerOffset);
         }
@@ -1652,48 +1788,48 @@ namespace Velo
             ICActorController controller = actor.controller;
             if (controller is Fireball fireball)
             {
-                if (fireball.owner != null && !fireball.owner.slot.LocalPlayer)
+                if (fireball.owner != null && !fireball.owner.slot.LocalPlayer && !fireball.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is DroppedObstacle droppedObstacle)
             {
-                if (droppedObstacle.owner != null && !droppedObstacle.owner.slot.LocalPlayer)
+                if (droppedObstacle.owner != null && !droppedObstacle.owner.slot.LocalPlayer && !droppedObstacle.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is Rocket rocket)
             {
-                if (rocket.owner != null && !rocket.owner.slot.LocalPlayer)
+                if (rocket.owner != null && !rocket.owner.slot.LocalPlayer && !rocket.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is GoldenHook goldenHook)
             {
-                if (goldenHook.owner != null && !goldenHook.owner.slot.LocalPlayer)
+                if (goldenHook.owner != null && !goldenHook.owner.slot.LocalPlayer && !goldenHook.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is Shockwave shockwave)
             {
-                if (shockwave.owner != null && !shockwave.owner.slot.LocalPlayer)
+                if (shockwave.owner != null && !shockwave.owner.slot.LocalPlayer && !shockwave.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is DroppedBomb droppedBomb)
             {
-                if (droppedBomb.owner != null && !droppedBomb.owner.slot.LocalPlayer)
+                if (droppedBomb.owner != null && !droppedBomb.owner.slot.LocalPlayer && !droppedBomb.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
             else if (controller is FreezeRay freezeRay)
             {
-                if (freezeRay.owner != null && !freezeRay.owner.slot.LocalPlayer)
+                if (freezeRay.owner != null && !freezeRay.owner.slot.LocalPlayer && !freezeRay.owner.slot.IsBot)
                     actor.ghostOwnedItem = true;
             }
         }
 #pragma warning restore IDE1006
 
-        public bool Load(bool setGlobalTime, bool ghostOnly = false, bool watermark = true)
+        public bool Load(bool setGlobalTime, int ghostIndex = -1)
         {
             if (!Velo.Ingame || Velo.Online)
                 return false;
 
-            Savestate.ghostOnly = ghostOnly;
+            Savestate.ghostIndex = ghostIndex;
 
             CCollisionEngine collisionEngine = CEngine.CEngine.Instance.World.CollisionEngine;
             CWorld world = CEngine.CEngine.Instance.World;
@@ -1701,8 +1837,8 @@ namespace Velo
 
             stream.Position = 0;
 
-            int valid = stream.Read<int>();
-            if (valid == -1 || valid > 1)
+            int version = stream.Read<int>();
+            if (version == -1 || version > 2)
                 return false;
 
             int prevIndex = (int)stream.Position;
@@ -1710,19 +1846,25 @@ namespace Velo
             int playerOffset = stream.Read<int>();
             stream.Position = prevIndex;
 
-            int solo = stream.Read<int>();
-            if ((solo == 1) != (Velo.ModuleSolo != null))
-                return false;
-            if (solo == 1)
+            if (version == 1)
             {
-                string nameAuthor = stream.ReadStr();
-                if (nameAuthor != Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author)
+                int solo = stream.Read<int>();
+                if ((solo == 1) != (Velo.ModuleSolo != null))
+                    return false;
+                if (solo == 1)
+                {
+                    string nameAuthor = stream.ReadStr();
+                    if (nameAuthor != Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author)
+                        return false;
+                }
+            }
+            else if (version == 2)
+            {
+                ulong mapId = stream.Read<ulong>();
+                if (mapId != Map.GetCurrentMapId())
                     return false;
             }
 
-            if (watermark)
-                LocalGameMods.Instance.savestateLoadTime = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
-            
             long time = stream.Read<long>();
             if (setGlobalTime)
             {
@@ -1737,21 +1879,24 @@ namespace Velo
             contrLookup.Add(-1, null);
 
             include = stream.ReadBoolArr();
-            if (ghostOnly)
+            if (ghostIndex != -1)
             {
                 stream.Position = playerOffset;
-                int ghostId = Velo.Ghost.actor.id;
-                Player.Read(stream, Velo.Ghost.actor.Controller);
-                Velo.Ghost.actor.id = ghostId;
+                int ghostId = Ghosts.Instance.Get(ghostIndex).actor.id;
+                ATPlayer.Read(stream, Ghosts.Instance.Get(ghostIndex).actor.Controller);
+                Ghosts.Instance.Get(ghostIndex).actor.id = ghostId;
                 goto cleanup;
             }
 
             int[] counts = new int[actorTypes.Count];
 
-            if (Velo.Ghost != null && Velo.Ghost.grapple != null && Velo.Ghost.rope != null)
+            foreach (Player ghost in Ghosts.Instance.All())
             {
-                Velo.Ghost.grapple.actor.ghostOwnedItem = true;
-                Velo.Ghost.rope.actor.ghostOwnedItem = true;
+                if (ghost != null && ghost.grapple != null && ghost.rope != null)
+                {
+                    ghost.grapple.actor.ghostOwnedItem = true;
+                    ghost.rope.actor.ghostOwnedItem = true;
+                }
             }
 
             List<CActor> newActors = new List<CActor>();
@@ -1765,17 +1910,17 @@ namespace Velo
 
                 CActor actor = null;
 
-                if (id == Player.Id)
+                if (id == ATPlayer.Id)
                 {
                     int slotIndex = stream.Read<int>();
-                    actor = GetOfType(Player.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
-                    Player.Read(stream, actor.Controller);
+                    actor = GetOfType(ATPlayer.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
+                    ATPlayer.Read(stream, actor.Controller);
                 }
-                else if (id == PlayerBot.Id)
+                else if (id == ATPlayerBot.Id)
                 {
                     int slotIndex = stream.Read<int>();
-                    actor = GetOfType(PlayerBot.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
-                    PlayerBot.Read(stream, actor.Controller);
+                    actor = GetOfType(ATPlayerBot.Type, 0, (check) => (check.Controller as Player).slot.Index == slotIndex);
+                    ATPlayerBot.Read(stream, actor.Controller);
                 }
                 else
                 {
@@ -1826,9 +1971,9 @@ namespace Velo
                     Read(stream, moduleMP);
             }
 
-            Velo.LastUsedItemTime = stream.Read<float>();
-            Velo.LastUsedDrillTime = stream.Read<float>();
-            Velo.LastUsedModTime = stream.Read<float>();
+            Cooldowns.Instance.ItemCooldown = stream.Read<float>();
+            Cooldowns.Instance.DrillCooldown = stream.Read<float>();
+            Cooldowns.Instance.ModCooldown = stream.Read<float>();
 
             foreach (Action action in applyPtr)
                 action();
