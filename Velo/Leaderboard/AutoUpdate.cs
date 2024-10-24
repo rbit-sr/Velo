@@ -1,5 +1,4 @@
 ﻿using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Input;
 using Steamworks;
 using System;
 using System.Diagnostics;
@@ -7,25 +6,30 @@ using System.IO;
 
 namespace Velo
 {
-    public class AutoUpdate : Module
+    public class AutoUpdate : MenuContext
     {
         private readonly RequestHandler handler;
 
         private VeloUpdate update;
         private bool updateAvailable = false;
-        private bool updateRefused = false;
 
-        private CachedFont font;
-        private bool initialized = false;
-
-        private WidgetContainer container;
-
-        public AutoUpdate() : base("Auto Update")
+        public AutoUpdate() :
+            base(
+                "Auto Update",
+                addEnabledSetting: false,
+                menuPos: new Vector2(610f, 415f),
+                menuSize: new Vector2(700f, 250f)
+                )
         {
             handler = new RequestHandler();
         }
 
         public static AutoUpdate Instance = new AutoUpdate();
+        
+        public void Refuse()
+        {
+            Enabled.Disable();
+        }
 
         public void Check()
         {
@@ -50,18 +54,39 @@ namespace Velo
                 }
                 this.update = update;
                 updateAvailable = true;
-            }, onSuccessPreUpdate: false);
+                Enabled.Enable();
+            }, onSuccessPreUpdate: true);
             handler.Run();
         }
 
-        public void Initialize()
+        public override void Init()
         {
-            FontCache.Get(ref font, "UI\\Font\\NotoSans-Regular.ttf:24");
+            base.Init();
 
-            LabelW popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", font.Font);
+            Check();
+        }
+
+        public override Menu GetStartMenu()
+        {
+            return new AutoUpdateWindow(this, update);
+        }
+    }
+
+    public class AutoUpdateWindow : Menu
+    {
+        private readonly LabelW popupText;
+        private readonly LabelW yesButton;
+        private readonly LabelW noButton;
+        private readonly LayoutW buttonRow;
+        private readonly LayoutW popupLayout;
+
+        public AutoUpdateWindow(MenuContext context, VeloUpdate update) :
+            base(context)
+        {
+            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", context.Fonts.FontLarge);
             Style.ApplyText(popupText);
 
-            LabelW yesButton = new LabelW("Yes", font.Font);
+            yesButton = new LabelW("Yes", context.Fonts.FontLarge);
             Style.ApplyButton(yesButton);
             yesButton.OnClick = wevent =>
             {
@@ -75,25 +100,24 @@ namespace Velo
                 }
             };
 
-            LabelW noButton = new LabelW("No", font.Font);
+            noButton = new LabelW("No", context.Fonts.FontLarge);
             Style.ApplyButton(noButton);
             noButton.OnClick = wevent =>
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    updateRefused = true;
-                    Cursor.DisableCursor(this);
+                    AutoUpdate.Instance.Refuse();
                 }
             };
 
-            LayoutW buttonRow = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
+            buttonRow = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
             buttonRow.AddSpace(LayoutW.FILL);
             buttonRow.AddChild(yesButton, 120f);
             buttonRow.AddSpace(10f);
             buttonRow.AddChild(noButton, 120f);
             buttonRow.AddSpace(10f);
 
-            LayoutW popupLayout = new LayoutW(LayoutW.EOrientation.VERTICAL)
+            popupLayout = new LayoutW(LayoutW.EOrientation.VERTICAL)
             {
                 BackgroundVisible = true,
                 BackgroundColor = () => new Color(20, 20, 20, 150)
@@ -104,41 +128,12 @@ namespace Velo
             popupLayout.AddChild(buttonRow, 45f);
             popupLayout.AddSpace(10f);
 
-            StackW stack = new StackW
-            {
-                BackgroundVisible = true,
-                BackgroundColor = () => new Color(0, 0, 0, 127)
-            };
-            stack.AddChild(popupLayout, new Vector2(610, 415), new Vector2(700, 250));
-            container = new WidgetContainer(stack, new Rectangle(0, 0, 1920, 1080));
-
-            initialized = true;
+            Child = popupLayout;
         }
 
-        public bool Enabled { get { return updateAvailable && !updateRefused; } }
-
-        public override void Init()
+        public override void Refresh()
         {
-            base.Init();
 
-            Check();
-        }
-
-        public override void PostRender()
-        {
-            base.PostRender();
-
-            if (!Enabled)
-                return;
-
-            if (!initialized)
-            {
-                Initialize();
-                initialized = true;
-                Cursor.EnableCursor(this);
-            }
-
-            container.Draw();
         }
     }
 }

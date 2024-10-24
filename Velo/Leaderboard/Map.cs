@@ -285,9 +285,25 @@ namespace Velo
                 mapId == 24 ||
                 mapId == 26 ||
                 mapId == 29 ||
+                mapId == 39 ||
                 mapId == 44 ||
                 mapId == 50 ||
                 mapId == 51;
+        }
+
+        public static bool AllowBombSmiley(ulong mapId)
+        {
+            return
+                mapId != 3 &&
+                mapId != 6 &&
+                mapId != 17;
+        }
+
+        public static bool AllowDrill(ulong mapId)
+        {
+            return
+                mapId != 3 &&
+                mapId != 17;
         }
 
         public static bool Has100Perc(ulong mapId)

@@ -17,6 +17,7 @@ namespace Velo
             ROPE_ACTIVE, ROPE_BREAKING, ROPE_OWNER, ROPE_LINES
         }
 
+        public long RealTime;
         public long Delta;
         public long Time;
         public long DeltaSum;
@@ -33,10 +34,11 @@ namespace Velo
         public float GrapRad;
         public int Flags;
 
-        public Frame(Player player, GameTime gameTime, long deltaSum)
+        public Frame(Player player, TimeSpan realTime, TimeSpan gameDelta, TimeSpan gameTime, long deltaSum)
         {
-            Delta = gameTime.ElapsedGameTime.Ticks;
-            Time = gameTime.TotalGameTime.Ticks;
+            RealTime = realTime.Ticks;
+            Delta = gameDelta.Ticks;
+            Time = gameTime.Ticks;
             DeltaSum = deltaSum;
             JumpTime = player.timespan1.Ticks;
             PosX = player.actor.Position.X;
@@ -138,6 +140,7 @@ namespace Velo
                 }
                 player.rope.UpdateLines();
             }
+            CheatEngineDetection.MatchValues();
         }
 
         public void ApplyInputs(Player player)
@@ -190,22 +193,22 @@ namespace Velo
 
     public class Recording
     {
-        public static readonly int VERSION = 1;
+        public static readonly int VERSION = 2;
 
         public CircArray<Frame> Frames;
         public CircArray<Savestate> Savestates;
-        public CircArray<TimeSpan> Timepoints;
         public RunInfo Info;
-        public RulesChecker Rules;
         public int LapStart;
+        public List<MacroDetection.Timing> Timings;
+        public byte[] Sign;
 
+        public RulesChecker Rules;
         public Stats Stats;
 
         public Recording()
         {
             Frames = new CircArray<Frame>();
             Savestates = new CircArray<Savestate>();
-            Timepoints = new CircArray<TimeSpan>();
             Info = new RunInfo();
             Rules = new RulesChecker();
             Clear();
@@ -217,7 +220,6 @@ namespace Velo
             {
                 Frames = Frames.Clone(),
                 Savestates = Savestates.Clone(),
-                Timepoints = Timepoints.Clone(),
                 Info = Info,
                 Rules = Rules.Clone(),
                 LapStart = LapStart,
@@ -241,7 +243,6 @@ namespace Velo
         {
             Frames.Clear();
             Savestates.Clear();
-            Timepoints.Clear();
             Info.Id = -1;
             LapStart = 0;
             ClearStats();
@@ -252,18 +253,16 @@ namespace Velo
             Stats = default;
         }
 
-        public void PushBack(Frame frame, Savestate savestate, TimeSpan timepoint)
+        public void PushBack(Frame frame, Savestate savestate)
         {
             Frames.PushBack(frame);
             Savestates.PushBack(savestate);
-            Timepoints.PushBack(timepoint);
         }
 
         public void PopFront()
         {
             Frames.PopFront();
             Savestates.PopFront();
-            Timepoints.PopFront();
             LapStart--;
         }
 
@@ -278,6 +277,7 @@ namespace Velo
             Info.Category.TypeId = (ulong)Rules.CategoryType;
             Info.RunTime = (int)(time * 1000f);
             Info.CreateTime = DateTimeOffset.Now.ToUnixTimeSeconds();
+            Info.NewGCD = OfflineGameMods.Instance.GrappleCooldown.Value == 0.2f ? (byte)1 : (byte)0;
             Info.Dist = (int)(Stats.Dist + 0.5);
             Info.GroundDist = (int)(Stats.GroundDist + 0.5);
             Info.SwingDist = (int)(Stats.SwingDist + 0.5);
@@ -286,6 +286,7 @@ namespace Velo
             Info.Jumps = (short)Stats.Jumps;
             Info.Grapples = (short)Stats.Grapples;
             Info.BoostUsed = (short)(Stats.BoostUsed * 50d + 0.5);
+            Timings = MacroDetection.Instance.GetTimings();
         }
 
         public void TrimBeginning(int maxFrames)
@@ -313,8 +314,12 @@ namespace Velo
             }
         }
 
-        public void Write(Stream stream, bool compress = true)
+        [DllImport("VeloVerifier.dll", EntryPoint = "generate_sign")]
+        private static extern void generate_sign(IntPtr salt, int salt_len, IntPtr sign);
+
+        public byte[] ToBytes(bool compress = true)
         {
+            MemoryStream stream = new MemoryStream();
             stream.Write(VERSION | (compress ? 0 : 1 << 31));
 
             SevenZip.Compression.LZMA.Encoder encoder = new SevenZip.Compression.LZMA.Encoder();
@@ -346,7 +351,11 @@ namespace Velo
                 raw.Write(buffer, 0, buffer.Length);
             }
 
-            raw.Position = 0;
+            raw.Write(Timings.Count);
+            foreach (MacroDetection.Timing timing in Timings)
+            {
+                raw.Write(timing);
+            }
 
             if (compress)
             {
@@ -354,20 +363,56 @@ namespace Velo
                 stream.Write(BitConverter.GetBytes((int)raw.Length), 0, sizeof(int));
                 try
                 {
+                    raw.Position = 0;
                     encoder.Code(raw, stream, raw.Length, -1, null);
                 }
-                catch (Exception)
+                catch (Exception) // 7zip can throw an exception for unknown reasons, try again without compression
                 {
+                    raw.Close();
                     stream.Seek(stream.Position - 13, SeekOrigin.Begin);
-                    Write(stream, compress: false);
+                    return ToBytes(compress: false);
                 }
                 raw.Close();
             }
+            return stream.ToArray();
+        }
+
+        public void GenerateSign(byte[] bytes)
+        {
+            Sign = new byte[32];
+            if (System.Diagnostics.Debugger.IsAttached)
+                return;
+            try
+            {
+                unsafe
+                {
+                    fixed (byte* dataBytes = bytes)
+                    {
+                        fixed (byte* signBytes = Sign)
+                        {
+                            generate_sign((IntPtr)dataBytes, bytes.Length, (IntPtr)signBytes);
+                        }
+                    }
+                }
+            }
+            catch (Exception) { }
+        }
+
+        public void Write(Stream stream, bool compress = true)
+        {
+            byte[] bytes = ToBytes(compress);
+            stream.Write(bytes.Length);
+            stream.Write(bytes, 0, bytes.Length);
         }
 
         public void Read(Stream stream)
         {
-            int versionInt = stream.Read<int>();
+            int prefix = stream.Read<int>(); // recording may or may not be prefixed by the filesize (a .srrec file from the server is, a local .srrec file is not), just a little flaw in this file format
+            int versionInt;
+            if ((prefix & ~(1 << 31)) < 128)
+                versionInt = prefix;
+            else
+                versionInt = stream.Read<int>();
 
             bool compressed = (versionInt & (1 << 31)) == 0;
             versionInt &= ~(1 << 31);
@@ -398,11 +443,19 @@ namespace Velo
             LapStart = raw.Read<int>();
 
             int size = raw.Read<int>();
-            int frameCount = size / Marshal.SizeOf<Frame>();
+            int frameCount = size;
+            if (versionInt <= 1)
+                frameCount /= Marshal.SizeOf<FrameBWC1>();
+            else
+                frameCount /= Marshal.SizeOf<Frame>();
             for (int i = 0; i < frameCount; i++)
             {
-                Frame frame = raw.Read<Frame>();
-                PushBack(frame, null, TimeSpan.Zero);
+                Frame frame;
+                if (versionInt <= 1)
+                    frame = raw.Read<FrameBWC1>().Get();
+                else
+                    frame = raw.Read<Frame>();
+                PushBack(frame, null);
             }
 
             Savestates[0] = new Savestate();
@@ -422,6 +475,22 @@ namespace Velo
                 raw.ReadExactly(buffer, 0, size);
                 Savestates[LapStart].Stream.Position = 0;
                 Savestates[LapStart].Stream.Write(buffer, 0, size);
+            }
+
+            if (versionInt >= 2)
+            {
+                size = raw.Read<int>();
+                Timings = new List<MacroDetection.Timing>();
+                for (int i = 0; i < size; i++)
+                {
+                    Timings.Add(raw.Read<MacroDetection.Timing>());
+                }
+
+                if (raw.Position < raw.Length)
+                {
+                    Sign = new byte[32];
+                    raw.ReadExactly(Sign, 0, Sign.Length);
+                }
             }
 
             raw.Close();
@@ -475,13 +544,12 @@ namespace Velo
             if (recording == null)
                 return;
 
-            GameTime gameTime = CEngine.CEngine.Instance.gameTime;
-            if (gameTime.ElapsedGameTime.Ticks == 0 || Velo.PauseMenu)
+            if (Velo.GameDelta.Ticks == 0 || Velo.PauseMenu)
                 return;                
 
-            if ((new TimeSpan(gameTime.TotalGameTime.Ticks) - new TimeSpan(lastSavestate)).TotalSeconds > SavestateInterval)
+            if ((new TimeSpan(Velo.GameTime.Ticks) - new TimeSpan(lastSavestate)).TotalSeconds > SavestateInterval)
             {
-                lastSavestate = gameTime.TotalGameTime.Ticks;
+                lastSavestate = Velo.GameTime.Ticks;
                 nextSavestate = new Savestate();
                 nextSavestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE, moduleProgressOnly: true);
             }
@@ -494,8 +562,7 @@ namespace Velo
             if (recording == null)
                 return;
 
-            GameTime gameTime = CEngine.CEngine.Instance.gameTime;
-            if (gameTime.ElapsedGameTime.Ticks == 0 || Velo.PauseMenuPrev)
+            if (Velo.GameDelta.Ticks == 0 || Velo.PauseMenuPrev)
                 return;
 
             Player player = Velo.MainPlayer;
@@ -503,11 +570,12 @@ namespace Velo
             recording.PushBack(
                 new Frame(
                     player: player, 
-                    gameTime: gameTime, 
+                    realTime: Velo.RealTime,
+                    gameDelta: Velo.GameDelta,
+                    gameTime: Velo.GameTime, 
                     deltaSum: recording.Count >= 1 ? recording[recording.Count - 1].DeltaSum + recording[recording.Count - 1].Delta : 0L
                 ),
-                nextSavestate,
-                Velo.Time
+                nextSavestate
             );
 
             recording.Stats.Dist += (Velo.MainPlayer.actor.Position - prevPos).Length();
@@ -537,7 +605,7 @@ namespace Velo
                     Velo.MainPlayer.wall_cd <= 0f)
                     usedBoost = true;
                 if (usedBoost)
-                    recording.Stats.BoostUsed += Math.Min(0.85 * CEngine.CEngine.Instance.gameTime.ElapsedGameTime.TotalSeconds, prevBoost);
+                    recording.Stats.BoostUsed += Math.Min(0.85 * Velo.GameDelta.TotalSeconds, prevBoost);
             }
 
             nextSavestate = null;
@@ -581,7 +649,7 @@ namespace Velo
         
         public Playback()
         {
-
+            Finished = true;
         }
 
         public Recording Recording { get => recording; }
@@ -594,16 +662,6 @@ namespace Velo
                 savestatePreVerify.Load(true);
 
             this.recording = recording;
-            switch (type)
-            {
-                case EPlaybackType.VIEW_REPLAY:
-                case EPlaybackType.VERIFY:
-                    player = Velo.MainPlayer;
-                    break;
-                case EPlaybackType.SET_GHOST:
-                    player = Ghosts.Instance.Get(ghostIndex);
-                    break;
-            }
             Type = type;
             GhostIndex = ghostIndex;
             Restart();
@@ -614,12 +672,29 @@ namespace Velo
             if (recording == null || !Velo.Ingame)
                 return;
 
+            switch (Type)
+            {
+                case EPlaybackType.VIEW_REPLAY:
+                case EPlaybackType.VERIFY:
+                    player = Velo.MainPlayer;
+                    break;
+                case EPlaybackType.SET_GHOST:
+                    player = Ghosts.Instance.Get(GhostIndex);
+                    break;
+            }
+
+            if (player == null)
+                return;
+
+            Finished = false;
             startI = 0;
             if (Type == EPlaybackType.SET_GHOST)
                 startI = recording.LapStart;
             i = startI;
 
             recording.Savestates[i].Load(setGlobalTime: Type == EPlaybackType.VERIFY, GhostIndex);
+            if (recording.Info.Id >= 0)
+                Savestate.LoadedVersion = Version.VERSION; // assume runs from the leaderboard are fine
             if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.VERIFY)
                 Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
             deltaSum = 0;
@@ -629,16 +704,17 @@ namespace Velo
         public void Stop()
         {
             recording = null;
+            Finished = true;
             if (Type == EPlaybackType.VERIFY)
                 savestatePreVerify.Load(true);
         }
 
         public void Finish()
         {
-            if (OnFinish != null)
-                OnFinish.Invoke(recording, Type);
-            else
-                Stop();
+            Finished = true;
+            if (Type == EPlaybackType.VERIFY)
+                savestatePreVerify.Load(true);
+            OnFinish?.Invoke(recording, Type);
         }
 
         public void Jump(float seconds, bool hold = false)
@@ -699,13 +775,7 @@ namespace Velo
             }
         }
 
-        public bool Finished
-        {
-            get
-            {
-                return recording == null;
-            }
-        }
+        public bool Finished { get; set; }
 
         public void PreUpdate()
         {
@@ -714,18 +784,14 @@ namespace Velo
             if (Finished)
                 return;
             if (player.destroyed)
-            {
-                Stop();
                 return;
-            }
 
-            GameTime gameTime = CEngine.CEngine.Instance.gameTime;
-            if (gameTime.ElapsedGameTime.Ticks == 0 || Velo.PauseMenu)
+            if (Velo.GameDelta.Ticks == 0 || Velo.PauseMenu)
                 return;
 
             if (holdingTime > 0f)
             {
-                holdingTime = Math.Max(holdingTime - (float)gameTime.ElapsedGameTime.TotalSeconds, 0f);
+                holdingTime = Math.Max(holdingTime - (float)Velo.GameDelta.TotalSeconds, 0f);
                 return;
             }
 
@@ -736,7 +802,7 @@ namespace Velo
                 long time = recording[i].Time;
                 cengine.gameTime = new GameTime(new TimeSpan(time), new TimeSpan(delta));
 
-                TimeSpan now = new TimeSpan(Velo.Time.Ticks);
+                TimeSpan now = new TimeSpan(Velo.RealTime.Ticks);
                 if ((now - lastNotificationUpdate).TotalSeconds > 0.25)
                 {
                     lastNotificationUpdate = now;
@@ -755,20 +821,13 @@ namespace Velo
             if (Finished)
                 return;
             if (player.destroyed)
-            {
-                Stop();
                 return;
-            }
 
-            GameTime gameTime = CEngine.CEngine.Instance.gameTime;
-            if (gameTime.ElapsedGameTime.Ticks == 0 || Velo.PauseMenuPrev)
+            if (Velo.GameDelta.Ticks == 0 || Velo.PauseMenuPrev)
                 return;
 
             if (holdingTime > 0f)
-            {
-                holdingTime = Math.Max(holdingTime - (float)gameTime.ElapsedGameTime.TotalSeconds, 0f);
                 return;
-            }
 
             if (Type == EPlaybackType.VERIFY)
             {
@@ -794,7 +853,7 @@ namespace Velo
 
                 Frame frame = Lerp(recording[i - 1], recording[i], (float)((double)nowRel / frameDelta));
 
-                long dt = CEngine.CEngine.Instance.gameTime.TotalGameTime.Ticks - recording[i - 1].Time;
+                long dt = Velo.GameTime.Ticks - recording[i - 1].Time;
                 bool forceGrapple =
                     (!player.grappling &&
                     (recording[i - 1].Flags & (1 << (int)EFlags.GRAPPLING)) != 0 &&
@@ -806,8 +865,10 @@ namespace Velo
                 float grapDirX = recording[i].GrapPosX > recording[i - 1].GrapPosX ? 1f : (recording[i].GrapPosX < recording[i - 1].GrapPosX ? -1f : 0f);
                 frame.Apply(player, dt, setFlags: true, forceGrapple: forceGrapple || Type == EPlaybackType.SET_GHOST, grapDirX: grapDirX);
 
+                Velo.measure("physics");
                 player.UpdateHitbox();
                 player.UpdateSprite(CEngine.CEngine.Instance.gameTime);
+                Velo.measure("Velo");
             }
         }
 
@@ -815,20 +876,15 @@ namespace Velo
         {
             if (Finished)
                 return false;
-
             if (player != this.player)
                 return false;
 
             if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.SET_GHOST)
             {
-                GameTime gameTime = CEngine.CEngine.Instance.gameTime;
                 if (holdingTime > 0f)
-                {
-                    holdingTime = Math.Max(holdingTime - (float)gameTime.ElapsedGameTime.TotalSeconds, 0f);
                     return true;
-                }
 
-                deltaSum += gameTime.ElapsedGameTime.Ticks;
+                deltaSum += Velo.GameDelta.Ticks;
 
                 while (recording[i].DeltaSum + recording[i].Delta - recording[startI].DeltaSum < deltaSum)
                 {

@@ -27,7 +27,8 @@ namespace Velo
         public Category Category;
         public byte WasWR;
         public byte HasComments;
-        public ushort Unused;
+        public byte SpeedrunCom;
+        public byte NewGCD;
         public int Place;
         public int Dist;
         public int GroundDist;
@@ -43,6 +44,10 @@ namespace Velo
             int cmp = RunTime.CompareTo(other.RunTime);
             if (cmp != 0)
                 return cmp;
+
+            /*cmp = CreateTime.CompareTo(other.CreateTime);
+            if (cmp != 0)
+                return cmp;*/
 
             return Id.CompareTo(other.Id);
         }
@@ -170,6 +175,8 @@ namespace Velo
 
         private readonly IEnumerable<ulong> curatedMapOrder = Enumerable.Range(0, (int)Map.CURATED_COUNT).Select(i => (ulong)i);
         private List<ulong> nonCuratedMapOrder = new List<ulong>();
+
+        private readonly Dictionary<ulong, string> pseudoSteamIdToSpeedrunComName = new Dictionary<ulong, string>();
 
         private bool initRequest = false;
 
@@ -321,23 +328,23 @@ namespace Velo
 
         public IEnumerable<RunInfo> GetAllForCategory(Category category)
         {
-            var runsForCategory = runsPerCategory[category];
-            if (runsForCategory == null)
-                return new List<RunInfo>();
+            List<RunInfo> runs = new List<RunInfo>();
+            if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
+                return runs;
 
             return runsForCategory.Select(i => allRuns[i]).ToList();
         }
 
         public IEnumerable<RunInfo> GetWRHistoryForCategory(Category category)
         {
-            var runsForCategory = runsPerCategory[category];
-            if (runsForCategory == null)
-                return new List<RunInfo>();
+            List<RunInfo> runs = new List<RunInfo>();
+            if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
+                return runs;
 
             return runsForCategory.Select(i => allRuns[i]).Where(run => run.WasWR == 1);
         }
 
-        public IEnumerable<MapRunInfos> GetWRs(bool curated)
+        public IEnumerable<MapRunInfos> GetWRs(int place, bool curated)
         {
             List<MapRunInfos> runs = new List<MapRunInfos>();
 
@@ -351,10 +358,16 @@ namespace Velo
                 for (int t = 0; t < (int)ECategoryType.COUNT; t++)
                 {
                     Category category = new Category { MapId = m, TypeId = (ulong)t };
-                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null || runsForCategory.Count == 0)
+                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
                         mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
                     else
-                        mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[0]]);
+                    {
+                        int index = runsForCategory.FindIndex(i => allRuns[i].Place == place);
+                        if (index == -1)
+                            mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
+                        else
+                            mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[index]]);
+                    }
                 }
                 runs.Add(mapRuns);
             }
@@ -474,6 +487,18 @@ namespace Velo
             return players;
         }
 
+        public string GetPlayerName(ulong steamId)
+        {
+            if (steamId > int.MaxValue)
+                return SteamCache.GetPlayerName(steamId);
+
+            if (pseudoSteamIdToSpeedrunComName.TryGetValue(steamId, out string name))
+            {
+                return name;
+            }
+            return "";
+        }
+
         public string GetComment(int id)
         {
             if (!comments.ContainsKey(id))
@@ -521,6 +546,8 @@ namespace Velo
             if (!addedDeletedSincePushed)
                 PushAddedDeletedSince();
             addedDeletedSincePushed = true;
+            //if (pseudoSteamIdToSpeedrunComName.Count == 0)
+                //PushRequestSpeedrunComPlayers(null);
         }
 
         public void PushRequestNonCuratedOrder(Action onSuccess)
@@ -528,6 +555,19 @@ namespace Velo
             getRunHandler.Push(new GetNonCuratedOrder(), (newOrder) =>
             {
                 nonCuratedMapOrder = newOrder;
+                onSuccess?.Invoke();
+            });
+        }
+
+        public void PushRequestSpeedrunComPlayers(Action onSuccess)
+        {
+            getRunHandler.Push(new GetSpeedrunComPlayersRequest(), (players) =>
+            {
+                pseudoSteamIdToSpeedrunComName.Clear();
+                foreach (var player in players)
+                {
+                    pseudoSteamIdToSpeedrunComName.Add(player.PseudoSteamId, player.Name);
+                }
                 onSuccess?.Invoke();
             });
         }
@@ -572,6 +612,7 @@ namespace Velo
         {
             getRecordingHandler.Push(new GetRecordingRequest(id), (recording) =>
             {
+                recording.Info.Id = id;
                 if (recordingCache.Count >= 10)
                     recordingCache.Dequeue();
                 recordingCache.Enqueue(new KeyValuePair<int, Recording>(id, recording));

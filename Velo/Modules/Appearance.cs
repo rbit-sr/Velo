@@ -228,8 +228,7 @@ namespace Velo
                 "refer to the tooltip or make a screenshot and use a color picker.";
 
             EnableUIColorReplacements.Tooltip =
-                "Restart your game for changes to fully take effect.\n" +
-                "Enabling this can lead to a slight loss in FPS.";
+                "Restart your game for changes to fully take effect.";
 
             UIBlueColors[0].Tooltip = "level select \"Workshop Levels\" bar and scroll bar";
             UIBlueColors[1].Tooltip = "story level select menu title text shadow";
@@ -271,35 +270,26 @@ namespace Velo
 
         public static Appearance Instance = new Appearance();
 
-        public override void PreUpdate()
+        public void ActorSpawned(CActor actor)
         {
-            base.PreUpdate();
-
-            if (!EnableUIColorReplacements.Value)
-                return;
-
             // disable all color replacements for actor drawers
-            var actors = CEngine.CEngine.Instance.World.CollisionEngine.actors;
-            foreach (CActor actor in actors)
+            ICDrawComponent drawer = actor.Controller.Drawer;
+            if (drawer is CSpriteDrawComponent sprite)
+                sprite.color_replace = false;
+            if (drawer is CImageDrawComponent image)
+                image.color_replace = false;
+            if (drawer is CTextDrawComponent text)
+                text.color_replace = false;
+            if (drawer is CGroupDrawComponent group)
             {
-                ICDrawComponent drawer = actor.Controller.Drawer;
-                if (drawer is CSpriteDrawComponent sprite)
-                    sprite.color_replace = false;
-                if (drawer is CImageDrawComponent image)
-                    image.color_replace = false;
-                if (drawer is CTextDrawComponent text)
-                    text.color_replace = false;
-                if (drawer is CGroupDrawComponent group)
+                foreach (ICDrawComponent child in group.Children)
                 {
-                    foreach (ICDrawComponent child in group.Children)
-                    {
-                        if (child is CSpriteDrawComponent sprite1)
-                            sprite1.color_replace = false;
-                        if (child is CImageDrawComponent image1)
-                            image1.color_replace = false;
-                        if (child is CTextDrawComponent text1)
-                            text1.color_replace = false;
-                    }
+                    if (child is CSpriteDrawComponent sprite1)
+                        sprite1.color_replace = false;
+                    if (child is CImageDrawComponent image1)
+                        image1.color_replace = false;
+                    if (child is CTextDrawComponent text1)
+                        text1.color_replace = false;
                 }
             }
         }

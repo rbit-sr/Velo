@@ -135,7 +135,7 @@ namespace Velo
                     break;
             }
 
-            long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
+            long milliseconds = Velo.RealTime.Ticks / TimeSpan.TicksPerMillisecond;
             if (milliseconds - lastUpdate >= UpdateInterval.Value)
             {
                 lastUpdate = milliseconds;

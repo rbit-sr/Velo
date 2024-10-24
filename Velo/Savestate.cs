@@ -9,15 +9,9 @@ using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.ComTypes;
-using System.Security.Cryptography;
-using System.Text;
 using XNATweener;
 
 namespace Velo
@@ -51,9 +45,11 @@ namespace Velo
         }
     }
 
-    
-    public class Savestate
+    public class Savestate : IDisposable
     {
+        private readonly int VERSION = 4;
+        public static ushort LoadedVersion = Version.VERSION;
+
         private static unsafe void Write(MemoryStream stream, CAABB obj)
         {
             stream.Write(obj, 0x4, 0x18);
@@ -112,7 +108,7 @@ namespace Velo
 
         private static unsafe void Read(MemoryStream stream, CAnimatedSpriteDrawComponent obj, bool player = false)
         {
-            Microsoft.Xna.Framework.Color color = obj.Color;
+            Color color = obj.Color;
             float opacity = obj.Opacity;
             Vector2 offset = obj.Offset;
             Vector2 scale = obj.Scale;
@@ -182,7 +178,7 @@ namespace Velo
             obj.lines = new List<CLine>(count);
             for (int i = 0; i < count; i++)
             {
-                CLine line = new CLine(Vector2.Zero, Vector2.Zero, Microsoft.Xna.Framework.Color.Black);
+                CLine line = new CLine(Vector2.Zero, Vector2.Zero, Color.Black);
                 Read(stream, line);
                 obj.lines.Add(line);
             }
@@ -836,7 +832,11 @@ namespace Velo
             Write(stream, obj.random);
             Write(stream, obj.groupDraw);
             stream.Write(obj.player != null ? obj.player.actor.Id : -1);
-            stream.WriteArr(obj.bools.Select(b => b ? (byte)1 : (byte)0).ToArray(), 4);
+            //stream.WriteArrFixed(obj.bools.Select(b => b ? (byte)1 : (byte)0).ToArray(), 4);
+            stream.WriteByte(obj.bools[0] ? (byte)1 : (byte)0);
+            stream.WriteByte(obj.bools[1] ? (byte)1 : (byte)0);
+            stream.WriteByte(obj.bools[2] ? (byte)1 : (byte)0);
+            stream.WriteByte(obj.bools[3] ? (byte)1 : (byte)0);
         }
 
         private static unsafe void Read(MemoryStream stream, BoostaCoke obj)
@@ -854,7 +854,11 @@ namespace Velo
             Read(stream, obj.groupDraw);
             int playerId = stream.Read<int>();
             applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
-            obj.bools = stream.ReadArr<byte>(4).Select(b => b != 0).ToArray();
+            //obj.bools = stream.ReadArrFixed<byte>(4).Select(b => b != 0).ToArray();
+            obj.bools[0] = stream.ReadByte() != 0;
+            obj.bools[1] = stream.ReadByte() != 0;
+            obj.bools[2] = stream.ReadByte() != 0;
+            obj.bools[3] = stream.ReadByte() != 0;
             obj.actor.UpdateCollision();
         }
 
@@ -1554,9 +1558,17 @@ namespace Velo
         private static readonly HashSet<CActor> fixedIndexActors = new HashSet<CActor>();
         private static readonly HashSet<int> fixedIds = new HashSet<int>();
 
+        private static readonly Stack<MemoryStream> memoryPool = new Stack<MemoryStream>();
+
         public Savestate()
         {
-            stream = new MemoryStream();
+            if (memoryPool.Count > 0)
+                lock (memoryPool)
+                {
+                    stream = memoryPool.Pop();
+                }
+            else
+                stream = new MemoryStream();
             stream.Write(-1);
         }
 
@@ -1646,17 +1658,10 @@ namespace Velo
 
             stream.Position = 0;
 
-            int version = 2;
+            int version = VERSION;
 
             stream.Write(version);
             stream.Write(Map.GetCurrentMapId());
-            /*if (Velo.ModuleSolo != null && Velo.ModuleSolo.LevelData != null)
-            {
-                stream.Write(1);
-                stream.WriteStr(Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author);
-            }
-            else
-                stream.Write(-1);*/
             stream.Write(CEngine.CEngine.Instance.GameTime.TotalGameTime.Ticks);
 
             if (listMode == EListMode.EXCLUDE)
@@ -1734,9 +1739,15 @@ namespace Velo
                     Write(stream, moduleMP);
             }
 
-            stream.Write(Cooldowns.Instance.ItemCooldown);
-            stream.Write(Cooldowns.Instance.DrillCooldown);
-            stream.Write(Cooldowns.Instance.ModCooldown);
+            stream.Write(Math.Min(LoadedVersion, Version.VERSION));
+
+            var cooldowns = OfflineGameMods.Instance.CurrentRecording.Rules.Cooldowns;
+            stream.Write(cooldowns.Count);
+            foreach (var entry in cooldowns)
+            {
+                stream.Write((int)entry.Key);
+                stream.Write(entry.Value.Value);
+            }
 
             stream.Write(playerOffset);
         }
@@ -1838,7 +1849,7 @@ namespace Velo
             stream.Position = 0;
 
             int version = stream.Read<int>();
-            if (version == -1 || version > 2)
+            if (version == -1 || version > VERSION)
                 return false;
 
             int prevIndex = (int)stream.Position;
@@ -1858,7 +1869,7 @@ namespace Velo
                         return false;
                 }
             }
-            else if (version == 2)
+            else if (version >= 2)
             {
                 ulong mapId = stream.Read<ulong>();
                 if (mapId != Map.GetCurrentMapId())
@@ -1971,9 +1982,33 @@ namespace Velo
                     Read(stream, moduleMP);
             }
 
-            Cooldowns.Instance.ItemCooldown = stream.Read<float>();
-            Cooldowns.Instance.DrillCooldown = stream.Read<float>();
-            Cooldowns.Instance.ModCooldown = stream.Read<float>();
+            if (version < 4)
+            {
+                stream.Read<float>();
+                stream.Read<float>();
+                stream.Read<float>();
+                if (version >= 3)
+                    stream.Read<float>();
+            }
+
+            if (version >= 4)
+                LoadedVersion = stream.Read<ushort>();
+            else
+                LoadedVersion = 34;
+
+            if (version >= 4)
+            {
+                var cooldowns = OfflineGameMods.Instance.CurrentRecording.Rules.Cooldowns;
+                int count = stream.Read<int>();
+                for (int i = 0; i < count; i++)
+                {
+                    EViolations violation = (EViolations)stream.Read<int>();
+                    float value = stream.Read<float>();
+                    cooldowns[violation].Value = value;
+                }
+            }
+
+            CheatEngineDetection.MatchValues();
 
             foreach (Action action in applyPtr)
                 action();
@@ -2007,6 +2042,15 @@ namespace Velo
             fixedIds.Clear();
 
             return true;
+        }
+
+        void IDisposable.Dispose()
+        {
+            lock (memoryPool)
+            {
+                stream.Position = 0;
+                memoryPool.Push(stream);
+            }
         }
     }
 }

@@ -21,7 +21,7 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (modified.Count > 0 && new TimeSpan(Velo.Time.Ticks) - lastSave >= TimeSpan.FromSeconds(1))
+            if (modified.Count > 0 && new TimeSpan(Velo.RealTime.Ticks) - lastSave >= TimeSpan.FromSeconds(1))
                 SaveModified();
         }
 
@@ -31,14 +31,14 @@ namespace Velo
 
             foreach (Setting setting in modified)
             {
-                if (!modules.Contains(setting.Module))
+                if (setting.Module != null && !modules.Contains(setting.Module))
                     modules.Add(setting.Module);
             }
 
             Save(modules);
 
             modified.Clear();
-            lastSave = new TimeSpan(Velo.Time.Ticks);
+            lastSave = new TimeSpan(Velo.RealTime.Ticks);
         }
 
         public void Save(List<Module> modules)
@@ -69,6 +69,8 @@ namespace Velo
                 if (!file.EndsWith(".json"))
                     continue;
                 string moduleName = file.Substring(file.LastIndexOf('\\') + 1).Replace(".json", "");
+                if (moduleName == "Local Game Mods")
+                    moduleName = "Offline Game Mods";
                 Module module = ModuleManager.Instance.Get(moduleName);
                 if (module == null)
                     continue;

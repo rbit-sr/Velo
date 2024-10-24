@@ -85,16 +85,18 @@
     <Compile Include="Input.cs" />
     <Compile Include="Json.cs" />
     <Compile Include="Leaderboard\AutoUpdate.cs" />
+    <Compile Include="Leaderboard\CheatEngineDetection.cs" />
     <Compile Include="Leaderboard\Client.cs" />
     <Compile Include="Leaderboard\Leaderboard.cs" />
     <Compile Include="Leaderboard\LeaderboardMenus.cs" />
     <Compile Include="Leaderboard\Map.cs" />
-    <Compile Include="Leaderboard\Cooldowns.cs" />
+    <Compile Include="Leaderboard\MacroDetection.cs" />
+    <Compile Include="Modules\Console.cs" />
     <Compile Include="Modules\Ghosts.cs" />
     <Compile Include="Modules\Origins.cs" />
     <Compile Include="Modules\Savestates.cs" />
     <Compile Include="Notification.cs" />
-    <Compile Include="Leaderboard\Recording.cs" />
+    <Compile Include="Recording.cs" />
     <Compile Include="Leaderboard\RecordingSubmitter.cs" />
     <Compile Include="Leaderboard\Request.cs" />
     <Compile Include="Leaderboard\RulesChecker.cs" />
@@ -110,7 +112,7 @@
     <Compile Include="Modules\HitboxIndicator.cs" />
     <Compile Include="Modules\InputDisplay.cs" />
     <Compile Include="Modules\JumpHoldingDisplay.cs" />
-    <Compile Include="Modules\LocalGameMods.cs" />
+    <Compile Include="Modules\OfflineGameMods.cs" />
     <Compile Include="Modules\Miscellaneous.cs" />
     <Compile Include="Modules\Performance.cs" />
     <Compile Include="Modules\RopeIndicators.cs" />
@@ -126,6 +128,7 @@
     <Compile Include="Types.cs" />
     <Compile Include="Util.cs" />
     <Compile Include="Velo.cs" />
+    <Compile Include="Verify.cs" />
     <Compile Include="Version.cs" />
   </ItemGroup>
   <ItemGroup />

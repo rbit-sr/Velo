@@ -7,7 +7,7 @@ namespace Velo
 {
     public class Savestates
     {
-        private readonly LocalGameMods instance;
+        private readonly OfflineGameMods instance;
 
         private readonly Dictionary<string, Savestate> savestates = new Dictionary<string, Savestate>();
         private readonly Dictionary<string, TimeSpan> savestatesFileModifiedTimes = new Dictionary<string, TimeSpan>();
@@ -16,7 +16,7 @@ namespace Velo
         private readonly Action<Savestate> onSave;
         private readonly Action<Savestate> onLoad;
 
-        public Savestates(LocalGameMods instance, Action<Savestate> onSave, Action<Savestate> onLoad)
+        public Savestates(OfflineGameMods instance, Action<Savestate> onSave, Action<Savestate> onLoad)
         {
             this.instance = instance;
             this.onSave = onSave;
@@ -53,17 +53,16 @@ namespace Velo
                     });
                 }
 
-                if (savestates.ContainsKey(key) && instance.LoadKeys[i].Pressed())
+                if (instance.LoadKeys[i].Pressed() && savestates.ContainsKey(key))
                 {
                     if (savestates[key].Load(setGlobalTime: false))
                         onLoad?.Invoke(savestates[key]);
                 }
             }
 
-            TimeSpan now = new TimeSpan(DateTime.Now.Ticks);
-            if (now > savestateFilesLastChecked + TimeSpan.FromSeconds(1))
+            if (Velo.RealTime > savestateFilesLastChecked + TimeSpan.FromSeconds(1))
             {
-                savestateFilesLastChecked = now;
+                savestateFilesLastChecked = Velo.RealTime;
                 if (Directory.Exists("Velo\\savestate"))
                 {
                     string[] files = Directory.GetFiles("Velo\\savestate");

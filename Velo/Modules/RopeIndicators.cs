@@ -44,7 +44,7 @@ namespace Velo
 
             Velo.OnMainPlayerReset.Add(() =>
             {
-                if (ClearOnReset.Value)
+                if (drawComp != null && ClearOnReset.Value)
                     drawComp.lines.Clear();
             });
         }
@@ -93,19 +93,20 @@ namespace Velo
 
             bool antiAlias = false;
 
-            foreach (CLine line in drawComp.Lines)
+            int count = drawComp.Lines.Count;
+            for (int i = 0; i < count; i++)
             {
-                line.color = color;
+                drawComp.Lines[i].color = color;
 
                 if (!antiAlias)
-                    line.thickness = Thickness.Value;
+                    drawComp.Lines[i].thickness = Thickness.Value;
                 else
                 {
-                    line.thickness = Thickness.Value + 1;
+                    drawComp.Lines[i].thickness = Thickness.Value + 1;
                     if (AntiAliasing.Value)
-                        line.color *= 0.5f;
+                        drawComp.Lines[i].color *= 0.5f;
                     else
-                        line.color = new Color(0, 0, 0, 0);
+                        drawComp.Lines[i].color = new Color(0, 0, 0, 0);
                 }
 
                 antiAlias = !antiAlias;

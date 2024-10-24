@@ -5,9 +5,7 @@ using Microsoft.Xna.Framework.Graphics;
 using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using System.Linq;
-
 using Microsoft.Xna.Framework.Input;
-using Newtonsoft.Json.Linq;
 
 namespace Velo
 {
@@ -41,9 +39,19 @@ namespace Velo
         }
     }
 
+    public class WECharInput : WEvent
+    {
+        public char Char;
+
+        public WECharInput(char c)
+        {
+            Char = c;
+        }
+    }
+
     public class WidgetContainer
     {
-        private readonly Widget root;
+        private readonly IWidget root;
         private readonly Rectangle rec;
         private readonly Events events;
         private MouseState mousePrev;
@@ -74,6 +82,7 @@ namespace Velo
             events.MouseState = mouseCurr;
             events.OnClick = null;
             events.OnScroll = null;
+            events.OnChar = null;
 
             root.UpdateInput(true, events);
 
@@ -91,13 +100,17 @@ namespace Velo
                 if (mousePrev.ScrollWheelValue != mouseCurr.ScrollWheelValue)
                     events.OnScroll(new WEMouseScroll(mousePrev.ScrollWheelValue - mouseCurr.ScrollWheelValue));
             }
+            if (events.OnChar != null)
+            {
+
+            }
 
             root.Position = new Vector2(rec.X, rec.Y) + Offset;
             root.Size = new Vector2(rec.Width, rec.Height);
 
             root.UpdateBounds(new Rectangle(rec.X + (int)Offset.X, rec.Y + (int)Offset.Y, rec.Width, rec.Height));
 
-            Widget hovered = root.GetHovered(mousePos, true);
+            IWidget hovered = root.GetHovered(mousePos, true);
 
             Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
             root.Draw(hovered, scale, Opacity);
@@ -111,9 +124,36 @@ namespace Velo
         public MouseState MouseState;
         public Action<WEMouseClick> OnClick;
         public Action<WEMouseScroll> OnScroll;
+        public Action<WECharInput> OnChar;
     }
 
-    public abstract class Widget
+    public interface IWidget
+    {
+        bool MouseInside { get; set; }
+        bool Visible { get; set; }
+        Vector2 Position { get; set; }
+        Vector2 Size { get; set; }
+        Vector2 Offset { get; set; }
+        float Opacity { get; set; }
+        bool BackgroundVisible { get; set; }
+        Func<Color> BackgroundColor { get; set; }
+        bool DisableInput { get; set; }
+        bool Hoverable { get; set; }
+        bool BackgroundVisibleHovered { get; set; }
+        Func<Color> BackgroundColorHovered { get; set; }
+        Action<WEMouseClick> OnClick { get; set; }
+        bool Crop { get; set; }
+        IEnumerable<IWidget> Children { get; }
+        void UpdateInput(bool mouseInsideParent, Events events);
+
+        void UpdateBounds(Rectangle crop);
+
+        IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent);
+
+        void Draw(IWidget hovered, float scale, float opacity);
+    }
+
+    public abstract class Widget : IWidget
     {
         public CRectangleDrawComponent recDraw;
         protected Rectangle crop;
@@ -150,7 +190,7 @@ namespace Velo
         public Action<WEMouseClick> OnClick { get; set; }
         public bool Crop { get; set; }
 
-        public virtual IEnumerable<Widget> Children => Enumerable.Empty<Widget>();
+        public virtual IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
 
         public virtual void UpdateInput(bool mouseInsideParent, Events events)
         {
@@ -175,16 +215,16 @@ namespace Velo
                 this.crop = Rectangle.Intersect(crop, new Rectangle((int)Position.X, (int)Position.Y, (int)Size.X, (int)Size.Y));
         }
 
-        public virtual Widget GetHovered(Vector2 mousePos, bool mouseInsideParent)
+        public virtual IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
         {
             if (!DisableInput)
             {
                 MouseInside = CheckMouseInside(mousePos);
             }
 
-            foreach (Widget child in Children)
+            foreach (IWidget child in Children)
             {
-                Widget hovered = child.GetHovered(mousePos, MouseInside && mouseInsideParent);
+                IWidget hovered = child.GetHovered(mousePos, MouseInside && mouseInsideParent);
                 if (hovered != null)
                     return hovered;
             }
@@ -195,7 +235,7 @@ namespace Velo
             return null;
         }
 
-        public virtual void Draw(Widget hovered, float scale, float opacity)
+        public virtual void Draw(IWidget hovered, float scale, float opacity)
         {
             if (!Visible)
                 return;
@@ -255,10 +295,10 @@ namespace Velo
 
     public class LayoutChild
     {
-        public Widget Widget;
+        public IWidget Widget;
         public float Size;
 
-        public LayoutChild(Widget widget, float size)
+        public LayoutChild(IWidget widget, float size)
         {
             Widget = widget;
             Size = size;
@@ -307,7 +347,7 @@ namespace Velo
             fillChild = -1;
         }
 
-        public override IEnumerable<Widget> Children => children.Select(child => child.Widget).Where(child => child != null);
+        public override IEnumerable<IWidget> Children => children.Select(child => child.Widget).Where(child => child != null);
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -354,7 +394,7 @@ namespace Velo
             }
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -373,11 +413,11 @@ namespace Velo
 
     public class StackChild
     {
-        public Widget Widget;
+        public IWidget Widget;
         public Vector2 Position;
         public Vector2 Size;
 
-        public StackChild(Widget widget, Vector2 position, Vector2 size)
+        public StackChild(IWidget widget, Vector2 position, Vector2 size)
         {
             Widget = widget;
             Position = position;
@@ -394,7 +434,7 @@ namespace Velo
             children = new List<StackChild>();
         }
 
-        public void AddChild(Widget child, Vector2 position, Vector2 size)
+        public void AddChild(IWidget child, Vector2 position, Vector2 size)
         {
             children.Add(new StackChild(child, position, size));
         }
@@ -404,7 +444,7 @@ namespace Velo
             children.Clear();
         }
 
-        public override IEnumerable<Widget> Children => children.Select(child => child.Widget);
+        public override IEnumerable<IWidget> Children => children.Select(child => child.Widget);
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -419,7 +459,7 @@ namespace Velo
             }
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -433,7 +473,7 @@ namespace Velo
         }
     }
 
-    public class HolderW<W> : Widget where W : Widget
+    public class HolderW<W> : Widget where W : class, IWidget
     {
         public W Child;
 
@@ -442,7 +482,7 @@ namespace Velo
 
         }
 
-        public override IEnumerable<Widget> Children => Child != null ? new[] { Child } : Enumerable.Empty<Widget>();
+        public override IEnumerable<IWidget> Children => Child != null ? new[] { (IWidget)Child } : Enumerable.Empty<IWidget>();
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -456,7 +496,7 @@ namespace Velo
             }
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -467,7 +507,7 @@ namespace Velo
         }
     }
 
-    public class TransitionW<W> : StackW where W : Widget
+    public class TransitionW<W> : StackW where W : class, IWidget
     {
         private readonly HolderW<W> child;
         private readonly HolderW<W> childFadeout;
@@ -487,21 +527,22 @@ namespace Velo
             {
                 DisableInput = true
             };
-            AddChild(child, Vector2.Zero, -1 * Vector2.One);
-            AddChild(childFadeout, Vector2.Zero, -1 * Vector2.One);
+            AddChild(child, Vector2.Zero, -1f * Vector2.One);
+            AddChild(childFadeout, Vector2.Zero, -1f * Vector2.One);
+            R = 1f;
         }
 
-        public override IEnumerable<Widget> Children => (R < 1f ? new[] { child, childFadeout } : new[] { child }).Where(child => child != null);
+        public override IEnumerable<IWidget> Children => (R < 1f ? new[] { (IWidget)child, childFadeout } : new[] { child }).Where(child => child != null);
 
         private static float Ease(float r)
         {
             return 1f - (1f - r) * (1f - r);
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
-            float dt = (float)(Velo.Time - lastTime).TotalSeconds;
-            lastTime = Velo.Time;
+            float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
+            lastTime = Velo.RealTime;
             if (dt > 1f)
                 dt = 1f;
 
@@ -535,7 +576,7 @@ namespace Velo
             bool transitionBack = childFadeout.Child == widget;
             childFadeout.Child = child.Child;
             child.Child = widget;
-            lastTime = Velo.Time;
+            lastTime = Velo.RealTime;
             R = transitionBack ? 1f - R : 0f;
             child.Opacity = R;
             childFadeout.Opacity = 1f - R;
@@ -579,7 +620,7 @@ namespace Velo
         public Func<Color> ScrollBarColor { get; set; }
         public int ScrollBarWidth { get; set; }
 
-        public override IEnumerable<Widget> Children => root != null ? new[] { root } : Enumerable.Empty<Widget>();
+        public override IEnumerable<IWidget> Children => root != null ? new[] { root } : Enumerable.Empty<IWidget>();
 
         public override void UpdateInput(bool mouseInsideParent, Events events)
         {
@@ -633,7 +674,7 @@ namespace Velo
                     scroll = 0;
                 }
 
-                float dt = (float)Velo.Delta.TotalSeconds;
+                float dt = (float)Velo.RealDelta.TotalSeconds;
                 if (dt > 1f)
                     dt = 1f;
 
@@ -673,9 +714,9 @@ namespace Velo
             root.UpdateBounds(this.crop);
         }
 
-        public override Widget GetHovered(Vector2 mousePos, bool mouseInsideParent)
+        public override IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
         {
-            Widget hovered = base.GetHovered(mousePos, mouseInsideParent);
+            IWidget hovered = base.GetHovered(mousePos, mouseInsideParent);
 
             if (!DisableInput && MouseInside && mouseInsideParent && root.Size.Y > Size.Y &&scrollBar.Contains((int)mousePos.X, (int)mousePos.Y))
             {
@@ -685,7 +726,7 @@ namespace Velo
             return hovered;
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -753,7 +794,7 @@ namespace Velo
         public bool EntryHoverable { get; set; }
         public Func<Color> EntryBackgroundColorHovered { get; set; }
 
-        public override IEnumerable<Widget> Children => entries.Select(entry => entry.Widget);
+        public override IEnumerable<IWidget> Children => entries.Select(entry => entry.Widget);
 
         public override void UpdateBounds(Rectangle crop)
         {
@@ -811,7 +852,7 @@ namespace Velo
             Size = new Vector2(Size.X, y - Position.Y);
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -854,11 +895,14 @@ namespace Velo
 
     public class LabelW : Widget
     {
-        private readonly CTextDrawComponent textDraw;
+        private readonly TextDraw textDraw;
+        private bool updateTextCrop = true;
+        private string text;
+        private Vector2 sizePrev = Vector2.Zero;
 
-        public LabelW(string text, CFont font)
+        public LabelW(string text, CachedFont font)
         {
-            textDraw = new CTextDrawComponent("", font, Vector2.Zero)
+            textDraw = new TextDraw()
             {
                 IsVisible = true,
                 Align = 0.5f * Vector2.One,
@@ -866,7 +910,8 @@ namespace Velo
                 DropShadowColor = Microsoft.Xna.Framework.Color.Black,
                 DropShadowOffset = Vector2.One
             };
-            Text = text;
+            textDraw.SetFont(font);
+            this.text = text;
         }
 
         public Vector2 Align
@@ -877,7 +922,15 @@ namespace Velo
 
         public Func<Color> Color { get; set; }
         
-        public string Text { get; set; }
+        public string Text 
+        { 
+            get => text; 
+            set
+            {
+                text = value;
+                updateTextCrop = true;
+            }
+        }
 
         public Vector2 Padding { get; set; }
 
@@ -885,11 +938,16 @@ namespace Velo
         {
             base.UpdateBounds(crop);
 
-            Vector2 requestedSize = textDraw.Size + 2 * Padding;
+            Vector2 requestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
             Size = new Vector2(Math.Max(Size.X, requestedSize.X), Math.Max(Size.Y, requestedSize.Y));
+            if (Size != sizePrev)
+            {
+                sizePrev = Size;
+                updateTextCrop = true;
+            }
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -899,22 +957,25 @@ namespace Velo
             if (Text == null)
                 Text = "";
 
-            string[] textLines = Text.Split('\n');
-
-            for (int i = 0; i < textLines.Length; i++)
+            if (updateTextCrop)
             {
-                while (textDraw.Font.MeasureString(textLines[i]).X > Size.X)
-                {
-                    textLines[i] = textLines[i].Substring(0, textLines[i].Length - 1);
-                }
-            }
+                string[] textLines = Text.Split('\n');
 
-            textDraw.StringText = string.Join("\n", textLines);
-            textDraw.color_replace = false;
+                for (int i = 0; i < textLines.Length; i++)
+                {
+                    while (textDraw.Font.MeasureString(textLines[i]).X > Size.X)
+                    {
+                        textLines[i] = textLines[i].Substring(0, textLines[i].Length - 1);
+                    }
+                }
+
+                textDraw.Text = string.Join("\n", textLines);
+                updateTextCrop = false;
+            }
             textDraw.Offset = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Padding + Offset;
             textDraw.Scale = Vector2.One * scale;
-            if (this.Color != null)
-                textDraw.Color = this.Color();
+            if (Color != null)
+                textDraw.Color = Color();
             textDraw.Opacity = opacity * Opacity;
             textDraw.Draw(null);
         }
@@ -938,7 +999,7 @@ namespace Velo
             set { imageDraw.Sprite = new CImage(value); }
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             base.Draw(hovered, scale, opacity);
 
@@ -964,7 +1025,7 @@ namespace Velo
         private float selectedRecLeft = 0f;
         private float selectedRecInitX = 0f;
 
-        public SelectorButtonW(IEnumerable<string> labels, int selected, CFont font) :
+        public SelectorButtonW(IEnumerable<string> labels, int selected, CachedFont font) :
             base(EOrientation.HORIZONTAL)
         {
             buttons = new List<LabelW>();
@@ -1015,8 +1076,8 @@ namespace Velo
             
             base.UpdateBounds(crop);
 
-            selectedRecR += 8f * (float)(Velo.Time - lastTime).TotalSeconds;
-            lastTime = Velo.Time;
+            selectedRecR += 8f * (float)(Velo.RealTime - lastTime).TotalSeconds;
+            lastTime = Velo.RealTime;
             if (selectedRecR > 1f)
                 selectedRecR = 1f;
         }
@@ -1026,7 +1087,7 @@ namespace Velo
             return 1f - (1f - r) * (1f - r);
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             CRectangleDrawComponent recDraw = new CRectangleDrawComponent(0f, 0f, 0f, 0f)
             {
@@ -1201,13 +1262,13 @@ namespace Velo
     public class TableW<T> : LayoutW, IListEntryFactory<T> where T : struct
     {
         private readonly ITableEntryFactory<T> factory;
-        private readonly CFont font;
+        private readonly CachedFont font;
         private readonly LayoutW headers;
         private readonly ListW<T> list;
         private readonly ScrollW scroll;
         private readonly List<TableColumn<T>> columns;
 
-        public TableW(CFont font, int entryCount, float headerHeight, ITableEntryFactory<T> factory) :
+        public TableW(CachedFont font, int entryCount, float headerHeight, ITableEntryFactory<T> factory) :
             base(EOrientation.VERTICAL)
         {
             this.factory = factory;

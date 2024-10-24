@@ -4,17 +4,19 @@ using System.Collections.Generic;
 using System;
 using CEngine.World.Actor;
 using System.IO;
-using System.Windows.Forms;
 using System.Linq;
 
 namespace Velo
 {
     // TODO: separate the recording logic from this class
-    public class LocalGameMods : Module
+    public class OfflineGameMods : Module
     {
         public FloatSetting TimeScale;
         public FloatSetting MaxSpeed;
         public VectorSetting Gravity;
+        public FloatSetting JumpStrength;
+        public FloatSetting WallJumpStrength;
+        public FloatSetting JumpDuration;
         public FloatSetting GrappleHookSpeed;
         public FloatSetting GrappleCooldown;
         public FloatSetting SlideCooldown;
@@ -39,8 +41,20 @@ namespace Velo
 
         public HotkeySetting[] SaveKeys = new HotkeySetting[10];
         public HotkeySetting[] LoadKeys = new HotkeySetting[10];
-        public IntSetting LoadHaltDuration;
+        public FloatSetting LoadHaltDuration;
         public BoolSetting StoreAIVolumes;
+
+        public HotkeySetting StopReplay;
+        public HotkeySetting Rewind1Second;
+        public HotkeySetting SaveRun;
+        public HotkeySetting ReplaySavedRun;
+        public HotkeySetting VerifySavedRun;
+        public HotkeySetting SetGhostSavedRun;
+        public BoolSetting LoopReplay;
+        public FloatSetting GhostOffsetTime;
+        public BoolSetting EnableMultiGhost;
+        public BoolSetting GhostDifferentColors;
+        public BoolSetting DisableReplayNotifications;
 
         public IntSetting DeltaTime;
         public BoolSetting FixDeltaTime;
@@ -64,14 +78,17 @@ namespace Velo
         public static bool test2;
         public static bool test;
 
-        private LocalGameMods() : base("Local Game Mods")
+        private OfflineGameMods() : base("Offline Game Mods")
         {
             NewCategory("physics");
             TimeScale = AddFloat("time scale", 1f, 0.1f, 5f);
             MaxSpeed = AddFloat("max speed", 1500f, 100f, 10000f);
             Gravity = AddVector("gravity", new Vector2(0f, 1000f), new Vector2(-5000f, -5000f), new Vector2(5000f, 5000f));
+            JumpStrength = AddFloat("jump strength", 2876f, 500f, 10000f);
+            WallJumpStrength = AddFloat("wall jump strength", 1500f, 500f, 10000f);
+            JumpDuration = AddFloat("jump duration", 0.25f, 0.05f, 2f);
             GrappleHookSpeed = AddFloat("grapple hook speed", 3000f, 100f, 20000f);
-            GrappleCooldown = AddFloat("grapple cooldown", 0.25f, 0f, 2f);
+            GrappleCooldown = AddFloat("grapple cooldown", 0.2f, 0f, 2f);
             SlideCooldown = AddFloat("slide cooldown", 0.5f, 0f, 2f);
             InfiniteJumps = AddBool("infinite jumps", false);
             FixGrappleGlitches = AddToggle("fix grapple glitches", new Toggle());
@@ -151,17 +168,39 @@ namespace Velo
                 LoadKeys[i] = new HotkeySetting(this, "load " + (i + 1) + " key", 0x97);
                 loadCategory.Children.Add(LoadKeys[i]);
             }
-            LoadHaltDuration = AddInt("load halt duration", 0, 0, 2000);
+            LoadHaltDuration = AddFloat("load halt duration", 0f, 0f, 2f);
             StoreAIVolumes = AddBool("store AI volumes", false);
 
             CurrentCategory.Tooltip =
                 "Savestates allow you to save the current state of the player and level and to then restore it at any time by pressing a hotkey. " +
                 "Savestates are stored in \"Velo\\savestate\".";
             LoadHaltDuration.Tooltip =
-                "Duration in milliseconds the game will run in slow motion after loading a savestate.";
+                "Duration in seconds the game will run in slow motion after loading a savestate.";
             StoreAIVolumes.Tooltip =
                 "Whether to store AI volumes or not. " +
                 "Storing them should be unnecessary in most circumstances.";
+
+            NewCategory("recording and replay");
+            StopReplay = AddHotkey("stop replay", 0x97);
+            Rewind1Second = AddHotkey("rewind 1 second", 0x97, autoRepeat: true);
+            SaveRun = AddHotkey("save last run", 0x97);
+            ReplaySavedRun = AddHotkey("replay saved run", 0x97);
+            VerifySavedRun = AddHotkey("verify saved run", 0x97);
+            SetGhostSavedRun = AddHotkey("set ghost saved run", 0x97);
+            LoopReplay = AddBool("loop replay", false);
+            GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
+            EnableMultiGhost = AddBool("enable multighost", false);
+            GhostDifferentColors = AddBool("ghosts different colors", true);
+            DisableReplayNotifications = AddBool("disable replay notifications", false);
+
+            Rewind1Second.Tooltip =
+                "Rewinds playback by 1 second.";
+            SaveRun.Tooltip =
+                "Saves a recording of the previous run to \"Velo\\saved run\". If you believe your run to be wrongly categorized or invalidated, send the file to a leaderboard moderator.";
+            GhostOffsetTime.Tooltip = "ghost offset time in seconds";
+            EnableMultiGhost.Tooltip = "Allows you to have multiple ghosts at the same time.";
+            GhostDifferentColors.Tooltip = "Color multiple ghosts differently or use the same color.";
+            DisableReplayNotifications.Tooltip = "Disables \"replay start/stop\" notifications.";
 
             NewCategory("TAS");
             FixDeltaTime = AddBool("fix delta time", false);
@@ -190,8 +229,7 @@ namespace Velo
 
             savestates = new Savestates(this, onSave: null, onLoad: savestate =>
             {
-                SavestateLoadTime = Velo.Time;
-                Cooldowns.Instance.SavestateLoaded();
+                SavestateLoadTime = Velo.RealTime;
                 recorder.Restart();
             });
 
@@ -199,7 +237,7 @@ namespace Velo
             //Test = AddHotkey("test", 0x97);
         }
 
-        public static LocalGameMods Instance = new LocalGameMods();
+        public static OfflineGameMods Instance = new OfflineGameMods();
 
         public bool DtFixed
         {
@@ -218,12 +256,10 @@ namespace Velo
             {
                 if (!Velo.Online && Velo.Ingame)
                 {
-                    if (SavestateLoadTime == TimeSpan.Zero || LoadHaltDuration.Value == 0)
+                    if (SavestateLoadTime == TimeSpan.Zero)
                         return TimeScale.Value;
 
-                    float ratio = (float)Math.Min((Velo.Time - SavestateLoadTime).TotalMilliseconds, LoadHaltDuration.Value) / LoadHaltDuration.Value;
-
-                    return TimeScale.Value * ratio;
+                    return TimeScale.Value * SavestateLoadHaltScale;
                 }
 
                 return 1f;
@@ -234,13 +270,19 @@ namespace Velo
         {
             base.Init();
 
+            if (Version.Compare(GrappleCooldown.Version, "2.2.8") <= 0)
+            {
+                GrappleCooldown.Value = GrappleCooldown.DefaultValue;
+                GrappleCooldown.Version = Version.VERSION_NAME;
+            }
+
             Velo.OnMainPlayerReset.Add(OnMainPlayerReset);
             Velo.OnLapFinish.Add(OnLapFinish);
 
             playback.OnFinish = (recording, type) => Velo.AddOnPreUpdate(() =>
             {
-                if (!Leaderboard.Instance.LoopReplay.Value || type != Playback.EPlaybackType.VIEW_REPLAY)
-                    StopPlayback(notification: !Leaderboard.Instance.DisableReplayNotifications.Value);
+                if (!LoopReplay.Value || type != Playback.EPlaybackType.VIEW_REPLAY)
+                    StopPlayback(notification: !DisableReplayNotifications.Value);
                 else
                     StartPlayback(recording, Playback.EPlaybackType.VIEW_REPLAY, notification: false);
             });
@@ -250,7 +292,7 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (Input.Pressed(Freeze.Value.Hotkey))
+            if (Input.IsPressed(Freeze.Value.Hotkey))
             {
                 Freeze.ToggleState();
             }
@@ -295,7 +337,7 @@ namespace Velo
                 playbackGhosts.ForEach(playback => playback.Stop());
             }
 
-            if (Leaderboard.Instance.Rewind1Second.Pressed())
+            if (Rewind1Second.Pressed())
             {
                 playback.Jump(-1f);
             }
@@ -305,6 +347,36 @@ namespace Velo
                 Freeze.Disable();
                 stepCount = 0;
                 return;
+            }
+
+            if (StopReplay.Pressed() && IsPlaybackRunning())
+            {
+                StopPlayback(notification: !DisableReplayNotifications.Value);
+            }
+            if (SaveRun.Pressed())
+            {
+                SaveLast();
+            }
+            if (ReplaySavedRun.Pressed())
+            {
+                Recording rec = LoadSaved();
+                if (rec != null)
+                    StartPlayback(rec, Playback.EPlaybackType.VIEW_REPLAY, notification: !DisableReplayNotifications.Value, showTime: true);
+            }
+            if (VerifySavedRun.Pressed())
+            {
+                Recording rec = LoadSaved();
+                if (rec != null)
+                    StartPlayback(rec, Playback.EPlaybackType.VERIFY);
+            }
+            if (SetGhostSavedRun.Pressed())
+            {
+                int ghostIndex = !EnableMultiGhost.Value ? 0 : GhostPlaybackCount();
+                Ghosts.Instance.GetOrSpawn(ghostIndex, Instance.GhostDifferentColors.Value);
+                Recording rec = LoadSaved();
+                Ghosts.Instance.WaitForGhost(ghostIndex);
+                if (rec != null)
+                    StartPlayback(rec, Playback.EPlaybackType.SET_GHOST);
             }
 
             if (Step1Key.Pressed())
@@ -353,8 +425,6 @@ namespace Velo
             if (Velo.Online)
                 return;
 
-            playbackGhosts.RemoveAll(playback => playback.Finished);
-
             if (Velo.ModuleSolo != null)
             {
                 recorder.PostUpdate();
@@ -371,6 +441,16 @@ namespace Velo
             }
         }
 
+        public float SavestateLoadHaltScale
+        {
+            get
+            {
+                if (LoadHaltDuration.Value <= 0)
+                    return 1f;
+                return (float)Math.Min((Velo.RealTime - SavestateLoadTime).TotalSeconds, LoadHaltDuration.Value) / LoadHaltDuration.Value;
+            }
+        }
+
         private void OnMainPlayerReset()
         {
             if (!Velo.Ingame || Velo.Online)
@@ -383,8 +463,9 @@ namespace Velo
                 recorder.Restart();
                 recCurrent.Rules.LapStart(true);
                 playback.Restart();
+                playbackGhosts.RemoveAll(playback => Ghosts.Instance.Get(playback.GhostIndex) == null);
                 playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(Leaderboard.Instance.GhostOffsetTime.Value, hold: true));
+                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
             }
         }
 
@@ -402,7 +483,7 @@ namespace Velo
                 recorder.SetLapStartToBack();
                 recCurrent.Rules.LapStart(false);
                 playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(Leaderboard.Instance.GhostOffsetTime.Value, hold: true));
+                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
             }
         }
 
@@ -426,8 +507,11 @@ namespace Velo
                 !CameraMaxSpeed.IsDefault() ||
                 !MaxSpeed.IsDefault() ||
                 !Gravity.IsDefault() ||
+                !JumpStrength.IsDefault() ||
+                !WallJumpStrength.IsDefault() ||
+                !JumpDuration.IsDefault() ||
                 !GrappleHookSpeed.IsDefault() ||
-                !GrappleCooldown.IsDefault() ||
+                (!GrappleCooldown.IsDefault() && GrappleCooldown.Value != 0.25f) ||
                 !SlideCooldown.IsDefault() ||
                 !InfiniteJumps.IsDefault() ||
                 !FixGrappleGlitches.IsDefault() ||
@@ -444,6 +528,8 @@ namespace Velo
                 return 1;
             return 0;
         }
+
+        public Recording CurrentRecording => recCurrent;
 
         public bool IsPlaybackRunning()
         {
@@ -571,7 +657,7 @@ namespace Velo
             }
             if ((ResetBoost.Value && !obstaclesOnly) || Origins.Instance.IsOrigins())
             {
-                Velo.MainPlayer.boost = 0f;
+                Velo.MainPlayer.Boost = 0f;
             }
             if ((ResetBoostaCoke.Value && !obstaclesOnly) || Origins.Instance.IsOrigins())
             {
@@ -596,22 +682,22 @@ namespace Velo
             {
                 playback.Start(recording, type, -1);
                 playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(Leaderboard.Instance.GhostOffsetTime.Value, hold: true));
+                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
             }
             else if (type == Playback.EPlaybackType.SET_GHOST)
             {
-                bool multiGhost = Leaderboard.Instance.EnableMultiGhost.Value;
-                Playback playback = !multiGhost && playbackGhosts.Count >= 1 ? playbackGhosts[0] : new Playback();
-                playback.OnFinish = (recording_, __) => Velo.AddOnPreUpdate(() =>
+                bool multiGhost = EnableMultiGhost.Value;
+                Playback playbackGhost = !multiGhost && playbackGhosts.Count >= 1 ? playbackGhosts[0] : new Playback();
+                playbackGhost.OnFinish = (recording_, __) => Velo.AddOnPreUpdate(() =>
                 {
-                    playback.Restart();
-                    playback.Jump(Leaderboard.Instance.GhostOffsetTime.Value, hold: true);
+                    playbackGhost.Restart();
+                    playbackGhost.Jump(GhostOffsetTime.Value, hold: true);
                 });
 
-                playback.Start(recording, type, !multiGhost ? 0 : playbackGhosts.Count);
-                playback.Jump(Leaderboard.Instance.GhostOffsetTime.Value, hold: true);
+                playbackGhost.Start(recording, type, !multiGhost ? 0 : playbackGhosts.Count);
+                playbackGhost.Jump(GhostOffsetTime.Value, hold: true);
                 if (multiGhost || playbackGhosts.Count == 0)
-                    playbackGhosts.Add(playback);
+                    playbackGhosts.Add(playbackGhost);
             }
 
             if (type == Playback.EPlaybackType.VIEW_REPLAY && notification)
@@ -641,7 +727,7 @@ namespace Velo
             {
                 int idPrev = recLast.Info.Id;
                 recLast.Info.Id = -50;
-                recLast.Write(stream);
+                recLast.Write(stream, compress: false);
                 recLast.Info.Id = idPrev;
             }
         }

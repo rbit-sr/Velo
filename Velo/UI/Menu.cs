@@ -4,6 +4,7 @@ using System;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
 using System.Collections.Generic;
+using System.Runtime.Remoting.Contexts;
 
 namespace Velo
 {
@@ -11,12 +12,12 @@ namespace Velo
     {
         public static void ApplyText(LabelW text)
         {
-            text.Color = () => Leaderboard.Instance.TextColor.Value.Get();
+            text.Color = () => SettingsUI.Instance.TextColor.Value.Get();
         }
 
         public static void ApplyTextHeader(LabelW text)
         {
-            text.Color = () => Leaderboard.Instance.HeaderTextColor.Value.Get();
+            text.Color = () => SettingsUI.Instance.HeaderTextColor.Value.Get();
         }
 
         public static void ApplyButton(LabelW button)
@@ -24,9 +25,9 @@ namespace Velo
             button.Hoverable = true;
             button.BackgroundVisible = true;
             button.BackgroundVisibleHovered = true;
-            button.Color = () => Leaderboard.Instance.TextColor.Value.Get();
-            button.BackgroundColor = () => Leaderboard.Instance.ButtonColor.Value.Get();
-            button.BackgroundColorHovered = () => Leaderboard.Instance.ButtonHoveredColor.Value.Get();
+            button.Color = () => SettingsUI.Instance.TextColor.Value.Get();
+            button.BackgroundColor = () => SettingsUI.Instance.ButtonColor.Value.Get();
+            button.BackgroundColorHovered = () => SettingsUI.Instance.ButtonHoveredColor.Value.Get();
         }
 
         public static void ApplySelectorButton(SelectorButtonW button)
@@ -34,10 +35,10 @@ namespace Velo
             button.ButtonBackgroundVisible = true;
             button.ButtonBackgroundVisibleHovered = true;
             button.ButtonBackgroundVisibleSelected = true;
-            button.Color = () => Leaderboard.Instance.TextColor.Value.Get();
-            button.ButtonBackgroundColor = () => Leaderboard.Instance.ButtonColor.Value.Get();
-            button.ButtonBackgroundColorHovered = () => Leaderboard.Instance.ButtonHoveredColor.Value.Get();
-            button.ButtonBackgroundColorSelected = () => Leaderboard.Instance.ButtonSelectedColor.Value.Get();
+            button.Color = () => SettingsUI.Instance.TextColor.Value.Get();
+            button.ButtonBackgroundColor = () => SettingsUI.Instance.ButtonColor.Value.Get();
+            button.ButtonBackgroundColorHovered = () => SettingsUI.Instance.ButtonHoveredColor.Value.Get();
+            button.ButtonBackgroundColorSelected = () => SettingsUI.Instance.ButtonSelectedColor.Value.Get();
         }
     }
 
@@ -87,11 +88,29 @@ namespace Velo
         }
     }
 
-    public abstract class Menu : HolderW<Widget>
+    public interface IMenu : IWidget
+    {
+        void Refresh();
+    }
+
+    public abstract class Menu : HolderW<Widget>, IMenu
     {
         protected MenuContext context;
 
         public Menu(MenuContext context) :
+            base()
+        {
+            this.context = context;
+        }
+
+        public abstract void Refresh();
+    }
+
+    public abstract class RequestingMenu : HolderW<Widget>, IMenu
+    {
+        protected RequestingMenuContext context;
+        
+        public RequestingMenu(RequestingMenuContext context) :
             base()
         {
             this.context = context;
@@ -107,49 +126,64 @@ namespace Velo
         public CachedFont FontSmall;
         public CachedFont FontMedium;
         public CachedFont FontLarge;
+        public CachedFont FontTitle;
+        public CachedFont FontConsole;
     }
 
-    public abstract class MenuContext
+    public abstract class MenuContext<T> : ToggleModule where T : class, IMenu
     {
-        protected readonly WidgetContainer container;
-        protected readonly TransitionW<Widget> menu;
-        protected readonly StackW menuStack;
-        protected readonly TransitionW<Menu> page;
-
-        protected readonly Stack<Menu> backStack;
+        protected WidgetContainer container;
+        protected TransitionW<Widget> menu;
+        protected StackW menuStack;
+        protected TransitionW<T> page;
+        
+        protected Stack<T> backStack;
         public MenuFonts Fonts;
         public string Error;
 
-        public Menu Menu => page.Child;
+        private readonly bool enableDim;
 
-        public MenuContext()
+        public T Menu => page.Child;
+
+        public MenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : base(name, addEnabledSetting)
         {
-            Fonts = new MenuFonts();
+            this.enableDim = enableDim;
+            
+            backStack = new Stack<T>();
 
-            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15");
-            FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
-            FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
-
-            backStack = new Stack<Menu>();
-
-            page = new TransitionW<Menu>();
+            page = new TransitionW<T>();
             menuStack = new StackW();
-            menuStack.AddChild(page, new Vector2(375f, 100f), new Vector2(1170f, 880f));
+            menuStack.AddChild(page, menuPos != null ? menuPos.Value : new Vector2(375f, 100f), menuSize != null ? menuSize.Value : new Vector2(1170f, 880f));
             menu = new TransitionW<Widget>();
             container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
         }
 
-        public void EnterMenu(Menu menu)
+        public override void Init()
+        {
+            base.Init();
+
+            Fonts = new MenuFonts();
+            
+            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15");
+            FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
+            FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\NotoSans-Regular.ttf:24,UI\\Font\\NotoSansCJKtc-Regular.otf:24,UI\\Font\\NotoSansCJKkr-Regular.otf:24");
+            FontCache.Get(ref Fonts.FontTitle, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
+            FontCache.Get(ref Fonts.FontConsole, "CEngine\\Debug\\FreeMonoBold.ttf:18");
+        }
+
+        public void EnterMenu(T menu)
         {
             this.menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
-            this.page.GoTo(menu);
+            page.GoTo(menu);
 
-            ResetStateRerequest();
+            OnGoToNewPage();
         }
 
         public void ExitMenu(bool animation = true)
         {
-            OnExit();
+            if (menu.Child == null)
+                return;
+            Enabled.Disable();
             backStack.Clear();
             if (animation)
                 menu.TransitionTo(null, 4f, new Vector2(-500f, 0f));
@@ -157,18 +191,16 @@ namespace Velo
                 menu.GoTo(null);
         }
 
-        public abstract void OnExit();
-
-        public virtual void ChangePage(Menu newPage)
+        public void ChangePage(T newPage)
         {
             if (page.Child != null)
                 backStack.Push(page.Child);
             page.TransitionTo(newPage, 8f, Vector2.Zero);
 
-            ResetStateRerequest();
+            OnGoToNewPage();
         }
 
-        public void PushBackStack(Menu menu)
+        public void PushBackStack(T menu)
         {
             backStack.Push(menu);
         }
@@ -176,54 +208,119 @@ namespace Velo
         public void PopPage()
         {
             page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
-            Rerequest();
+            OnGoBackPage();
         }
 
-        public void ResetStateRerequest()
+        public virtual void OnGoToNewPage()
         {
-            OnCancelAllRequests();
+            Menu.Refresh();
+        }
+
+        public virtual void OnChangePage()
+        {
+            Menu.Refresh();
+        }
+
+        public virtual void OnGoBackPage()
+        {
+            Menu.Refresh();
+        }
+
+        public override void PostRender()
+        {
+            base.PostRender();
+
+            bool modified = Enabled.Modified();
+
+            if (modified)
+            {
+                if (Enabled.Value.Enabled)
+                    Cursor.EnableCursor(this);
+                else
+                    Cursor.DisableCursor(this);
+            }
+
+            if (modified)
+            {
+                if (Enabled.Value.Enabled)
+                    EnterMenu(GetStartMenu());
+                else
+                    ExitMenu(animation: true);
+            }
+
+            if (menu.Child == null && !menu.Transitioning())
+                return;
+
+            if (enableDim)
+            {
+                CRectangleDrawComponent dimRecDraw = new CRectangleDrawComponent(0, 0, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height)
+                {
+                    IsVisible = true,
+                    OutlineEnabled = false,
+                    OutlineThickness = 0,
+                    FillEnabled = true,
+                    FillColor = SettingsUI.Instance.DimColor.Value.Get() * (menu.Child != null ? menu.R : 1f - menu.R)
+                };
+                Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
+                dimRecDraw.Draw(null);
+                Velo.SpriteBatch.End();
+            }
+
+            container.Draw();
+        }
+
+        public abstract T GetStartMenu();
+    }
+
+    public abstract class MenuContext : MenuContext<Menu>
+    {
+        protected MenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : 
+            base(name, addEnabledSetting, enableDim, menuPos, menuSize)
+        {
+
+        }
+    }
+
+    public abstract class RequestingMenuContext : MenuContext<RequestingMenu>
+    {
+        public RequestingMenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) :
+            base(name, addEnabledSetting, enableDim, menuPos, menuSize)
+        {
+
+        }
+
+        public override void OnGoToNewPage()
+        {
+            CancelAllRequests();
             Menu.ResetState();
             Menu.Rerequest();
             Menu.Refresh();
         }
 
-        public void Rerequest()
+        public override void OnChangePage()
         {
-            OnCancelAllRequests();
+            CancelAllRequests();
+            Menu.Rerequest();
+            Menu.Refresh();
+        }
+
+        public override void OnGoBackPage()
+        {
+            CancelAllRequests();
             Menu.Rerequest();
             Menu.Refresh();
         }
 
         public void ClearCacheRerequest()
         {
-            OnCancelAllRequests();
-            OnClearCache();
+            CancelAllRequests();
+            ClearCache();
             Menu.ResetState();
             Menu.Rerequest();
             Menu.Refresh();
         }
 
-        public abstract void OnCancelAllRequests();
-        public abstract void OnClearCache();
-
-        public void Draw()
-        {
-            if (menu.Child == null && !menu.Transitioning())
-                return;
-
-            CRectangleDrawComponent dimRecDraw = new CRectangleDrawComponent(0, 0, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Width, CEngine.CEngine.Instance.GraphicsDevice.Viewport.Height)
-            {
-                IsVisible = true,
-                OutlineEnabled = false,
-                OutlineThickness = 0,
-                FillEnabled = true,
-                FillColor = Leaderboard.Instance.DimColor.Value.Get() * (menu.Child != null ? menu.R : 1f - menu.R)
-            };
-            Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            dimRecDraw.Draw(null);
-            Velo.SpriteBatch.End();
-
-            container.Draw();
-        }
+        public abstract void CancelAllRequests();
+        public abstract void ClearCache();
     }
 }

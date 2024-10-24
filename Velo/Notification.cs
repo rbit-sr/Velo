@@ -30,9 +30,11 @@ namespace Velo
 
         public void PushNotification(string message, Color color, TimeSpan duration)
         {
+            if (notificationQueue.Count >= 5)
+                return;
             notificationQueue.Enqueue(new Notification { Text = message, Color = color, Duration = duration });
             if (notificationQueue.Count == 1)
-                notificationBegin = Velo.Time;
+                notificationBegin = Velo.RealTime;
         }
 
         public void PushNotification(string message)
@@ -44,7 +46,7 @@ namespace Velo
         {
             notificationQueue.Dequeue();
             if (notificationQueue.Count >= 1)
-                notificationBegin = Velo.Time;
+                notificationBegin = Velo.RealTime;
             textDraw = null;
         }
 
@@ -52,7 +54,7 @@ namespace Velo
         {
             notificationQueue.Clear();
             notificationQueue.Enqueue(new Notification { Text = message, Color = color, Duration = duration });
-            notificationBegin = Velo.Time;
+            notificationBegin = Velo.RealTime;
             textDraw = null;
         }
 
@@ -68,7 +70,7 @@ namespace Velo
             if (notificationQueue.Count == 0)
                 return;
 
-            TimeSpan age = Velo.Time - notificationBegin;
+            TimeSpan age = Velo.RealTime - notificationBegin;
             if (age > notificationQueue.Peek().Duration)
                 PopNotification();
 

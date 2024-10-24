@@ -1,5 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System;
+using System.Runtime.InteropServices;
 
 namespace Velo
 {
@@ -22,6 +24,8 @@ namespace Velo
         private static KeyboardState keysCurr;
         private static KeyboardOemState keysOemPrev;
         private static KeyboardOemState keysOemCurr;
+        private static MouseState mousePrev;
+        private static MouseState mouseCurr;
         private static GamePadState gamePadPrev;
         private static GamePadState gamePadCurr;
 
@@ -35,7 +39,7 @@ namespace Velo
             COUNT
         }
 
-        private static bool IsDown(KeyboardState keys, KeyboardOemState keysOem, GamePadState gamePad, ushort key)
+        private static bool IsDown(KeyboardState keys, KeyboardOemState keysOem, MouseState mouse, GamePadState gamePad, ushort key)
         {
             if ((key & 0x400) != 0)
             {
@@ -92,6 +96,16 @@ namespace Velo
 
                 switch ((System.Windows.Forms.Keys)key)
                 {
+                    case System.Windows.Forms.Keys.LButton:
+                        return mouse.LeftButton == ButtonState.Pressed;
+                    case System.Windows.Forms.Keys.RButton:
+                        return mouse.RightButton == ButtonState.Pressed;
+                    case System.Windows.Forms.Keys.MButton:
+                        return mouse.MiddleButton == ButtonState.Pressed;
+                    case System.Windows.Forms.Keys.XButton1:
+                        return mouse.XButton1 == ButtonState.Pressed;
+                    case System.Windows.Forms.Keys.XButton2:
+                        return mouse.XButton2 == ButtonState.Pressed;
                     case System.Windows.Forms.Keys.Oem1:
                         return keysOem.Oem1;
                     case System.Windows.Forms.Keys.Oem2:
@@ -111,19 +125,44 @@ namespace Velo
                     case System.Windows.Forms.Keys.Oem102:
                         return keysOem.Oem102;
                 }
-
+               
                 return keys[(Keys)(key & 0xff)] == KeyState.Down;
             }
         }
 
-        public static bool Pressed(ushort key)
+        public static bool IsPressed(ushort key)
         {
-            return IsDown(keysCurr, keysOemCurr, gamePadCurr, key) && !IsDown(keysPrev, keysOemPrev, gamePadPrev, key);
+            if (key == 0x97)
+                return false;
+            return IsDown(keysCurr, keysOemCurr, mouseCurr, gamePadCurr, key) && !IsDown(keysPrev, keysOemPrev, mousePrev, gamePadPrev, key);
         }
 
-        public static bool Held(ushort key)
+        public static bool IsDown(ushort key)
         {
-            return IsDown(keysCurr, keysOemCurr, gamePadCurr, key);
+            if (key == 0x97)
+                return false;
+            return IsDown(keysCurr, keysOemCurr, mouseCurr, gamePadCurr, key);
+        }
+
+        [DllImport("Velo_UI.dll", EntryPoint = "InitLLKeyboardHook")]
+        public static extern void InitLLKeyboardHook();
+        [DllImport("Velo_UI.dll", EntryPoint = "InitLLMouseHook")]
+        public static extern void InitLLMouseHook();
+        [DllImport("Velo_UI.dll", EntryPoint = "RemoveLLHooks")]
+        public static extern void RemoveLLHooks();
+        [DllImport("Velo_UI.dll", EntryPoint = "PollLLHooks")]
+        public static extern void PollLLKeyboardHook();
+
+        [DllImport("Velo_UI.dll", EntryPoint = "IsDown")]
+        public static extern bool IsKeyDown(byte key);
+
+        public static void Init()
+        {
+            InitLLKeyboardHook();
+            AppDomain.CurrentDomain.ProcessExit += (_, __) => RemoveLLHooks();
+            AppDomain.CurrentDomain.DomainUnload += (_, __) => RemoveLLHooks();
+            System.Windows.Forms.Application.ApplicationExit += (_, __) => RemoveLLHooks();
+            Console.CancelKeyPress += (_, __) => RemoveLLHooks();
         }
 
         public static void Update()
@@ -133,18 +172,23 @@ namespace Velo
 
             keysOemPrev = keysOemCurr;
             keysOemCurr = new KeyboardOemState();
+
             if (Util.IsFocused())
             {
-                keysOemCurr.Oem1 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem1) & 0x8000) > 0;
-                keysOemCurr.Oem2 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem2) & 0x8000) > 0;
-                keysOemCurr.Oem3 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem3) & 0x8000) > 0;
-                keysOemCurr.Oem4 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem4) & 0x8000) > 0;
-                keysOemCurr.Oem5 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem5) & 0x8000) > 0;
-                keysOemCurr.Oem6 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem6) & 0x8000) > 0;
-                keysOemCurr.Oem7 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem7) & 0x8000) > 0;
-                keysOemCurr.Oem8 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem8) & 0x8000) > 0;
-                keysOemCurr.Oem102 = (Util.GetAsyncKeyState(System.Windows.Forms.Keys.Oem102) & 0x8000) > 0;
+                PollLLKeyboardHook(); 
+                keysOemCurr.Oem1 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem1);
+                keysOemCurr.Oem2 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem2);
+                keysOemCurr.Oem3 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem3);
+                keysOemCurr.Oem4 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem4);
+                keysOemCurr.Oem5 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem5);
+                keysOemCurr.Oem6 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem6);
+                keysOemCurr.Oem7 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem7);
+                keysOemCurr.Oem8 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem8);
+                keysOemCurr.Oem102 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem102);
             }
+
+            mousePrev = mouseCurr;
+            mouseCurr = Mouse.GetState();
 
             gamePadPrev = gamePadCurr;
             gamePadCurr = GamePad.GetState((PlayerIndex)SettingsUI.Instance.ControllerIndex.Value);
@@ -166,6 +210,12 @@ namespace Velo
             GamePadButtonsDown[(int)EGamePadButton.DPAD_RIGHT] = gamePadCurr.DPad.Right == ButtonState.Pressed;
             GamePadButtonsDown[(int)EGamePadButton.DPAD_UP] = gamePadCurr.DPad.Up == ButtonState.Pressed;
             GamePadButtonsDown[(int)EGamePadButton.DPAD_DOWN] = gamePadCurr.DPad.Down == ButtonState.Pressed;
+
+            if (IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev)
+            {
+                InitLLKeyboardHook();
+                InitLLMouseHook();
+            }
         }
     }
 }

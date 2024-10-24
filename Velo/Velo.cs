@@ -11,14 +11,17 @@ using Lidgren.Network;
 using SDL2;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 
 namespace Velo
 {
     public class Velo
     {
         private static TimeSpan lastFrameTime = TimeSpan.Zero;
-        public static TimeSpan Time;
-        public static TimeSpan Delta;
+        public static TimeSpan RealTime;
+        public static TimeSpan RealDelta;
+        public static TimeSpan GameTime => CEngine.CEngine.Instance.gameTime.TotalGameTime;
+        public static TimeSpan GameDelta => CEngine.CEngine.Instance.gameTime.ElapsedGameTime;
         public static CEngine.CEngine CEngineInst;
         public static SpriteBatch SpriteBatch;
         public static CContentBundleManager ContentManager;
@@ -38,6 +41,8 @@ namespace Velo
         public static bool GhostLaserCollision = false;
         public static bool GhostFallTileCollision = false;
 
+        public static int MainThreadId;
+
         public static List<Action> OnMainPlayerReset = new List<Action>();
         public static List<Action<float>> OnLapFinish = new List<Action<float>>();
 
@@ -45,30 +50,30 @@ namespace Velo
         private static List<Action> onPreUpdateTemp = new List<Action>();
 
         // thread-safe
-        private static List<Action> onPreUpdateTS = new List<Action>();
-        private static List<Action> onPreUpdateTSTemp = new List<Action>();
+        private static readonly List<Action> onPreUpdateTS = new List<Action>();
+
+        private static bool playerReset = false;
 
         private static int ghostPollCounter = 0;
 
         private static bool originsLoaded = false;
         private static bool timerTriggered = false;
 
+        private static readonly TimeSpan[] lastTrailUpdate = new TimeSpan[4];
+        private static readonly bool[] trailAddPoint = new bool[4];
+
         public static Player GetMainPlayer()
         {
-            CCollisionEngine collisionEngine = CEngineInst.World.CollisionEngine;
+            if (Main.game.stack.gameInfo == null)
+                return null;
 
-            for (int i = 0; i < collisionEngine.ActorCount; i++)
+            Slot[] slots = Main.game.stack.gameInfo.slots;
+
+            for (int i = 0; i < 4; i++)
             {
-                CActor actor = collisionEngine.GetActor(i);
-                ICActorController controller = actor.controller;
-                if (controller is Player)
-                {
-                    Player player = controller as Player;
-                    if (player.slot.LocalPlayer)
-                        return player;
-                }
+                if (slots[i].Player != null && slots[i].LocalPlayer)
+                    return slots[i].Player;
             }
-
             return null;
         }
 
@@ -77,17 +82,15 @@ namespace Velo
             if (Main.game.stack.gameInfo == null)
                 return false;
 
-            foreach (var module in Main.game.stack.modules)
-                if (module is ModuleSolo)
-                    return false;
+            if (ModuleSolo != null)
+                return false;
 
             Slot[] slots = Main.game.stack.gameInfo.slots;
-            foreach (Slot slot in slots)
+            for (int i = 0; i < 4; i++)
             {
-                if (slot.Player != null && !slot.LocalPlayer)
+                if (slots[i].Player != null && !slots[i].LocalPlayer)
                     return true;
             }
-
             return false;
         }
 
@@ -96,26 +99,14 @@ namespace Velo
             if (Main.game.stack.gameInfo == null)
                 return null;
 
-            foreach (var module in Main.game.stack.modules)
-                if (module is ModuleSolo moduleSolo)
-                    return moduleSolo;
-
-            return default;
-        }
-
-        public static bool CheckForVerifier(bool error = false)
-        {
-            if (!File.Exists("VeloVerifier.exe"))
+            List<IModule> modules = Main.game.stack.modules;
+            int count = modules.Count;
+            for (int i = 0; i < count; i++)
             {
-                Notifications.Instance.PushNotification(
-                    (error ? "ERROR: " : "WARNING: ") + 
-                    "Could not find \"VeloVerifier.exe\"!\n" +
-                    "Please make sure to fully install Velo in order to be allowed to upload runs.",
-                    Color.Lime, TimeSpan.FromSeconds(6d)
-                );
-                return false;
+                if (modules[i] is ModuleSolo moduleSolo)
+                    return moduleSolo;
             }
-            return true;
+            return default;
         }
 
 #pragma warning disable IDE1006
@@ -131,46 +122,86 @@ namespace Velo
             SpriteBatch = CEngineInst.SpriteBatch;
             ContentManager = CEngineInst.ContentBundleManager;
             GraphicsDevice = CEngineInst.GraphicsDevice;
+            RealTime = new TimeSpan(DateTime.Now.Ticks);
+            MainThreadId = Thread.CurrentThread.ManagedThreadId;
 
+            Input.Init();
             ModuleManager.Instance.Init();
             Storage.Instance.Load();
             SettingsUI.Instance.SendUpdates = false;
+            ModuleManager.Instance.InitModules();
             SettingsUI.Instance.Enabled.Disable();
-            LocalGameMods.Instance.Freeze.Disable();
+            OfflineGameMods.Instance.Freeze.Disable();
             Leaderboard.Instance.Enabled.Disable();
-            Miscellaneous.Instance.OriginsMenu.Disable();
+            Origins.Instance.Enabled.Disable();
             SettingsUI.Instance.SendUpdates = true;
+
+            if (!Verify.VerifyFiles(out Dictionary<string, bool> result))
+            {
+                string message = "WARNING: Client modification detected! Please make sure that the following\nfiles are all in their original state before proceeding to submit runs:\n";
+                foreach (var pair in result)
+                {
+                    if (!pair.Value)
+                        message += "-" + pair.Key + "\n";
+                }
+                message = message.Substring(0, message.Length - 1);
+                Notifications.Instance.PushNotification(message, Color.Red, TimeSpan.FromSeconds(15));
+            }
+
+            if (Directory.Exists("Velo\\update"))
+                Directory.Delete("Velo\\update", true);
+            if (File.Exists("VeloUpdater.exe"))
+                File.Delete("VeloUpdater.exe");
+            if (File.Exists("VeloVerifier.exe"))
+                File.Delete("VeloVerifier.exe");
         }
 
         // replaces the game's update call
         public static void game_update(GameTime gameTime)
         {
-            Time = new TimeSpan(DateTime.Now.Ticks);
+            measure("Velo");
+
+            RealTime = new TimeSpan(DateTime.Now.Ticks);
             if (lastFrameTime != new TimeSpan())
-                Delta = Time - lastFrameTime;
-            lastFrameTime = Time;
+                RealDelta = RealTime - lastFrameTime;
+            lastFrameTime = RealTime;
 
             Input.Update();
 
             onPreUpdateTemp = onPreUpdate;
             onPreUpdate = new List<Action>();
-            foreach (Action action in onPreUpdateTemp)
-                action();
-            onPreUpdateTemp.Clear();
             lock (onPreUpdateTS)
             {
-                onPreUpdateTSTemp = onPreUpdateTS;
-                onPreUpdateTS = new List<Action>();
-                foreach (Action action in onPreUpdateTSTemp)
-                    action();
-                onPreUpdateTSTemp.Clear();
+                onPreUpdateTemp.AddRange(onPreUpdateTS);
+                onPreUpdateTS.Clear();
             }
+            int count = onPreUpdateTemp.Count;
+            for (int i = 0; i < count; i++)
+                onPreUpdateTemp[i]();
+            onPreUpdateTemp.Clear();
+            
             ModuleManager.Instance.PreUpdate();
             BoostaCokeModified = false;
             GhostLaserCollision = false;
             GhostFallTileCollision = false;
 
+            if (Ingame)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if ((MainPlayer.game_time.TotalGameTime - lastTrailUpdate[i]).TotalMilliseconds > Performance.Instance.TrailResolution.Value)
+                    {
+                        lastTrailUpdate[i] = MainPlayer.game_time.TotalGameTime;
+                        trailAddPoint[i] = true;
+                    }
+                    else
+                        trailAddPoint[i] = false;
+                }
+            }
+
+            measure("other");
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
+            measure("Velo");
 
             // cache a few commonly needed values
             ModuleSolo = GetModuleSolo();
@@ -184,7 +215,7 @@ namespace Velo
             Paused = CEngineInst.IsPaused && !PauseMenu;
             ItemIdPrev = ItemId;
             ItemId = MainPlayer != null ? MainPlayer.item_id : (byte)0;
-
+           
             if (is_origins() && Ingame && !Paused && PausedPrev && !timerTriggered)
             {
                 ModuleSolo.timerView.Trigger();
@@ -195,18 +226,28 @@ namespace Velo
             if (!Ingame)
                 timerTriggered = false;
 
-            if (Ingame && !IngamePrev)
-                CheckForVerifier();
-            
             ModuleManager.Instance.PostUpdate();
+
+            if (Ingame)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if (Main.game.stack.gameInfo.slots[i].Player != null)
+                        vel_prev[i] = Main.game.stack.gameInfo.slots[i].Player.actor.Velocity;
+                }
+            }
 
             if (
                 !(Performance.Instance.Enabled.Value &&
-                Performance.Instance.LimitFramerateAfterRender.Value)
+                Performance.Instance.FixInputDelay.Value)
                 )
             {
+                measure("idle");
                 Main.game.Delay(); // limits framerate
+                measure("Velo");
             }
+
+            playerReset = false;
 
             ghostPollCounter = 0;
 
@@ -218,23 +259,27 @@ namespace Velo
                 ContentManager.LoadBundle("Boss03", false);
                 originsLoaded = true;
             }
+
+            measure("other");
         }
 
         public static void game_draw(GameTime gameTime)
         {
+            measure("Velo");
             ModuleManager.Instance.PreRender();
 
+            measure("render");
             Main.game.GameDraw(gameTime);
 
+            measure("Velo");
             ModuleManager.Instance.PostRender();
 
-            if (
-                Performance.Instance.Enabled.Value &&
-                Performance.Instance.LimitFramerateAfterRender.Value
-                )
-            {
-                Main.game.Delay(); // limits framerate
-            }
+            measure("render");
+        }
+
+        public static void on_exit()
+        {
+            Input.RemoveLLHooks();
         }
 
         public static void AddOnPreUpdate(Action action)
@@ -247,6 +292,29 @@ namespace Velo
             lock (onPreUpdateTS)
             {
                 onPreUpdateTS.Add(action);
+            }
+        }
+
+        public static void pre_sdl_poll()
+        {
+            if (
+                Performance.Instance.Enabled.Value &&
+                Performance.Instance.FixInputDelay.Value
+                )
+            {
+                measure("idle");
+                Main.game.Delay(); // limits framerate
+            }
+
+            if (Performance.Instance.FixInputDelay.Value && Performance.Instance.Enabled.Value)
+            {
+                Input.PollLLKeyboardHook();
+                if (!disable_steam_input_api())
+                {
+                    measure("steam");
+                    rDnINrpyznfv3CiqSvLCoO4PuuLtVdemAf_0hQLtBAt8T_uP7ugL8U7R00VvHzDHIw.ZR_eFfR_DQhS95b0kUtB2nY.Update(new GameTime(TimeSpan.Zero, Velo.RealDelta));
+                    measure_previous();
+                }
             }
         }
 
@@ -266,7 +334,7 @@ namespace Velo
         // called in CEngine's update method
         public static float get_time_scale()
         {
-            return LocalGameMods.Instance.TimeScaleVal;
+            return OfflineGameMods.Instance.TimeScaleVal;
         }
 
         // skip all key inputs on true
@@ -275,7 +343,7 @@ namespace Velo
             return 
                 (SettingsUI.Instance.Enabled.Value.Enabled && 
                 SettingsUI.Instance.DisableKeyInput.Value) ||
-                AutoUpdate.Instance.Enabled;
+                AutoUpdate.Instance.Enabled.Value.Enabled;
         }
 
         // skip all mouse inputs on true
@@ -284,8 +352,8 @@ namespace Velo
             return
                 SettingsUI.Instance.Enabled.Value.Enabled ||
                 Leaderboard.Instance.Enabled.Value.Enabled ||
-                AutoUpdate.Instance.Enabled ||
-                Miscellaneous.Instance.OriginsMenu.Value.Enabled;
+                AutoUpdate.Instance.Enabled.Value.Enabled ||
+                Origins.Instance.Enabled.Value.Enabled;
         }
 
         // hooked into FNA.dll's event loop
@@ -294,17 +362,22 @@ namespace Velo
             SettingsUI.Instance.SdlPoll(ref sdl_event);
         }
 
+        public static TimeSpan test;
+
         // called in Player.Reset()
+        // gets called twice on pressing reset for some reason
         public static void player_reset(Player player)
         {
-            if (player == MainPlayer)
+            if (player == MainPlayer && !playerReset)
             {
-                onPreUpdate.Add(Cooldowns.Instance.Clear);
+                Savestate.LoadedVersion = Version.VERSION;
                 if (Origins.Instance.IsOrigins())
                     onPreUpdate.Add(() => ModuleSolo?.timer?.Trigger());
 
                 foreach (Action action in OnMainPlayerReset)
                     onPreUpdate.Add(action);
+
+                playerReset = true;
             }
         }
 
@@ -315,6 +388,11 @@ namespace Velo
                 onPreUpdate.Add(() => action(time));
         }
 
+        public static void spawn_ghost(Player ghost)
+        {
+            Ghosts.Instance.MainGhostSpawned(ghost);
+        }
+
         // bypasses the check whether a ghost is spawned in the ghost removal routine
         public static bool remove_ghost_bypass = false;
 
@@ -322,7 +400,7 @@ namespace Velo
         {
             if (Ghosts.Instance.Get(0) != null)
                 remove_ghost_bypass = true;
-            Ghosts.Instance.RemoveAll();
+            Ghosts.Instance.RemoveAll(destroy: true);
         }
 
         public static void boostacoke_add()
@@ -341,7 +419,7 @@ namespace Velo
         {
             ghostPollCounter++;
             if (
-                (Delta.TotalSeconds > 0.5 && ModuleSolo != null && ghostPollCounter > 100) ||
+                (RealDelta.TotalSeconds > 0.5 && ModuleSolo != null && ghostPollCounter > 100) ||
                 (ModuleSolo != null && ghostPollCounter > 10000)
                 )
             {
@@ -354,7 +432,7 @@ namespace Velo
 
         public static bool disable_ghost_poll()
         {
-            return LocalGameMods.Instance.GhostPlaybackCount() > 0;
+            return OfflineGameMods.Instance.GhostPlaybackCount() > 0;
         }
 
         public static bool disable_grapple_sound(Player player)
@@ -365,67 +443,91 @@ namespace Velo
         public static float get_camera_max_speed(ICCameraModifier camera)
         {
             if (Online)
-                return LocalGameMods.Instance.CameraMaxSpeed.DefaultValue;
+                return OfflineGameMods.Instance.CameraMaxSpeed.DefaultValue;
 
-            return LocalGameMods.Instance.CameraMaxSpeed.Value;
+            return OfflineGameMods.Instance.CameraMaxSpeed.Value;
         }
 
         public static float get_max_speed()
         {
             if (Online)
-                return LocalGameMods.Instance.MaxSpeed.DefaultValue;
+                return OfflineGameMods.Instance.MaxSpeed.DefaultValue;
 
-            return LocalGameMods.Instance.MaxSpeed.Value;
+            return OfflineGameMods.Instance.MaxSpeed.Value;
         }
 
         public static Vector2 get_gravity()
         {
             if (Online)
-                return LocalGameMods.Instance.Gravity.DefaultValue;
+                return OfflineGameMods.Instance.Gravity.DefaultValue;
 
-            return LocalGameMods.Instance.Gravity.Value;
+            return OfflineGameMods.Instance.Gravity.Value;
+        }
+
+        public static float get_jump_strength()
+        {
+            if (Online)
+                return OfflineGameMods.Instance.JumpStrength.DefaultValue;
+
+            return OfflineGameMods.Instance.JumpStrength.Value;
+        }
+
+        public static float get_wall_jump_strength()
+        {
+            if (Online)
+                return OfflineGameMods.Instance.WallJumpStrength.DefaultValue;
+
+            return OfflineGameMods.Instance.WallJumpStrength.Value;
+        }
+
+        public static float get_jump_duration()
+        {
+            if (Online)
+                return OfflineGameMods.Instance.JumpDuration.DefaultValue;
+
+            return OfflineGameMods.Instance.JumpDuration.Value;
         }
 
         public static float get_grapple_hook_speed()
         {
             if (Online)
-                return LocalGameMods.Instance.GrappleHookSpeed.DefaultValue;
+                return OfflineGameMods.Instance.GrappleHookSpeed.DefaultValue;
 
-            return LocalGameMods.Instance.GrappleHookSpeed.Value;
+            return OfflineGameMods.Instance.GrappleHookSpeed.Value;
         }
 
         public static float get_grapple_cooldown()
         {
             if (Online)
-                return LocalGameMods.Instance.GrappleCooldown.DefaultValue;
-
-            return LocalGameMods.Instance.GrappleCooldown.Value;
+                return OfflineGameMods.Instance.GrappleCooldown.DefaultValue;
+            
+            return OfflineGameMods.Instance.GrappleCooldown.Value;
         }
 
         public static float get_slide_cooldown()
         {
             if (Online)
-                return LocalGameMods.Instance.SlideCooldown.DefaultValue;
+                return OfflineGameMods.Instance.SlideCooldown.DefaultValue;
 
-            return LocalGameMods.Instance.SlideCooldown.Value;
+            return OfflineGameMods.Instance.SlideCooldown.Value;
         }
 
         public static bool get_fix_grapple_glitches()
         {
             if (Online)
-                return LocalGameMods.Instance.FixGrappleGlitches.DefaultValue.Enabled;
+                return OfflineGameMods.Instance.FixGrappleGlitches.DefaultValue.Enabled;
 
             return
-                LocalGameMods.Instance.FixGrappleGlitches.Value.Enabled &&
-                !Input.Held(LocalGameMods.Instance.FixGrappleGlitches.Value.Hotkey);
+                OfflineGameMods.Instance.FixGrappleGlitches.Value.Enabled &&
+                !Input.IsDown(OfflineGameMods.Instance.FixGrappleGlitches.Value.Hotkey);
         }
 
         public static bool get_enable_old_moonwalk()
         {
             if (Online)
-                return LocalGameMods.Instance.EnableOldMoonwalk.DefaultValue;
+                return OfflineGameMods.Instance.EnableOldMoonwalk.DefaultValue;
 
-            return LocalGameMods.Instance.EnableOldMoonwalk.Value;
+            return OfflineGameMods.Instance.EnableOldMoonwalk.Value;
         }
 
         private static bool isLaserTraceLine = false;
@@ -444,7 +546,7 @@ namespace Velo
             if (Online)
                 return true;
             if ((collidable as CActor).Controller == Ghosts.Instance.Get(0))
-                return !LocalGameMods.Instance.DisableGhostLaserInteraction.Value;
+                return !OfflineGameMods.Instance.DisableGhostLaserInteraction.Value;
             return true;
         }
 
@@ -459,7 +561,9 @@ namespace Velo
 
         public static bool skip_fall_tile_collision(Player player)
         {
-            if (LocalGameMods.Instance.DisableGhostFallTileInteraction.Value)
+            if (ModuleSolo == null)
+                return false;
+            if (OfflineGameMods.Instance.DisableGhostFallTileInteraction.Value)
                 return player != MainPlayer;
             if (player != MainPlayer)
                 GhostFallTileCollision = true;
@@ -469,29 +573,35 @@ namespace Velo
         // called in CEngine
         public static bool dt_fixed()
         {
-            return LocalGameMods.Instance.DtFixed;
+            return OfflineGameMods.Instance.DtFixed;
         }
 
         // called when player inputs get polled (in the Player.Update() method)
         // on true the game skips the input polls
         public static bool set_inputs(Player player)
         {
-            return LocalGameMods.Instance.SetInputs(player);
+            measure("Velo");
+            bool result = OfflineGameMods.Instance.SetInputs(player);
+            measure("physics");
+            return result;
+
         }
 
         public static bool skip_update_sprite(Player player)
         {
-            return LocalGameMods.Instance.SkipUpdateSprite(player);
+            return OfflineGameMods.Instance.SkipUpdateSprite(player);
         }
 
         public static void update_camera(ICCameraModifier cameraMod)
         {
-            LocalGameMods.Instance.UpdateCamera(cameraMod);
+            OfflineGameMods.Instance.UpdateCamera(cameraMod);
         }
 
         public static void update_cam_pos(ICCameraModifier cameraMod)
         {
+            measure("Velo");
             BlindrunSimulator.Instance.Update(cameraMod);
+            measure("physics");
         }
 
         public static int event_id()
@@ -700,6 +810,34 @@ namespace Velo
             Appearance.Instance.UpdateChatColor(obj);
         }
 
+        public static void actor_spawned(CActor actor)
+        {
+            Appearance.Instance.ActorSpawned(actor);
+        }
+
+        private static readonly Vector2[] vel_prev = new Vector2[4];
+
+        public static bool trail_add_point(int quality, double time, Player player)
+        {
+            if (Performance.Instance.Enabled.Value && Performance.Instance.TrailResolution.Value != 0)
+            {
+                bool addPoint = 
+                    time > Performance.Instance.TrailResolution.Value / 1000f || trailAddPoint[player.slot.Index] || 
+                    (Math.Abs(vel_prev[player.slot.Index].X) >= 1200f) != (Math.Abs(player.actor.Velocity.X) >= 1200f) ||
+                    (vel_prev[player.slot.Index].Length() >= 800f) != (player.actor.Velocity.Length() >= 800f) ||
+                    Math.Abs(Math.Atan2(vel_prev[player.slot.Index].Y, vel_prev[player.slot.Index].X) - Math.Atan2(player.actor.Velocity.Y, player.actor.Velocity.X)) > 0.08;
+                if (addPoint)
+                    lastTrailUpdate[player.slot.Index] = player.game_time.TotalGameTime;
+                return addPoint;
+            }
+            return quality != 1 || time > 0.15000000596046448;
+        }
+
+        public static bool ctrail_update_last()
+        {
+            return Performance.Instance.Enabled.Value && Performance.Instance.TrailResolution.Value != 0;
+        }
+
         public static bool disable_bubbles()
         {
             return
@@ -710,6 +848,36 @@ namespace Velo
         public static void particle_engine_update()
         {
             Performance.Instance.ParticleEngineUpdate();
+        }
+
+        public static long get_time(long time)
+        {
+            if (Performance.Instance.Enabled.Value && Performance.Instance.PreciseTime.Value)
+                return Util.UtcNow;
+            else
+                return time;
+        }
+
+        private static long prev_time = Util.UtcNow;
+
+        public static long get_elapsed_time(long time)
+        {
+            if (Performance.Instance.Enabled.Value && Performance.Instance.PreciseTime.Value)
+            {
+                long now = Util.UtcNow;
+                long elapsed = now - prev_time;
+                prev_time = now;
+                return elapsed;
+            }
+            else
+                return time;
+        }
+
+        public static bool fix_input_delay()
+        {
+            return
+                Performance.Instance.Enabled.Value &&
+                Performance.Instance.FixInputDelay.Value;
         }
 
         public static bool disable_steam_input_api()
@@ -725,6 +893,46 @@ namespace Velo
                 Performance.Instance.Enabled.Value &&
                 Performance.Instance.EnableControllerId.Value != -1 &&
                 Performance.Instance.EnableControllerId.Value != controller_id;
+        }
+
+        public static void poll_key_inputs()
+        {
+            if (Performance.Instance.FixInputDelay.Value && Performance.Instance.Enabled.Value)
+                Input.PollLLKeyboardHook();
+        }
+
+        public static bool is_down(bool isDown, Microsoft.Xna.Framework.Input.Keys key)
+        {
+            if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value)
+                return isDown;
+            return Input.IsKeyDown((byte)key);
+        }
+
+        public static bool is_up(bool isUp, Microsoft.Xna.Framework.Input.Keys key)
+        {
+            if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value)
+                return isUp;
+            return !Input.IsKeyDown((byte)key);
+        }
+
+        public static void set_mouse_inputs_prepare(Player player)
+        {
+            Miscellaneous.Instance.SetMouseInputsPrepare(player);
+        }
+
+        public static void set_mouse_inputs(Player player)
+        {
+            Miscellaneous.Instance.SetMouseInputs(player);
+        }
+
+        public static void measure(string label)
+        {
+            Performance.Instance.Measure(label);
+        }
+
+        public static void measure_previous()
+        {
+            Performance.Instance.MeasurePrevious();
         }
 
         public static string timespan_to_string(TimeSpan timespan, string format)

@@ -14,16 +14,16 @@ namespace Velo
             if (names.ContainsKey(id))
             {
                 if (names[id] == "[unknown]")
-                    names[id] = Steamworks.SteamFriends.GetFriendPersonaName(new Steamworks.CSteamID(id));
+                    names[id] = SteamFriends.GetFriendPersonaName(new CSteamID(id));
 
                 return names[id];
             }
 
-            string name = Steamworks.SteamFriends.GetFriendPersonaName(new Steamworks.CSteamID(id));
+            string name = SteamFriends.GetFriendPersonaName(new CSteamID(id));
             names.Add(id, name);
 
             if (name == "[unknown]")
-                Steamworks.SteamFriends.RequestUserInformation(new Steamworks.CSteamID(id), false);
+                SteamFriends.RequestUserInformation(new CSteamID(id), false);
             return name;
         }
 
@@ -32,11 +32,11 @@ namespace Velo
             Texture2D texture;
             if (id > 5)
             {
-                Steamworks.SteamUtils.GetImageSize(id, out uint width, out uint height);
+                SteamUtils.GetImageSize(id, out uint width, out uint height);
                 if (width != 184 || height != 184)
                     return CEngine.CEngine.Instance.WhitePixel;
                 byte[] avatar = new byte[4 * (int)width * (int)height];
-                Steamworks.SteamUtils.GetImageRGBA(id, avatar, avatar.Length);
+                SteamUtils.GetImageRGBA(id, avatar, avatar.Length);
                 texture = new Texture2D(CEngine.CEngine.Instance.GraphicsDevice, (int)width, (int)height);
                 texture.SetData<byte>(avatar);
                 return texture;
@@ -50,15 +50,15 @@ namespace Velo
             if (avatars.ContainsKey(id))
             {
                 if (avatars[id] == CEngine.CEngine.Instance.WhitePixel)
-                    avatars[id] = AvatarToTexture(Steamworks.SteamFriends.GetLargeFriendAvatar(new Steamworks.CSteamID(id)));
+                    avatars[id] = AvatarToTexture(SteamFriends.GetLargeFriendAvatar(new CSteamID(id)));
                 return avatars[id];
             }
 
-            Texture2D avatar = AvatarToTexture(Steamworks.SteamFriends.GetLargeFriendAvatar(new Steamworks.CSteamID(id)));
+            Texture2D avatar = AvatarToTexture(SteamFriends.GetLargeFriendAvatar(new CSteamID(id)));
             avatars.Add(id, avatar);
 
             if (avatar == CEngine.CEngine.Instance.WhitePixel)
-                Steamworks.SteamFriends.RequestUserInformation(new Steamworks.CSteamID(id), false);
+                SteamFriends.RequestUserInformation(new CSteamID(id), false);
             return avatar;
         }
 

@@ -32,7 +32,7 @@ namespace Velo
         private CachedFont font;
 
         private CRectangleDrawComponent[] boxComps;
-        private CTextDrawComponent[] textComps;
+        private TextDraw[] textComps;
         
         private InputDisplay() : base("Input Display", true)
         {
@@ -77,8 +77,6 @@ namespace Velo
 
         public override void UpdateComponents()
         {
-            FontCache.Get(ref font, Font.Value + ":" + (int)(FontSize.Value * Scale.Value));
-
             Player player = Velo.MainPlayer;
 
             if (player == null)
@@ -99,14 +97,16 @@ namespace Velo
                 }
             }
 
+            if (textComps == null || Font.Modified() || FontSize.Modified() || Scale.Modified())
+                FontCache.Get(ref font, Font.Value + ":" + (int)(FontSize.Value * Scale.Value));
+
             if (textComps == null)
             {
-                textComps = new CTextDrawComponent[7];
+                textComps = new TextDraw[7];
                 for (int j = 0; j < 7; j++)
                 {
-                    textComps[j] = new CTextDrawComponent("", font.Font, Vector2.Zero)
+                    textComps[j] = new TextDraw()
                     {
-                        color_replace = false,
                         IsVisible = true
                     };
                     AddComponent(textComps[j]);
@@ -149,12 +149,12 @@ namespace Velo
             float maxX = float.MinValue;
             float maxY = float.MinValue;
 
-            foreach (InputBox inputBox in inputBoxes)
+            for (int i = 0; i < 7; i++)
             {
-                minX = Math.Min(minX, inputBox.position.X);
-                minY = Math.Min(minY, inputBox.position.Y);
-                maxX = Math.Max(maxX, inputBox.position.X + inputBox.size.X);
-                maxY = Math.Max(maxY, inputBox.position.Y + inputBox.size.Y);
+                minX = Math.Min(minX, inputBoxes[i].position.X);
+                minY = Math.Min(minY, inputBoxes[i].position.Y);
+                maxX = Math.Max(maxX, inputBoxes[i].position.X + inputBoxes[i].size.X);
+                maxY = Math.Max(maxY, inputBoxes[i].position.Y + inputBoxes[i].size.Y);
             }
 
             float width = (maxX - minX) * Scale.Value;
@@ -172,8 +172,8 @@ namespace Velo
                 boxComps[i].OutlineThickness = isPressed ? PressedOutlineWidth.Value : ReleasedOutlineWidth.Value;
                 boxComps[i].SetPositionSize(origin + inputBoxes[i].position * Scale.Value, inputBoxes[i].size * Scale.Value);
 
-                textComps[i].StringText = inputBoxes[i].text;
-                textComps[i].Font = font.Font;
+                textComps[i].Text = inputBoxes[i].text;
+                textComps[i].SetFont(font);
                 textComps[i].Color = isPressed ? pressedTextColor : releasedTextColor;
                 textComps[i].Opacity = Opacity.Value;
                 textComps[i].UpdateBounds();

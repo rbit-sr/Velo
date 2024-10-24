@@ -3,11 +3,17 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
+using CEngine.Graphics.Camera;
+using CEngine.Graphics.Component;
+using CEngine.Graphics.Library;
+using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace Velo
 {
@@ -249,7 +255,7 @@ namespace Velo
             {
                 int read = stream.Read(buffer, offset, remaining);
                 if (read == 0)
-                    throw new System.IO.EndOfStreamException();
+                    throw new EndOfStreamException();
                 offset += read;
                 remaining -= read;
             }
@@ -269,6 +275,19 @@ namespace Velo
             }
         }
 
+        public static void ToBytes<T>(this T value, byte[] buffer) where T : struct
+        {
+            unsafe
+            {
+                int size = Marshal.SizeOf<T>();
+                void* valuePtr = Unsafe.AsPointer(ref value);
+                fixed (byte* bytePtr = buffer)
+                {
+                    Buffer.MemoryCopy(valuePtr, bytePtr, size, size);
+                }
+            }
+        }
+
         public static T FromBytes<T>(this byte[] bytes) where T : struct
         {
             unsafe
@@ -278,6 +297,20 @@ namespace Velo
                 fixed (byte* bytePtr = bytes)
                 {
                     Buffer.MemoryCopy(bytePtr, valuePtr, bytes.Length, bytes.Length);
+                }
+                return value;
+            }
+        }
+
+        public static T FromBytes<T>(this byte[] bytes, int size) where T : struct
+        {
+            unsafe
+            {
+                T value = new T();
+                void* valuePtr = Unsafe.AsPointer(ref value);
+                fixed (byte* bytePtr = bytes)
+                {
+                    Buffer.MemoryCopy(bytePtr, valuePtr, size, size);
                 }
                 return value;
             }
@@ -339,10 +372,10 @@ namespace Velo
 
         public static bool IsFocused()
         {
-            if (Velo.Time.Ticks >= lastFocusedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
+            if (Velo.RealTime.Ticks >= lastFocusedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
             {
                 focused = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
-                lastFocusedUpdate = new TimeSpan(Velo.Time.Ticks);
+                lastFocusedUpdate = new TimeSpan(Velo.RealTime.Ticks);
             }
 
             return focused;
@@ -356,10 +389,10 @@ namespace Velo
 
         public static bool IsMinimized()
         {
-            if (Velo.Time.Ticks >= lastMinimizedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
+            if (Velo.RealTime.Ticks >= lastMinimizedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
             {
                 minimized = IsIconic(Process.GetCurrentProcess().MainWindowHandle);
-                lastMinimizedUpdate = Velo.Time;
+                lastMinimizedUpdate = Velo.RealTime;
             }
 
             return minimized;
@@ -371,9 +404,13 @@ namespace Velo
 
     public static class StreamUtil
     {
+        [ThreadStatic]
+        public static byte[] buffer;
+
         public static unsafe void Write(this Stream stream, object obj, int off, int size)
         {
-            byte[] buffer = new byte[size];
+            if (buffer == null || buffer.Length < size)
+                buffer = new byte[size * 2];
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
             {
@@ -384,7 +421,8 @@ namespace Velo
 
         public static unsafe void Read(this Stream stream, object obj, int off, int size)
         {
-            byte[] buffer = new byte[size];
+            if (buffer == null || buffer.Length < size)
+                buffer = new byte[size * 2];
             stream.ReadExactly(buffer, 0, size);
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
@@ -395,15 +433,20 @@ namespace Velo
 
         public static unsafe void Write<T>(this Stream stream, T value) where T : struct
         {
-            byte[] buffer = value.ToBytes();
-            stream.Write(buffer, 0, buffer.Length);
+            int size = Marshal.SizeOf<T>();
+            if (buffer == null || buffer.Length < size)
+                buffer = new byte[size * 2];
+            value.ToBytes(buffer);
+            stream.Write(buffer, 0, size);
         }
 
         public static unsafe T Read<T>(this Stream stream) where T : struct
         {
-            byte[] buffer = new byte[Marshal.SizeOf<T>()];
-            stream.ReadExactly(buffer, 0, buffer.Length);
-            return buffer.FromBytes<T>();
+            int size = Marshal.SizeOf<T>();
+            if (buffer == null || buffer.Length < size)
+                buffer = new byte[size * 2];
+            stream.ReadExactly(buffer, 0, size);
+            return buffer.FromBytes<T>(size);
         }
 
         public static unsafe void WriteArr<T>(this Stream stream, T[] value) where T : struct
@@ -429,13 +472,13 @@ namespace Velo
             return value;
         }
 
-        public static unsafe void WriteArr<T>(this Stream stream, T[] value, int length) where T : struct
+        public static unsafe void WriteArrFixed<T>(this Stream stream, T[] value, int length) where T : struct
         {
             for (int i = 0; i < length; i++)
                 Write(stream, value[i]);
         }
 
-        public static unsafe T[] ReadArr<T>(this Stream stream, int length) where T : struct
+        public static unsafe T[] ReadArrFixed<T>(this Stream stream, int length) where T : struct
         {
             T[] value = new T[length];
             for (int i = 0; i < length; i++)
@@ -451,11 +494,20 @@ namespace Velo
                 return;
             }
             Write(stream, value.Length);
-            byte[] packed = new byte[(value.Length + 7) >> 3];
-            for (int i = 0; i < value.Length; i++)
-                packed[i >> 3] |= (byte)((value[i] ? 1 : 0) << (i & 7));
-            foreach (byte b in packed)
-                Write(stream, b);
+            byte nextB = 0;
+            int i = 0;
+            for (; i < value.Length; i++)
+            {
+                nextB |= (byte)((value[i] ? 1 : 0) << (i & 0b111));
+                if ((i & 0b111) == 0b111)
+                {
+                    stream.WriteByte(nextB);
+                    nextB = 0;
+                }
+            }
+            i--;
+            if ((i & 0b111) != 0b111)
+                stream.WriteByte(nextB);
         }
 
         public static unsafe bool[] ReadBoolArr(this Stream stream)
@@ -464,11 +516,14 @@ namespace Velo
             if (length == -1)
                 return null;
             bool[] value = new bool[length];
-            byte[] packed = new byte[(length + 7) >> 3];
-            for (int i = 0; i < packed.Length; i++)
-                packed[i] = Read<byte>(stream);
-            for (int i = 0; i < value.Length; i++)
-                value[i] = ((packed[i >> 3] >> (i & 7)) & 1) == 1;
+            byte nextB = 0;
+            for (int i = 0; i < length; i++)
+            {
+                if ((i & 0b111) == 0)
+                    nextB = (byte)stream.ReadByte();
+                value[i] = (nextB & 1) == 1;
+                nextB >>= 1;
+            }
             return value;
         }
 
@@ -490,9 +545,9 @@ namespace Velo
 
     public class CircArray<T>
     {
-        T[] arr;
-        int begin;
-        int end;
+        private T[] arr;
+        private int begin;
+        private int end;
 
         public CircArray()
         {
@@ -582,6 +637,171 @@ namespace Velo
             };
             Array.Copy(arr, clone.arr, arr.Length);
             return clone;
+        }
+    }
+
+    public class TextDraw : ICDrawComponent
+    {
+        private string text;
+        private Vector2 stringSize;
+
+        private string layerId;
+        private ICParentDrawComponent parent;
+
+        private string fontName;
+        private CachedFont font;
+        private bool update;
+
+        public TextDraw()
+        {
+            text = "";
+            IsVisible = true;
+            Opacity = 1f;
+            Scale = Vector2.One;
+        }
+
+        public string Text
+        {
+            get => text;
+            set
+            {
+                if (text != value)
+                {
+                    text = value;
+                    update = true;
+                }
+            }
+        }
+
+        public void SetFont(string newFontName)
+        {
+            if (font == null || newFontName != fontName)
+            {
+                FontCache.Get(ref font, newFontName);
+                fontName = newFontName;
+                update = true;
+            }
+        }
+
+        public CFont Font => font.Font;
+
+        public void SetFont(CachedFont font)
+        {
+            this.font = font;
+            fontName = "";
+        }
+
+        public Color Color { get; set; }
+        public float Opacity { get; set; }
+        public bool IsVisible { get; set; }
+        public bool HasDropShadow { get; set; }
+        public Vector2 DropShadowOffset { get; set; }
+        public Color DropShadowColor { get; set; }
+        public Vector2 Position { get; set; }
+        public Vector2 Offset { get; set; }
+        public Vector2 Scale { get; set; }
+        public Vector2 Align { get; set; }
+        public float Rotation { get; set; }
+        public bool Flipped { get; set; }
+        public CAABB Bounds
+        {
+            get
+            {
+                if (update)
+                {
+                    stringSize = font.Font.MeasureString(text);
+                    update = false;
+                }
+                return CAABB.CreateFromPositionSize(Position + Offset - stringSize * Scale * Align, stringSize * Scale);
+            }
+        }
+            
+        public string LayerId
+        {
+            get
+            {
+                if (layerId == null)
+				{
+                    return parent.LayerId;
+                }
+                return layerId;
+            }
+            set
+            {
+                layerId = value;
+            }
+        }
+
+        public ICParentDrawComponent Parent
+        {
+            set
+            {
+                if (value != null)
+                {
+                    parent = value;
+                }
+                else
+                {
+                    parent = CRootDrawComponent.Instance;
+                }
+            }
+        }
+
+        public bool Cull => true;
+
+        public ICGraphicsLibraryItem Asset => null;
+
+        public void Draw()
+        {
+            if (update)
+            {
+                stringSize = font.Font.MeasureString(text);
+                update = false;
+            }
+
+            if (IsVisible)
+            {
+                Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
+
+                if (HasDropShadow)
+                    font.Font.DrawString(Velo.SpriteBatch, text, Position + Offset * Scale + DropShadowOffset, DropShadowColor * Opacity, Rotation, stringSize * Align, Scale, Flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+
+                font.Font.DrawString(Velo.SpriteBatch, text, Position + Offset * Scale, Color * Opacity, Rotation, stringSize * Align, Scale, Flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+
+                Velo.SpriteBatch.End();
+            }
+        }
+
+        public void Init()
+        {
+
+        }
+
+        public void Destroy()
+        {
+
+        }
+
+        public void UpdateBounds()
+        {
+
+        }
+
+        public void Draw(CCamera camera)
+        {
+            if (update)
+            {
+                stringSize = font.Font.MeasureString(text);
+                update = false;
+            }
+
+            if (IsVisible)
+            {
+                if (HasDropShadow)
+                    font.Font.DrawString(Velo.SpriteBatch, text, Position + Offset * Scale + DropShadowOffset, DropShadowColor * Opacity, Rotation, stringSize * Align, Scale, Flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+
+                font.Font.DrawString(Velo.SpriteBatch, text, Position + Offset * Scale, Color * Opacity, Rotation, stringSize * Align, Scale, Flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
+            }
         }
     }
 }

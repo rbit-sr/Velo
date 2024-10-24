@@ -55,6 +55,13 @@ namespace Velo
         public int Id => id;
         public bool Hidden = false;
 
+        private string version = "";
+        public virtual string Version
+        {
+            get => version;
+            set => version = value;
+        }
+
         public Setting(Module module, string name)
         {
             this.module = module;
@@ -91,6 +98,16 @@ namespace Velo
     public class SettingCategory : Setting
     {
         public List<Setting> Children;
+
+        public override string Version
+        {
+            get => base.Version;
+            set
+            {
+                base.Version = value;
+                Children.ForEach(child => child.Version = value);
+            }
+        }
 
         public SettingCategory(Module module, string name) :
             base(module, name)
@@ -316,20 +333,23 @@ namespace Velo
 
         public bool Pressed()
         {
-            if (Input.Pressed(Value))
+            if (Value == 0x97)
+                return false;
+
+            if (Input.IsPressed(Value))
             {
                 if (autoRepeat)
                 {
-                    pressTime = Velo.Time;
+                    pressTime = Velo.RealTime;
                     lastRepeat = TimeSpan.Zero;
                 }
                 return true;
             }
 
-            if (!autoRepeat || !Input.Held(Value))
+            if (!autoRepeat || !Input.IsDown(Value))
                 return false;
 
-            TimeSpan now = Velo.Time;
+            TimeSpan now = Velo.RealTime;
 
             if ((now - pressTime).TotalSeconds >= 0.5 && (now - lastRepeat).TotalSeconds >= 0.05)
             {

@@ -1,4 +1,7 @@
-﻿namespace Velo
+﻿using Microsoft.Xna.Framework;
+using System;
+
+namespace Velo
 {
     public struct CategoryBWC1
     {
@@ -42,7 +45,7 @@
                 Category = Category.Get(),
                 WasWR = WasWR,
                 HasComments = HasComments,
-                Unused = 0,
+                NewGCD = 0,
                 Place = Place,
                 Dist = Dist,
                 GroundDist = GroundDist,
@@ -52,6 +55,48 @@
                 Grapples = Grapples,
                 Jumps = Jumps,
                 BoostUsed = BoostUsed
+            };
+        }
+    }
+
+    public struct FrameBWC1
+    {
+        public long Delta;
+        public long Time;
+        public long DeltaSum;
+        public long JumpTime;
+        public float PosX;
+        public float PosY;
+        public float VelX;
+        public float VelY;
+        public float Boost;
+        public short JumpState;
+        public short Unknown27;
+        public float GrapPosX;
+        public float GrapPosY;
+        public float GrapRad;
+        public int Flags;
+
+        public Frame Get()
+        {
+            return new Frame
+            {
+                RealTime = 0,
+                Delta = Delta,
+                Time = Time,
+                DeltaSum = DeltaSum,
+                JumpTime = JumpTime,
+                PosX = PosX,
+                PosY = PosY,
+                VelX = VelX,
+                VelY = VelY,
+                Boost = Boost,
+                JumpState = JumpState,
+                Unknown27 = Unknown27,
+                GrapPosX = GrapPosX,
+                GrapPosY = GrapPosY,
+                GrapRad = GrapRad,
+                Flags = Flags
             };
         }
     }

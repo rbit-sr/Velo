@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Diagnostics;
 using Microsoft.Xna.Framework;
+using System.Runtime.InteropServices;
 
 namespace Velo
 {
@@ -36,7 +37,9 @@ namespace Velo
         GET_PLAYER_PBS_NON_CURATED,
         GET_WRS_NON_CURATED,
         GET_NON_CURATED_ORDER,
-        SEND_MAP_NAME
+        SEND_MAP_NAME,
+        SEND_SPEEDRUN_COM_DATA, // not implemented here
+        GET_SPEEDRUN_COM_PLAYERS
     }
 
     public enum ERequestStatus
@@ -337,14 +340,16 @@ namespace Velo
 
     public class GetWRsRequest : IRequest<List<RunInfo>>
     {
-        public GetWRsRequest()
-        {
+        private readonly int place;
 
+        public GetWRsRequest(int place)
+        {
+            this.place = place;
         }
 
         public void SendHeader(Client client)
         {
-
+            client.Send(place);
         }
 
         public List<RunInfo> Run(Client client)
@@ -371,14 +376,16 @@ namespace Velo
 
     public class GetWRsNonCuratedRequest : IRequest<List<RunInfo>>
     {
-        public GetWRsNonCuratedRequest()
-        {
+        private readonly int place;
 
+        public GetWRsNonCuratedRequest(int place)
+        {
+            this.place = place;
         }
 
         public void SendHeader(Client client)
         {
-
+            client.Send(place);
         }
 
         public List<RunInfo> Run(Client client)
@@ -663,11 +670,18 @@ namespace Velo
 
     public class SubmitRunRequest : IRequest<NewPbInfo>
     {
-        private readonly Recording recording;
+        private enum EVerificationResult : int
+        {
+            SUCCESS, NO_CLIENT_SIGN, NO_RUN_SIGN, TIME_MANIPULATION, CLIENT_MODIFICATION, MACRO
+        }
 
-        public SubmitRunRequest(Recording recording)
+        private readonly Recording recording;
+        private readonly byte[] bytes;
+
+        public SubmitRunRequest(Recording recording, byte[] bytes)
         {
             this.recording = recording;
+            this.bytes = bytes;
         }
 
         public void SendHeader(Client client)
@@ -675,6 +689,9 @@ namespace Velo
             
         }
 
+        [DllImport("VeloVerifier.dll", EntryPoint = "generate_sign")]
+        private static extern void generate_sign(IntPtr salt, int salt_len, IntPtr sign);
+        
         public NewPbInfo Run(Client client)
         {
             long deltaSum = 0;
@@ -682,76 +699,114 @@ namespace Velo
             {
                 deltaSum += recording[i].Delta;
             }
-            float avgFramerate = 1f / (float)new TimeSpan(deltaSum / (recording.Count - 1 - recording.LapStart)).TotalSeconds;
+            float avgFramerate = 1f / (float)new TimeSpan(deltaSum / (recording.Count - recording.LapStart)).TotalSeconds;
 
             client.Send(recording.Info);
-            client.Send(recording.Timepoints[recording.LapStart].Ticks);
-            client.Send(recording.Timepoints[recording.Count - 1].Ticks);
+            client.Send(recording[recording.LapStart].RealTime);
+            client.Send(recording[recording.Count - 1].RealTime);
             client.Send(avgFramerate);
+            client.Send(recording.Timings.Count);
+            foreach (MacroDetection.Timing timing in recording.Timings)
+            {
+                client.Send(timing);
+            }
             client.SendCrc();
 
-            if (!Velo.CheckForVerifier(error: true))
-                return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
-
-            int salt = client.Receive<int>();
-            Task<int> verification = Task.Run(() =>
-            {
-                try
-                {
-                    Process process = Process.Start("VeloVerifier.exe", salt + "");
-                    process.WaitForExit();
-                    return process.ExitCode;
-                }
-                catch (Exception)
-                {
-                    return 0;
-                }
-            });
-
             int timeSave = client.Receive<int>();
-            
+
             if (timeSave == -1)
             {
                 client.VerifyCrc();
                 return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
             }
-            
+
             int newWr = client.Receive<int>();
+
+            byte[] salt = new byte[32];
+            byte[] sign = new byte[32];
+            client.Receive(salt);
             client.VerifyCrc();
 
-            MemoryStream dataStream = new MemoryStream();
-            recording.Write(dataStream);
+            if (!Debugger.IsAttached)
+            {
+                try
+                {
+                    unsafe
+                    {
+                        fixed (byte* saltBytes = salt)
+                        {
+                            fixed (byte* signBytes = sign)
+                            {
+                                generate_sign((IntPtr)saltBytes, 32, (IntPtr)signBytes);
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    sign.Fill((byte)0);
+                }
+            }
 
-            byte[] bytes = dataStream.ToArray();
+            client.Send(sign);
+            
             client.Send(bytes.Length);
             client.Send(bytes);
-
-            verification.Wait();
-            if (verification.Result == 0)
-            {
-                Notifications.Instance.PushNotification(
-                    "WARNING: Unable to check for client modifications!\n" +
-                    "Your run will be manually verified by a leaderboard moderator.",
-                    Color.Lime, TimeSpan.FromSeconds(6d));
-            }
-            client.Send(verification.Result);
-
+            client.Send(recording.Sign);
             client.SendCrc();
 
-            int verificationResult = client.Receive<int>();
-            if (verificationResult == -1)
+            EVerificationResult verificationResult = (EVerificationResult)client.Receive<int>();
+
+            bool sendMismatchingFiles = false;
+            if (verificationResult == EVerificationResult.NO_CLIENT_SIGN)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Could not verify client!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.LightGreen, TimeSpan.FromSeconds(6d));
+                sendMismatchingFiles = true;
+            }
+            else if (verificationResult == EVerificationResult.NO_RUN_SIGN)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Could not verify run!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.LightGreen, TimeSpan.FromSeconds(6d));
+                sendMismatchingFiles = true;
+            }
+            else if (verificationResult == EVerificationResult.TIME_MANIPULATION)
             {
                 Notifications.Instance.PushNotification(
                     "WARNING: Time manipulation detected!\n" +
                     "Your run will be manually verified by a leaderboard moderator.",
-                    Color.Lime, TimeSpan.FromSeconds(6d));
+                    Color.LightGreen, TimeSpan.FromSeconds(6d));
             }
-            if (verificationResult == -2)
+            else if (verificationResult == EVerificationResult.CLIENT_MODIFICATION)
             {
                 Notifications.Instance.PushNotification(
                     "WARNING: Client modifications detected!\n" +
                     "Your run will be manually verified by a leaderboard moderator.",
-                    Color.Lime, TimeSpan.FromSeconds(6d));
+                    Color.LightGreen, TimeSpan.FromSeconds(6d));
+                sendMismatchingFiles = true;
+            }
+            else if (verificationResult == EVerificationResult.MACRO)
+            {
+                Notifications.Instance.PushNotification(
+                    "WARNING: Macro detected!\n" +
+                    "Your run will be manually verified by a leaderboard moderator.",
+                    Color.LightGreen, TimeSpan.FromSeconds(6d));
+            }
+
+            if (sendMismatchingFiles)
+            {
+                Verify.VerifyFiles(out Dictionary<string, bool> verifyResult);
+                client.Send(verifyResult.Values.Count(b => !b));
+                foreach (var pair in verifyResult)
+                {
+                    if (!pair.Value)
+                        client.Send(pair.Key);
+                }
+                client.SendCrc();
             }
 
             RunInfo result = client.Receive<RunInfo>();
@@ -1060,6 +1115,46 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.CHECK_UPDATE;
+        }
+    }
+
+    public struct SpeedrunComPlayer
+    {
+        public ulong PseudoSteamId;
+        public string Name;
+    }
+
+    public class GetSpeedrunComPlayersRequest : IRequest<List<SpeedrunComPlayer>>
+    {
+        public GetSpeedrunComPlayersRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public List<SpeedrunComPlayer> Run(Client client)
+        {
+            List<SpeedrunComPlayer> players = new List<SpeedrunComPlayer>();
+            SpeedrunComPlayer player;
+            while (true)
+            {
+                player.PseudoSteamId = client.Receive<ulong>();
+                player.Name = client.ReceiveStr();
+                if (player.PseudoSteamId == 0)
+                    break;
+                players.Add(player);
+            }
+            client.VerifyCrc();
+            return players;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_SPEEDRUN_COM_PLAYERS;
         }
     }
 }

@@ -1,5 +1,6 @@
 ﻿using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
+using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using System;
@@ -11,6 +12,10 @@ namespace Velo
     public class ModuleManager
     {
         private readonly List<Module> modules = new List<Module>();
+        private readonly List<Module> modulesPreUpdate = new List<Module>();
+        private readonly List<Module> modulesPostUpdate = new List<Module>();
+        private readonly List<Module> modulesPreRender = new List<Module>();
+        private readonly List<Module> modulesPostRender = new List<Module>();
         private readonly Dictionary<string, Module> modulesLookup = new Dictionary<string, Module>();
         private readonly Dictionary<int, Setting> idToSetting = new Dictionary<int, Setting>();
         private int nextId = 0;
@@ -36,8 +41,31 @@ namespace Velo
             }
 
             modules.Sort((left, right) => left.Name.CompareTo(right.Name));
+            
+            modules.ForEach(AddToCycle);
+        }
 
+        public void InitModules()
+        {
             modules.ForEach(module => module.Init());
+        }
+
+        public void RemoveFromCycle(Module module)
+        {
+            modulesPreUpdate.Remove(module);
+            modulesPostUpdate.Remove(module);
+            modulesPreRender.Remove(module);
+            modulesPostRender.Remove(module);
+        }
+
+        public void AddToCycle(Module module)
+        {
+            Type t = module.GetType();
+            Type m = typeof(Module);
+            if (t.GetMethod("PreUpdate").DeclaringType != m) modulesPreUpdate.Add(module);
+            if (t.GetMethod("PostUpdate").DeclaringType != m) modulesPostUpdate.Add(module);
+            if (t.GetMethod("PreRender").DeclaringType != m) modulesPreRender.Add(module);
+            if (t.GetMethod("PostRender").DeclaringType != m) modulesPostRender.Add(module);
         }
 
         public void Add(Module module)
@@ -67,26 +95,30 @@ namespace Velo
 
         public void PreUpdate()
         {
-            foreach (var module in modules)
-                module.PreUpdate();
+            int count = modulesPreUpdate.Count;
+            for (int i = 0; i < count; i++)
+                modulesPreUpdate[i].PreUpdate();
         }
 
         public void PostUpdate()
         {
-            foreach (var module in modules)
-                module.PostUpdate();
+            int count = modulesPostUpdate.Count;
+            for (int i = 0; i < count; i++)
+                modulesPostUpdate[i].PostUpdate();
         }
 
         public void PreRender()
         {
-            foreach (var module in modules)
-                module.PreRender();
+            int count = modulesPreRender.Count;
+            for (int i = 0; i < count; i++)
+                modulesPreRender[i].PreRender();
         }
 
         public void PostRender()
         {
-            foreach (var module in modules)
-                module.PostRender();
+            int count = modulesPostRender.Count;
+            for (int i = 0; i < count; i++)
+                modulesPostRender[i].PostRender();
         }
 
         public JsonElement ToJson(ToJsonArgs args)
@@ -124,6 +156,7 @@ namespace Velo
                 if (idToSetting.ContainsKey(id))
                 {
                     idToSetting[id].FromJson(item);
+                    idToSetting[id].Version = Version.VERSION_NAME;
                 }
             }
         }
@@ -266,6 +299,10 @@ namespace Velo
         {
             if (!(elem is JsonObject))
                 return;
+            JsonElement version = (elem as JsonObject).Get("Version");
+            string versionStr = Version.VERSION_NAME;
+            if (version is JsonString)
+                versionStr = version.AsString();
             JsonElement settings = (elem as JsonObject).Get("Settings");
             if (!(settings is JsonArray))
                 return;
@@ -275,9 +312,26 @@ namespace Velo
                 if (!(nameJson is JsonString))
                     continue;
                 string name = nameJson.AsString();
+                if (this is Leaderboard && name == "hotkeys")
+                {
+                    OfflineGameMods.Instance.settingsLookup["recording and replay"].FromJson(setting);
+                    OfflineGameMods.Instance.settingsLookup["recording and replay"].Version = versionStr;
+                    continue;
+                }
+                if (this is Leaderboard && name == "general")
+                {
+                    OfflineGameMods.Instance.settingsLookup["recording and replay"].FromJson(setting);
+                    OfflineGameMods.Instance.settingsLookup["recording and replay"].Version = versionStr;
+                }
+                if (this is Leaderboard && name == "style")
+                {
+                    SettingsUI.Instance.settingsLookup["Velo menu style"].FromJson(setting);
+                    SettingsUI.Instance.settingsLookup["Velo menu style"].Version = versionStr;
+                }
                 if (settingsLookup.ContainsKey(name))
                 {
                     settingsLookup[name].FromJson(setting);
+                    settingsLookup[name].Version = versionStr;
                 }
             }
         }
@@ -293,16 +347,19 @@ namespace Velo
     {
         public ToggleSetting Enabled;
 
-        public ToggleModule(string name) : base(name)
+        public ToggleModule(string name, bool addEnabledSetting = true) : base(name)
         {
-            Enabled = AddToggle("enabled", new Toggle());
+            if (addEnabledSetting)
+                Enabled = AddToggle("enabled", new Toggle());
+            else
+                Enabled = new ToggleSetting(null, "enabled", new Toggle());
         }
 
         public override void PreUpdate()
         {
             base.PreUpdate();
 
-            if (Input.Pressed(Enabled.Value.Hotkey))
+            if (Input.IsPressed(Enabled.Value.Hotkey))
             {
                 Enabled.ToggleState();
             }
@@ -468,8 +525,9 @@ namespace Velo
             if (FixedPos)
             {
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-                foreach (var component in components)
-                    component.Draw(null);
+                int count = components.Count;
+                for (int i = 0; i < count; i++)
+                    components[i].Draw(null);
                 Velo.SpriteBatch.End();
             }
         }
@@ -572,8 +630,7 @@ namespace Velo
         public RoundingMultiplierSetting RoundingMultiplier;
         public BoolSetting DisablePopup;
 
-        protected CachedFont font;
-        protected CTextDrawComponent drawComp = null;
+        protected TextDraw textDraw = null;
 
         public StatDisplayModule(string name, bool ingameOnly) : base(name, ingameOnly)
         {
@@ -613,51 +670,46 @@ namespace Velo
         {
             get
             {
-                if (drawComp == null)
-                    drawComp = new CTextDrawComponent("", null, Vector2.Zero);
-                return drawComp;
+                if (textDraw == null)
+                    textDraw = new TextDraw();
+                return textDraw;
             }
         }
 
         public override void UpdateComponent()
         {
-            FontCache.Get(ref font, Font.Value + ":" + FontSize.Value);
-
             Update();
 
             if (Orientation.Value == EOrientation.PLAYER && Velo.MainPlayer == null)
             {
-                drawComp.IsVisible = false;
+                textDraw.IsVisible = false;
                 return;
             }
-            
-            drawComp.color_replace = false;
-            drawComp.IsVisible = true;
-            drawComp.Font = font.Font;
-            drawComp.Align = Orientation.Value == EOrientation.PLAYER ?
+
+            textDraw.IsVisible = true;
+            textDraw.SetFont(Font.Value + ":" + FontSize.Value);
+            textDraw.Align = Orientation.Value == EOrientation.PLAYER ?
                 0.5f * Vector2.One : Vector2.Zero;
-            drawComp.Offset = Offset.Value;
-            drawComp.HasDropShadow = true;
-            drawComp.DropShadowColor = Color.Black;
-            drawComp.DropShadowOffset = Vector2.One;
-            drawComp.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup != null && Velo.MainPlayer.popup.Flipped;
-            drawComp.Scale = Scale.Value * Vector2.One;
-            drawComp.Rotation = Rotation.Value;
-            drawComp.StringText = GetText();
-            drawComp.Color = GetColor();
-            drawComp.DropShadowColor *= drawComp.Color.A / 255f;
-            drawComp.Opacity = Opacity.Value;
-            drawComp.UpdateBounds();
+            textDraw.Offset = Offset.Value;
+            textDraw.HasDropShadow = true;
+            textDraw.DropShadowColor = Color.Black;
+            textDraw.DropShadowOffset = Vector2.One;
+            textDraw.Flipped = Velo.MainPlayer != null && Velo.MainPlayer.popup != null && Velo.MainPlayer.popup.Flipped;
+            textDraw.Scale = Scale.Value * Vector2.One;
+            textDraw.Rotation = Rotation.Value;
+            textDraw.Text = GetText();
+            textDraw.Color = GetColor();
+            textDraw.DropShadowColor *= textDraw.Color.A / 255f;
+            textDraw.Opacity = Opacity.Value;
+            CAABB bounds = textDraw.Bounds;
 
             float screenWidth = Velo.SpriteBatch.GraphicsDevice.Viewport.Width;
             float screenHeight = Velo.SpriteBatch.GraphicsDevice.Viewport.Height;
 
-            float width = drawComp.Bounds.Width;
-            float height = drawComp.Bounds.Height;
+            float width = bounds.Width;
+            float height = bounds.Height;
 
-            drawComp.Position = Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.MainPlayer != null ? Velo.MainPlayer.actor.Position : Vector2.Zero);
-
-            drawComp.UpdateBounds();
+            textDraw.Position = Orientation.Value.GetOrigin(width, height, screenWidth, screenHeight, Velo.MainPlayer != null ? Velo.MainPlayer.actor.Position : Vector2.Zero);
         }
     }
 }

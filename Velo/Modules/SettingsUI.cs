@@ -16,6 +16,19 @@ namespace Velo
         public BoolSetting DisableKeyInput;
         public IntSetting ControllerIndex;
 
+        public ColorTransitionSetting TextColor;
+        public ColorTransitionSetting HeaderTextColor;
+        public ColorTransitionSetting HighlightTextColor;
+        public ColorTransitionSetting EntryColor1;
+        public ColorTransitionSetting EntryColor2;
+        public ColorTransitionSetting EntryHoveredColor;
+        public ColorTransitionSetting ButtonColor;
+        public ColorTransitionSetting ButtonHoveredColor;
+        public ColorTransitionSetting ButtonSelectedColor;
+        public IntSetting ScrollBarWidth;
+        public ColorTransitionSetting PanelBackgroundColor;
+        public ColorTransitionSetting DimColor;
+
         private bool initialized = false;
 
         private string selectedDriver = "";
@@ -32,6 +45,20 @@ namespace Velo
 
             DisableKeyInput = AddBool("disable key input", false);
             ControllerIndex = AddInt("controller index", 0, 0, 3);
+
+            NewCategory("Velo menu style");
+            TextColor = AddColorTransition("text color", new ColorTransition(Color.White));
+            HeaderTextColor = AddColorTransition("header text color", new ColorTransition(new Color(185, 253, 224)));
+            HighlightTextColor = AddColorTransition("highlight text color", new ColorTransition(Color.Gold));
+            EntryColor1 = AddColorTransition("entry color 1", new ColorTransition(new Color(40, 40, 40, 150)));
+            EntryColor2 = AddColorTransition("entry color 2", new ColorTransition(new Color(30, 30, 30, 150)));
+            EntryHoveredColor = AddColorTransition("entry hovered color", new ColorTransition(new Color(100, 100, 100, 150)));
+            ButtonColor = AddColorTransition("button color", new ColorTransition(new Color(150, 150, 150, 150)));
+            ButtonHoveredColor = AddColorTransition("button hovered color", new ColorTransition(new Color(200, 200, 200, 150)));
+            ButtonSelectedColor = AddColorTransition("button selected color", new ColorTransition(new Color(240, 70, 100, 200)));
+            ScrollBarWidth = AddInt("scroll bar width", 10, 0, 20);
+            PanelBackgroundColor = AddColorTransition("panel background color", new ColorTransition(new Color(20, 20, 20, 150)));
+            DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
 
             DisableKeyInput.Tooltip =
                 "Disables any key inputs while the settings menu is open.";
@@ -58,16 +85,20 @@ namespace Velo
             if (unsupportedWarned)
             {
                 if (Enabled.Modified())
+                {
+                    Input.InitLLKeyboardHook();
                     Storage.Instance.Load();
+                }
                 Enabled.Disable();
                 return;
             }
 
-            if (AutoUpdate.Instance.Enabled)
+            if (AutoUpdate.Instance.Enabled.Value.Enabled)
                 Enabled.Disable();
 
             if (Enabled.Modified())
             {
+                Input.InitLLKeyboardHook();
                 if (Enabled.Value.Enabled)
                     Cursor.EnableCursor(this);
                 else
@@ -138,7 +169,7 @@ namespace Velo
 
         public void SettingUpdate(Setting setting)
         {
-            if (!initialized || !SendUpdates || setting.Hidden)
+            if (!initialized || !SendUpdates || setting.Hidden || setting.Module == null)
                 return;
             JsonObject jsonObj = new JsonObject(2).
                 AddElement("Changes", new JsonArray(1).

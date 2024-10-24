@@ -9,62 +9,64 @@ namespace Velo
     {
         private class SubmitRequest
         {
-            private readonly RequestHandler handler;
-            private readonly Task writeFileTask;
-            private readonly string path;
+            private readonly Recording recording;
+            private string path;
+            private RequestHandler handler;
+            private Task task;
             private RunInfo tempInfo;
 
             public SubmitRequest(Recording recording, string path)
             {
+                this.recording = recording;
                 this.path = path;
-                if (this.path == "")
-                {
-                    string id = Guid.NewGuid().ToString();
-                    this.path = "Velo\\pending\\" + id + ".temp";
+            }
 
-                    writeFileTask = Task.Run(() =>
+            public void Run()
+            {
+                task = Task.Run(() =>
+                {
+                    byte[] bytes = recording.ToBytes();
+                    if (recording.Sign == null)
                     {
-                        try
-                        {
-                            if (!Directory.Exists("Velo\\pending"))
-                                Directory.CreateDirectory("Velo\\pending");
+                        recording.GenerateSign(bytes);
+                    }
 
-                            using (FileStream stream = new FileStream(this.path, FileMode.Create, FileAccess.Write))
-                            {
-                                recording.Write(stream);
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(e);
-                            StreamWriter writer = new StreamWriter("exception.txt");
-                            writer.WriteLine(e.Message);
-                            writer.WriteLine(e.ToString());
-                            writer.Close();
-                        }
+                    handler = new RequestHandler(int.MaxValue, (i) =>
+                    {
+                        if (i < 3)
+                            return 0;
+                        else if (i < 6)
+                            return 20 * 1000;
+                        else
+                            return 5 * 60 * 1000;
                     });
-                }
+                    tempInfo = recording.Info;
+                    RunsDatabase.Instance.AddPending(ref tempInfo);
+                    if (Map.IsOther(recording.Info.Category.MapId))
+                    {
+                        handler.Push(new SendMapNameRequest(recording.Info.Category.MapId));
+                    }
+                    handler.Push(new SubmitRunRequest(recording, bytes), result =>
+                    {
+                        Result = result;
+                    });
+                    handler.Run();
 
-                handler = new RequestHandler(int.MaxValue, (i) =>
-                {
-                    if (i < 3)
-                        return 0;
-                    else if (i < 6)
-                        return 20 * 1000;
-                    else
-                        return 5 * 60 * 1000;
+                    if (path == "")
+                    {
+                        string id = Guid.NewGuid().ToString();
+                        path = "Velo\\pending\\" + id + ".temp";
+
+                        if (!Directory.Exists("Velo\\pending"))
+                            Directory.CreateDirectory("Velo\\pending");
+
+                        using (FileStream stream = new FileStream(path, FileMode.Create, FileAccess.Write))
+                        {
+                            stream.Write(bytes, 0, bytes.Length);
+                            stream.Write(recording.Sign, 0, recording.Sign.Length);
+                        }
+                    }
                 });
-                tempInfo = recording.Info;
-                RunsDatabase.Instance.AddPending(ref tempInfo);
-                if (Map.IsOther(recording.Info.Category.MapId))
-                {
-                    handler.Push(new SendMapNameRequest(recording.Info.Category.MapId));
-                }
-                handler.Push(new SubmitRunRequest(recording), result =>
-                {
-                    Result = result;
-                });
-                handler.Run();
             }
 
             public NewPbInfo Result { get; set; }
@@ -78,7 +80,7 @@ namespace Velo
             {
                 Task.Run(() =>
                 {
-                    writeFileTask?.Wait();
+                    task?.Wait();
                     if (File.Exists(path))
                         File.Delete(path);
                 });
@@ -178,7 +180,9 @@ namespace Velo
             message += "...";
             Notifications.Instance.PushNotification(message);
 
-            requests.Add(new SubmitRequest(recording, path));
+            SubmitRequest request = new SubmitRequest(recording, path);
+            requests.Add(request);
+            request.Run();
         }
     }
 }

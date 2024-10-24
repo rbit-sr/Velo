@@ -83,6 +83,23 @@ namespace Velo
             return value.ToString("F" + Precision);
         }
 
+        public string ToStringRounded(double value)
+        {
+            if (Value == 0)
+                return value + "";
+
+            double s = value >= 0f ? 1f : -1f;
+
+            value = Math.Abs(value);
+
+            long c = (long)(value / Value + 0.5f);
+
+            value = Value * c;
+            value *= s;
+
+            return value.ToString("F" + Precision);
+        }
+
         public override bool Equals(object obj)
         {
             if (!(obj is RoundingMultiplier))
@@ -132,7 +149,7 @@ namespace Velo
             if (colors.Length == 1)
                 return Util.ApplyAlpha(colors[0]);
 
-            long milliseconds = Velo.Time.Ticks / TimeSpan.TicksPerMillisecond;
+            long milliseconds = Velo.RealTime.Ticks / TimeSpan.TicksPerMillisecond;
 
             return Get(milliseconds, true);
         }

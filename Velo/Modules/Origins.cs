@@ -8,35 +8,8 @@ using System.Linq;
 
 namespace Velo
 {
-    public class OrMenuContext : MenuContext
+    public class Origins : MenuContext
     {
-        public OrMenuContext()
-        {
-
-        }
-
-        public override void OnExit()
-        {
-            Miscellaneous.Instance.OriginsMenu.Disable();
-        }
-
-        public override void OnCancelAllRequests()
-        {
-
-        }
-
-        public override void OnClearCache()
-        {
-
-        }
-    }
-
-    public class Origins
-    {
-        private bool initialized = false;
-
-        private OrMenuContext context;
-
         public ulong Selected = ulong.MaxValue;
         public ulong Current = ulong.MaxValue;
 
@@ -48,26 +21,21 @@ namespace Velo
             Enumerable.Range((int)Map.ORIGINS_START, (int)(Map.ORIGINS_END - Map.ORIGINS_START)).
             Select(m => new OriginMap(Map.MapIdToFileName[(ulong)m]));
 
-        private Origins()
+        private Origins() : base("Origins", addEnabledSetting: false)
         {
 
         }
 
         public static Origins Instance = new Origins();
 
-        private void Initialize()
+        public override void Init()
         {
-            context = new OrMenuContext();
+            base.Init();
 
-            initialized = true;
-        }
-
-        public void Init()
-        {
             Velo.OnMainPlayerReset.Add(ResetActors);
         }
 
-        public void PostUpdate()
+        public override void PostUpdate()
         {
             if (!Velo.Ingame && Selected != ulong.MaxValue)
                 isOrigins = true;
@@ -78,39 +46,6 @@ namespace Velo
             }
             if (!Velo.Ingame && Selected == ulong.MaxValue)
                 isOrigins = false;
-        }
-
-        public void PostRender()
-        {
-            bool modified = Miscellaneous.Instance.OriginsMenu.Modified();
-
-            if (modified)
-            {
-                if (Miscellaneous.Instance.OriginsMenu.Value.Enabled)
-                    Cursor.EnableCursor(this);
-                else
-                    Cursor.DisableCursor(this);
-            }
-
-            if (Miscellaneous.Instance.OriginsMenu.Value.Enabled && !initialized)
-                Initialize();
-
-            if (!Miscellaneous.Instance.OriginsMenu.Value.Enabled && !initialized)
-                return;
-
-            if (modified)
-            {
-                if (Miscellaneous.Instance.OriginsMenu.Value.Enabled)
-                {
-                    context.EnterMenu(new OriginsMenu(context));
-                }
-                else
-                {
-                    context.ExitMenu(animation: true);
-                }
-            }
-
-            context.Draw();
         }
 
         public void SelectOrigins(ulong mapId)
@@ -157,6 +92,9 @@ namespace Velo
 
         public void ResetActors()
         {
+            if (!IsOrigins())
+                return;
+
             finished = false;
 
             List<CActor> actors = CEngine.CEngine.Instance.World.CollisionEngine.actors;
@@ -192,6 +130,11 @@ namespace Velo
                 }
             }
         }
+
+        public override Menu GetStartMenu()
+        {
+            return new OriginsMenu(this);
+        }
     }
 
     public struct OriginMap
@@ -208,7 +151,7 @@ namespace Velo
     {
         private readonly ulong mapId;
 
-        public OriginMapEntry(CFont font, ulong mapId, Action exitMenu) :
+        public OriginMapEntry(CachedFont font, ulong mapId, Action exitMenu) :
             base(Map.MapIdToName(mapId), font)
         {
             this.mapId = mapId;
@@ -232,12 +175,12 @@ namespace Velo
             };
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             if (mapId == Origins.Instance.Selected)
-                Color = Leaderboard.Instance.HighlightTextColor.Value.Get;
+                Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
             else
-                Color = Leaderboard.Instance.TextColor.Value.Get;
+                Color = SettingsUI.Instance.TextColor.Value.Get;
 
             base.Draw(hovered, scale, opacity);
         }
@@ -251,30 +194,30 @@ namespace Velo
         private readonly ListW<OriginMap> list;
         private readonly LayoutW layout;
 
-        public OriginsMenu(OrMenuContext context) :
+        public OriginsMenu(MenuContext context) :
             base(context)
         {
             layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-            title = new LabelW("Origins", context.Fonts.FontLarge.Font)
+            title = new LabelW("Origins", context.Fonts.FontTitle)
             {
                 Align = new Vector2(0f, 0.5f),
-                Color = Leaderboard.Instance.HeaderTextColor.Value.Get
+                Color = SettingsUI.Instance.HeaderTextColor.Value.Get
             };
 
             list = new ListW<OriginMap>((int)(Map.ORIGINS_END - Map.ORIGINS_START), this)
             {
                 EntryBackgroundVisible = true,
-                EntryBackgroundColor1 = Leaderboard.Instance.EntryColor1.Value.Get,
-                EntryBackgroundColor2 = Leaderboard.Instance.EntryColor2.Value.Get,
+                EntryBackgroundColor1 = SettingsUI.Instance.EntryColor1.Value.Get,
+                EntryBackgroundColor2 = SettingsUI.Instance.EntryColor2.Value.Get,
                 EntryHoverable = true,
-                EntryBackgroundColorHovered = Leaderboard.Instance.EntryHoveredColor.Value.Get
+                EntryBackgroundColorHovered = SettingsUI.Instance.EntryHoveredColor.Value.Get
             };
             scroll = new ScrollW(list)
             {
-                ScrollBarColor = Leaderboard.Instance.ButtonColor.Value.Get,
-                ScrollBarWidth = Leaderboard.Instance.ScrollBarWidth.Value
+                ScrollBarColor = SettingsUI.Instance.ButtonColor.Value.Get,
+                ScrollBarWidth = SettingsUI.Instance.ScrollBarWidth.Value
             };
-            info = new LabelW("", context.Fonts.FontMedium.Font)
+            info = new LabelW("", context.Fonts.FontMedium)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = () => Color.Red
@@ -289,7 +232,7 @@ namespace Velo
             Child = layout;
         }
 
-        public override void Draw(Widget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, float scale, float opacity)
         {
             info.Text = "";
             if (Origins.Instance.Selected != ulong.MaxValue)
@@ -300,7 +243,7 @@ namespace Velo
 
         public Widget Create(OriginMap elem, int i)
         {
-            return new OriginMapEntry(context.Fonts.FontMedium.Font, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
+            return new OriginMapEntry(context.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
         }
 
         public IEnumerable<OriginMap> GetElems()
@@ -314,16 +257,6 @@ namespace Velo
         }
 
         public override void Refresh()
-        {
-
-        }
-
-        public override void Rerequest()
-        {
-
-        }
-
-        public override void ResetState()
         {
 
         }

@@ -22,37 +22,15 @@ namespace Velo
         {
             base.PostUpdate();
 
-            ghosts[0] = GetMainGhost();
-
             if (!Velo.Ingame)
             {
-                while (ghosts.Count >= 2)
-                {
-                    ghosts.RemoveAt(1);
-                    ghostSpawnTimes.RemoveAt(1);
-                }
+                RemoveAll(destroy: false);
             }
         }
 
-        private Player GetMainGhost()
+        public void MainGhostSpawned(Player ghost)
         {
-            if (Velo.ModuleSolo == null)
-                return null;
-            CCollisionEngine collisionEngine = Velo.CEngineInst.World.CollisionEngine;
-
-            for (int i = 0; i < collisionEngine.ActorCount; i++)
-            {
-                CActor actor = collisionEngine.GetActor(i);
-                ICActorController controller = actor.controller;
-                if (controller is Player)
-                {
-                    Player player = controller as Player;
-                    if (!player.slot.LocalPlayer && player.charId == 0)
-                        return player;
-                }
-            }
-
-            return null;
+            ghosts[0] = ghost;
         }
 
         public Player Get(int index)
@@ -85,7 +63,7 @@ namespace Velo
             {
                 Velo.ModuleSolo.SpawnGhost();
                 ghosts[0] = Velo.ModuleSolo.gameInfo.slots[1].Player;
-                ghostSpawnTimes[0] = Velo.Time;
+                ghostSpawnTimes[0] = Velo.RealTime;
                 return ghosts[0];
             }
             else
@@ -106,7 +84,7 @@ namespace Velo
                 slot.l4yokIuZOlldyR5VFwaPFbo(ghost, false);
                 ghost.charId = (byte)index;
                 ghosts[index] = ghost;
-                ghostSpawnTimes[index] = Velo.Time;
+                ghostSpawnTimes[index] = Velo.RealTime;
                 return ghosts[index];
             }
         }
@@ -115,7 +93,7 @@ namespace Velo
         // this is to ensure that the addresses are more stable and to minimize the chance of crashing
         public void WaitForGhost(int index)
         {
-            TimeSpan age = Velo.Time - ghostSpawnTimes[index];
+            TimeSpan age = Velo.RealTime - ghostSpawnTimes[index];
             TimeSpan waitTime = TimeSpan.Zero;
             if (age < TimeSpan.FromSeconds(1))
                 waitTime = TimeSpan.FromSeconds(1) - age;
@@ -123,16 +101,15 @@ namespace Velo
                 Task.Delay(waitTime).Wait();
         }
 
-        public void RemoveAll()
+        public void RemoveAll(bool destroy)
         {
             while (ghosts.Count >= 2)
             {
-                ghosts[1].Destroy();
+                if (destroy)
+                    ghosts[1].Destroy();
                 ghosts.RemoveAt(1);
                 ghostSpawnTimes.RemoveAt(1);
             }
-            if (Velo.ModuleSolo == null)
-                return;
             
             ghosts[0] = null;
             ghostSpawnTimes[0] = TimeSpan.Zero;

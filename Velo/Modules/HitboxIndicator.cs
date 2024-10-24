@@ -113,7 +113,7 @@ namespace Velo
 
             for (int i = 0; i < count; i++)
             {
-                CActor actor = collisionEngine.GetActor(i);
+                CActor actor = collisionEngine.actors[i];
 
                 if (
                     !colToIndex.ContainsKey(actor.CollidableType) ||
@@ -157,7 +157,7 @@ namespace Velo
 
                 Color color = 
                     actor.CollidableType != 100 ? ObjectsColor.Value.Get() : 
-                    (actor.Controller is Player && (actor.Controller as Player).slot.LocalPlayer) ? LocalPlayersColor.Value.Get() : 
+                    actor.Controller is Player player && player.slot.LocalPlayer && !player.slot.IsBot ? LocalPlayersColor.Value.Get() : 
                     RemotePlayersColor.Value.Get();
 
                 if (useRect)
@@ -166,18 +166,19 @@ namespace Velo
 
                     if (hitbox == null)
                     {
-                        hitbox = new CRectangleDrawComponent(0, 0, 0, 0);
+                        hitbox = new CRectangleDrawComponent(0, 0, 0, 0)
+                        {
+                            IsVisible = true,
+                            FillEnabled = true,
+                            OutlineThickness = 0
+                        };
                         AddComponent(hitbox);
                         hitboxes.Add(actor, hitbox);
                     }
 
                     CRectangleDrawComponent rectDraw = hitbox as CRectangleDrawComponent;
                     rectDraw.SetPositionSize(rect.Position, rect.Size);
-                    rectDraw.IsVisible = true;
-                    rectDraw.FillEnabled = true;
                     rectDraw.FillColor = color;
-                    rectDraw.OutlineThickness = 0;
-                    rectDraw.UpdateBounds();
                 }
                 else if (collision is CConvexPolygon)
                 {
@@ -224,10 +225,11 @@ namespace Velo
             }
 
             // remove unvisited hitboxes
-            foreach (CActor actor in unvisited)
+            count = unvisited.Count;
+            for (int i = 0; i < count; i++)
             {
-                RemoveComponent(hitboxes[actor]);
-                hitboxes.Remove(actor);
+                RemoveComponent(hitboxes[unvisited[i]]);
+                hitboxes.Remove(unvisited[i]);
             }
         }
     }

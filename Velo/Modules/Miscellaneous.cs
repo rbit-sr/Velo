@@ -5,6 +5,7 @@ using Microsoft.Xna.Framework;
 using System;
 using System.IO;
 using System.Linq;
+using System.Windows.Forms;
 
 namespace Velo
 {
@@ -54,6 +55,43 @@ namespace Velo
         }
     }
 
+    public enum EInput
+    {
+        NONE, LEFT, RIGHT, JUMP, GRAPPLE, SLIDE, BOOST, ITEM, TAUNT, SWAP_ITEM
+    }
+
+    public static class EInputExt
+    {
+        public static string Label(this EInput input)
+        {
+            switch (input)
+            {
+                case EInput.NONE:
+                    return "none";
+                case EInput.LEFT:
+                    return "left";
+                case EInput.RIGHT:
+                    return "right";
+                case EInput.JUMP:
+                    return "jump";
+                case EInput.GRAPPLE:
+                    return "grapple";
+                case EInput.SLIDE:
+                    return "slide";
+                case EInput.BOOST:
+                    return "boost";
+                case EInput.ITEM:
+                    return "item";
+                case EInput.TAUNT:
+                    return "taunt";
+                case EInput.SWAP_ITEM:
+                    return "swap item";
+                default:
+                    return "";
+            }
+        }
+    }
+
     public class Miscellaneous : Module
     {
         public EnumSetting<EEvent> Event;
@@ -73,7 +111,16 @@ namespace Velo
 
         public ToggleSetting OriginsMenu;
 
+        public EnumSetting<EInput> LeftButton;
+        public EnumSetting<EInput> RightButton;
+        public EnumSetting<EInput> MiddleButton;
+        public EnumSetting<EInput> X1Button;
+        public EnumSetting<EInput> X2Button;
+        public BoolSetting OverwriteInputs;
+
         public bool contentsReloaded = false;
+
+        private bool wasItemPressed = false;
 
         private Miscellaneous() : base("Miscellaneous")
         {
@@ -128,6 +175,16 @@ namespace Velo
 
             NewCategory("Origins");
             OriginsMenu = AddToggle("menu", new Toggle());
+            Origins.Instance.Enabled = OriginsMenu;
+
+            NewCategory("mouse inputs");
+            string[] labels = Enum.GetValues(typeof(EInput)).Cast<EInput>().Select(input => input.Label()).ToArray();
+            LeftButton = AddEnum("left button", EInput.NONE, labels);
+            RightButton = AddEnum("right button", EInput.NONE, labels);
+            MiddleButton = AddEnum("middle button", EInput.NONE, labels);
+            X1Button = AddEnum("X1 button", EInput.NONE, labels);
+            X2Button = AddEnum("X2 button", EInput.NONE, labels);
+            OverwriteInputs = AddBool("overwrite inputs", false);
         }
 
         public static Miscellaneous Instance = new Miscellaneous();
@@ -135,18 +192,11 @@ namespace Velo
         public override void Init()
         {
             base.Init();
-
-            Origins.Instance.Init();
         }
 
         public override void PreUpdate()
         {
             base.PreUpdate();
-
-            if (Input.Pressed(OriginsMenu.Value.Hotkey))
-            {
-                OriginsMenu.ToggleState();
-            }
 
             if (ReloadKey.Pressed())
                 ReloadContents();
@@ -176,19 +226,18 @@ namespace Velo
         {
             base.PostUpdate();
 
-            Origins.Instance.PostUpdate();
-
             CCollisionEngine col = CEngine.CEngine.Instance.World.CollisionEngine;
             
             if (DisableSawSound.Value || DisableLaserSound.Value)
             {
-                foreach (CActor actor in col.actors)
+                int count = col.actors.Count;
+                for (int i = 0; i < count; i++)
                 {
-                    if (DisableSawSound.Value && actor.Controller is TriggerSaw saw) 
+                    if (DisableSawSound.Value && col.actors[i].Controller is TriggerSaw saw) 
                     {
                         saw.soundEmitter.Pause();
                     }
-                    if (DisableLaserSound.Value && actor.Controller is Laser laser)
+                    if (DisableLaserSound.Value && col.actors[i].Controller is Laser laser)
                     {
                         laser.soundEmitter.Pause();
                     }
@@ -197,9 +246,10 @@ namespace Velo
 
             if (DisableSawSound.Modified() && !DisableSawSound.Value)
             {
-                foreach (CActor actor in col.actors)
+                int count = col.actors.Count;
+                for (int i = 0; i < count; i++)
                 {
-                    if (actor.Controller is TriggerSaw saw)
+                    if (col.actors[i].Controller is TriggerSaw saw)
                     {
                         saw.soundEmitter.Unpause();
                     }
@@ -207,9 +257,10 @@ namespace Velo
             }
             if (DisableLaserSound.Modified() && !DisableLaserSound.Value)
             {
-                foreach (CActor actor in col.actors)
+                int count = col.actors.Count;
+                for (int i = 0; i < count; i++)
                 {
-                    if (actor.Controller is Laser laser)
+                    if (col.actors[i].Controller is Laser laser)
                     {
                         laser.soundEmitter.Unpause();
                     }
@@ -220,8 +271,6 @@ namespace Velo
         public override void PostRender()
         {
             base.PostRender();
-
-            Origins.Instance.PostRender();
 
             contentsReloaded = false;
         }
@@ -290,6 +339,74 @@ namespace Velo
                 return DisableGhostGrappleSound.Value;
             else
                 return DisableRemoteGrappleSound.Value;
+        }
+
+        private void SetInput(Player player, EInput input, bool pressed)
+        {
+            bool dummy = false;
+            ref bool playerInput = ref dummy;
+
+            bool mirrored = player.slot != null && player.gameInfo.isOption(2);
+            switch (input)
+            {
+                case EInput.LEFT:
+                    if (!mirrored)
+                        playerInput = ref player.leftPressed;
+                    else
+                        playerInput = ref player.rightPressed;
+                    break;
+                case EInput.RIGHT:
+                    if (!mirrored)
+                        playerInput = ref player.rightPressed;
+                    else
+                        playerInput = ref player.leftPressed;
+                    break;
+                case EInput.JUMP:
+                    playerInput = ref player.jumpPressed;
+                    break;
+                case EInput.GRAPPLE:
+                    playerInput = ref player.grapplePressed;
+                    break;
+                case EInput.SLIDE:
+                    playerInput = ref player.slidePressed;
+                    break;
+                case EInput.BOOST:
+                    playerInput = ref player.boostPressed;
+                    break;
+                case EInput.ITEM:
+                    if (OverwriteInputs.Value)
+                        player.item_p2 = pressed && !wasItemPressed;
+                    else
+                        player.item_p2 |= pressed && !wasItemPressed;
+                    playerInput = ref player.itemPressed;
+                    break;
+                case EInput.TAUNT:
+                    playerInput = ref player.tauntPressed;
+                    break;
+                case EInput.SWAP_ITEM:
+                    playerInput = ref player.swapItemPressed;
+                    break;
+            }
+            if (OverwriteInputs.Value)
+                playerInput = pressed;
+            else
+                playerInput |= pressed;
+        }
+
+        public void SetMouseInputsPrepare(Player player)
+        {
+            wasItemPressed = player.itemPressed;
+        }
+
+        public void SetMouseInputs(Player player)
+        {
+            if (!Util.IsFocused())
+                return;
+            SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton));
+            SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton));
+            SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton));
+            SetInput(player, X1Button.Value, Input.IsKeyDown((byte)Keys.XButton1));
+            SetInput(player, X2Button.Value, Input.IsKeyDown((byte)Keys.XButton2));
         }
     }
 }
