@@ -68,6 +68,13 @@ namespace Velo
 
         public static SettingsUI Instance = new SettingsUI();
 
+        public override void Init()
+        {
+            base.Init();
+
+            SetHwnd(CEngine.CEngine.Instance.Game.Window.Handle);
+        }
+
         public override void PreUpdate()
         {
             base.PreUpdate();
@@ -271,6 +278,8 @@ namespace Velo
             }
         }
 
+        [DllImport("Velo_UI.dll", EntryPoint = "SetHwnd")]
+        private static extern void SetHwnd(IntPtr hwnd);
         [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_d3d11")]
         private static extern void InitializeImGui_d3d11(IntPtr swapChain);
         [DllImport("Velo_UI.dll", EntryPoint = "InitializeImGui_opengl")]

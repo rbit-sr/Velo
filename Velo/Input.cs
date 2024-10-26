@@ -151,7 +151,7 @@ namespace Velo
         [DllImport("Velo_UI.dll", EntryPoint = "RemoveLLHooks")]
         public static extern void RemoveLLHooks();
         [DllImport("Velo_UI.dll", EntryPoint = "PollLLHooks")]
-        public static extern void PollLLKeyboardHook();
+        public static extern void PollLLHooks();
 
         [DllImport("Velo_UI.dll", EntryPoint = "IsDown")]
         public static extern bool IsKeyDown(byte key);
@@ -165,8 +165,15 @@ namespace Velo
             Console.CancelKeyPress += (_, __) => RemoveLLHooks();
         }
 
+        private static bool first = true;
+        private static bool focusedPrev = false;
+        private static bool initializedLLMouseHook = false;
+
         public static void Update()
         {
+            if (first)
+                focusedPrev = Util.IsFocused();
+
             keysPrev = keysCurr;
             keysCurr = Keyboard.GetState();
 
@@ -175,7 +182,7 @@ namespace Velo
 
             if (Util.IsFocused())
             {
-                PollLLKeyboardHook(); 
+                PollLLHooks(); 
                 keysOemCurr.Oem1 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem1);
                 keysOemCurr.Oem2 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem2);
                 keysOemCurr.Oem3 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem3);
@@ -211,11 +218,19 @@ namespace Velo
             GamePadButtonsDown[(int)EGamePadButton.DPAD_UP] = gamePadCurr.DPad.Up == ButtonState.Pressed;
             GamePadButtonsDown[(int)EGamePadButton.DPAD_DOWN] = gamePadCurr.DPad.Down == ButtonState.Pressed;
 
-            if (IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev)
+            if (IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev || focusedPrev != Util.IsFocused())
             {
                 InitLLKeyboardHook();
-                InitLLMouseHook();
+                if (initializedLLMouseHook || IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev)
+                {
+                    InitLLMouseHook();
+                    initializedLLMouseHook = true;
+                }
             }
+
+            focusedPrev = Util.IsFocused();
+
+            first = false;
         }
     }
 }

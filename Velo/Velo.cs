@@ -308,7 +308,7 @@ namespace Velo
 
             if (Performance.Instance.FixInputDelay.Value && Performance.Instance.Enabled.Value)
             {
-                Input.PollLLKeyboardHook();
+                Input.PollLLHooks();
                 if (!disable_steam_input_api())
                 {
                     measure("steam");
@@ -472,8 +472,11 @@ namespace Velo
             return OfflineGameMods.Instance.JumpStrength.Value;
         }
 
-        public static float get_wall_jump_strength()
+        public static float get_wall_jump_strength(float jumpStrength, Player player)
         {
+            if (player is PlayerBot)
+                return jumpStrength;
+
             if (Online)
                 return OfflineGameMods.Instance.WallJumpStrength.DefaultValue;
 
@@ -898,7 +901,7 @@ namespace Velo
         public static void poll_key_inputs()
         {
             if (Performance.Instance.FixInputDelay.Value && Performance.Instance.Enabled.Value)
-                Input.PollLLKeyboardHook();
+                Input.PollLLHooks();
         }
 
         public static bool is_down(bool isDown, Microsoft.Xna.Framework.Input.Keys key)

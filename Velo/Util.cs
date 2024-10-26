@@ -364,42 +364,13 @@ namespace Velo
             }
         }
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
-
-        public static bool focused = false;
-        public static TimeSpan lastFocusedUpdate = TimeSpan.Zero;
+        [DllImport("Velo_UI.dll", EntryPoint = "IsSrFocused")]
+        private static extern bool IsSrFocused();
 
         public static bool IsFocused()
         {
-            if (Velo.RealTime.Ticks >= lastFocusedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
-            {
-                focused = Process.GetCurrentProcess().MainWindowHandle == GetForegroundWindow();
-                lastFocusedUpdate = new TimeSpan(Velo.RealTime.Ticks);
-            }
-
-            return focused;
+            return IsSrFocused();
         }
-
-        [DllImport("user32.dll")]
-        private static extern bool IsIconic(IntPtr handle);
-
-        public static bool minimized = false;
-        public static TimeSpan lastMinimizedUpdate;
-
-        public static bool IsMinimized()
-        {
-            if (Velo.RealTime.Ticks >= lastMinimizedUpdate.Ticks + 100 * TimeSpan.TicksPerMillisecond)
-            {
-                minimized = IsIconic(Process.GetCurrentProcess().MainWindowHandle);
-                lastMinimizedUpdate = Velo.RealTime;
-            }
-
-            return minimized;
-        }
-
-        [DllImport("User32.dll")]
-        public static extern short GetAsyncKeyState(Keys key);
     }
 
     public static class StreamUtil
