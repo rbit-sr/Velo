@@ -296,14 +296,16 @@ namespace Velo
             return
                 mapId != 3 &&
                 mapId != 6 &&
-                mapId != 17;
+                mapId != 17 &&
+                mapId != 20;
         }
 
         public static bool AllowDrill(ulong mapId)
         {
             return
                 mapId != 3 &&
-                mapId != 17;
+                mapId != 17 &&
+                mapId != 20;
         }
 
         public static bool Has100Perc(ulong mapId)

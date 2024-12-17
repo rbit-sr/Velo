@@ -322,7 +322,9 @@ namespace Velo
             if (!texturesSetUp)
             {
                 SetUpTextures();
-                ((CBufferedTileMapLayer)layer).refresh();
+                (layer as CBufferedTileMapLayer).refresh();
+                (layer as CBufferedTileMapLayer).render_targets.Clear();
+                (layer as CBufferedTileMapLayer).unknown.Clear();
             }
         }
 

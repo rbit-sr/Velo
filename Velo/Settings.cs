@@ -1,7 +1,9 @@
-﻿using Microsoft.Xna.Framework;
+﻿using Microsoft.Win32;
+using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using static Velo.Frame;
 
 namespace Velo
 {
@@ -351,7 +353,7 @@ namespace Velo
 
             TimeSpan now = Velo.RealTime;
 
-            if ((now - pressTime).TotalSeconds >= 0.5 && (now - lastRepeat).TotalSeconds >= 0.05)
+            if (now - pressTime >= Util.RepeatDelay && now - lastRepeat >= Util.RepeatRate)
             {
                 lastRepeat = now;
                 return true;

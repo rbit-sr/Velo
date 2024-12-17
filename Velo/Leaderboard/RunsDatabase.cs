@@ -8,6 +8,7 @@ namespace Velo
     {
         NEW_LAP, ONE_LAP, NEW_LAP_SKIPS, ONE_LAP_SKIPS, 
         ANY_PERC, HUNDRED_PERC,
+        EVENT,
         COUNT
     }
 
@@ -19,6 +20,9 @@ namespace Velo
 
     public struct RunInfo
     {
+        public static readonly byte FLAG_NEW_GCD = 1 << 0;
+        public static readonly byte FLAG_FIX_BOUNCE_GLITCH = 1 << 1;
+
         public ulong PlayerId;
         public long CreateTime;
 
@@ -28,7 +32,7 @@ namespace Velo
         public byte WasWR;
         public byte HasComments;
         public byte SpeedrunCom;
-        public byte NewGCD;
+        public byte PhysicsFlags;
         public int Place;
         public int Dist;
         public int GroundDist;
@@ -151,9 +155,34 @@ namespace Velo
                     return "Any%";
                 case ECategoryType.HUNDRED_PERC:
                     return "100%";
+                case ECategoryType.EVENT:
+                    return "Event";
                 default:
                     return "";
             }
+        }
+    }
+
+    public struct MapEvent
+    {
+        public long From;
+        public long To;
+        public ECategoryType CategoryType;
+        public ulong Winner;
+
+        public long RemainingStart()
+        {
+            return From - DateTimeOffset.Now.ToUnixTimeSeconds();
+        }
+
+        public long RemainingEnd()
+        {
+            return To - DateTimeOffset.Now.ToUnixTimeSeconds();
+        }
+
+        public bool CurrentlyNotRunning()
+        {
+            return RunsDatabase.Instance.EventTime / TimeSpan.TicksPerSecond >= To;
         }
     }
 
@@ -164,6 +193,8 @@ namespace Velo
         private readonly RequestHandler getCommentHandler = new RequestHandler();
         private readonly RequestHandler initHandler = new RequestHandler();
         private bool addedDeletedSincePushed = false;
+        private bool eventsPushed = false;
+        private bool popularThisWeekPushed = false;
 
         private readonly Queue<KeyValuePair<int, Recording>> recordingCache = new Queue<KeyValuePair<int, Recording>>();
 
@@ -173,8 +204,15 @@ namespace Velo
         private readonly Dictionary<int, string> comments = new Dictionary<int, string>();
         private readonly List<PlayerInfoScore> scores = new List<PlayerInfoScore>();
 
-        private readonly IEnumerable<ulong> curatedMapOrder = Enumerable.Range(0, (int)Map.CURATED_COUNT).Select(i => (ulong)i);
-        private List<ulong> nonCuratedMapOrder = new List<ulong>();
+        private readonly IEnumerable<ulong> curatedMapChronologicOrder = Enumerable.Range(0, (int)Map.CURATED_COUNT).Select(i => (ulong)i);
+        private List<ulong> curatedMapPopularityOrder = new List<ulong>();
+        private List<ulong> nonCuratedMapPopularityOrder = new List<ulong>();
+
+        private readonly Dictionary<ulong, MapEvent> mapEvents = new Dictionary<ulong, MapEvent>();
+        private long eventTime = 0;
+        public long EventTime => eventTime;
+
+        private readonly List<ulong> popularThisWeek = new List<ulong>();
 
         private readonly Dictionary<ulong, string> pseudoSteamIdToSpeedrunComName = new Dictionary<ulong, string>();
 
@@ -344,11 +382,11 @@ namespace Velo
             return runsForCategory.Select(i => allRuns[i]).Where(run => run.WasWR == 1);
         }
 
-        public IEnumerable<MapRunInfos> GetWRs(int place, bool curated)
+        public IEnumerable<MapRunInfos> GetWRs(int place, bool curated, bool popularity)
         {
             List<MapRunInfos> runs = new List<MapRunInfos>();
 
-            IEnumerable<ulong> maps = curated ? curatedMapOrder : nonCuratedMapOrder;
+            IEnumerable<ulong> maps = curated ? (popularity ? curatedMapPopularityOrder : curatedMapChronologicOrder) : nonCuratedMapPopularityOrder;
             foreach (ulong m in maps)
             {
                 MapRunInfos mapRuns = new MapRunInfos
@@ -374,11 +412,11 @@ namespace Velo
             return runs;
         }
 
-        public IEnumerable<MapRunInfos> GetPlayerPBs(ulong playerId, bool curated)
+        public IEnumerable<MapRunInfos> GetPlayerPBs(ulong playerId, bool curated, bool popularity)
         {
             List<MapRunInfos> runs = new List<MapRunInfos>();
 
-            IEnumerable<ulong> maps = curated ? curatedMapOrder : nonCuratedMapOrder;
+            IEnumerable<ulong> maps = curated ? (popularity ? curatedMapPopularityOrder : curatedMapChronologicOrder) : nonCuratedMapPopularityOrder;
             foreach (ulong m in maps)
             {
                 MapRunInfos mapRuns = new MapRunInfos
@@ -411,7 +449,7 @@ namespace Velo
 
         public IEnumerable<RunInfo> GetRecentWRs()
         {
-            return allRuns.Select(pair => pair.Value).Where(run => run.WasWR == 1 && !Map.IsOther(run.Category.MapId));
+            return allRuns.Select(pair => pair.Value).Where(run => run.WasWR == 1 && !Map.IsOther(run.Category.MapId) && run.Category.TypeId != (ulong)ECategoryType.EVENT);
         }
 
         public RunInfo GetPB(ulong player, Category category)
@@ -449,11 +487,13 @@ namespace Velo
             List<PlayerInfoWRs> players = new List<PlayerInfoWRs>();
             Dictionary<ulong, PlayerInfoWRs> playerDict = new Dictionary<ulong, PlayerInfoWRs>();
 
-            IEnumerable<ulong> maps = curatedMapOrder;
+            IEnumerable<ulong> maps = curatedMapChronologicOrder;
             foreach (ulong m in maps)
             {
                 for (int t = 0; t < (int)ECategoryType.COUNT; t++)
                 {
+                    if (t == (int)ECategoryType.EVENT)
+                        continue;
                     Category category = new Category { MapId = m, TypeId = (ulong)t };
                     if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null || runsForCategory.Count == 0)
                         continue;
@@ -511,6 +551,20 @@ namespace Velo
             return scores;
         }
 
+        public MapEvent GetEvent(ulong mapId)
+        {
+            if (mapEvents.TryGetValue(mapId, out MapEvent mapEvent))
+            {
+                return mapEvent;
+            }
+            return new MapEvent { From = 0, To = 0 };
+        }
+
+        public IEnumerable<ulong> GetPopularThisWeek()
+        {
+            return popularThisWeek;
+        }
+
         public bool Pending()
         {
             return
@@ -546,22 +600,31 @@ namespace Velo
             if (!addedDeletedSincePushed)
                 PushAddedDeletedSince();
             addedDeletedSincePushed = true;
+            if (!eventsPushed)
+                PushRequestEvents();
+            eventsPushed = true;
+            if (!popularThisWeekPushed)
+                PushRequestPopularThisWeek();
+            popularThisWeekPushed = true;
             //if (pseudoSteamIdToSpeedrunComName.Count == 0)
-                //PushRequestSpeedrunComPlayers(null);
+            //PushRequestSpeedrunComPlayers(null);
         }
 
-        public void PushRequestNonCuratedOrder(Action onSuccess)
+        public void PushRequestPopularityOrder(Action onSuccess, bool curated)
         {
-            getRunHandler.Push(new GetNonCuratedOrder(), (newOrder) =>
+            getRunHandler.Push(new GetPopularityOrderRequest(curated ? 0 : 1), newOrder =>
             {
-                nonCuratedMapOrder = newOrder;
+                if (curated)
+                    curatedMapPopularityOrder = newOrder;
+                else
+                    nonCuratedMapPopularityOrder = newOrder;
                 onSuccess?.Invoke();
             });
         }
 
         public void PushRequestSpeedrunComPlayers(Action onSuccess)
         {
-            getRunHandler.Push(new GetSpeedrunComPlayersRequest(), (players) =>
+            getRunHandler.Push(new GetSpeedrunComPlayersRequest(), players =>
             {
                 pseudoSteamIdToSpeedrunComName.Clear();
                 foreach (var player in players)
@@ -574,7 +637,7 @@ namespace Velo
 
         public void PushRequestScores(Action onSuccess)
         {
-            getRunHandler.Push(new GetScoresRequest(), (newScores) =>
+            getRunHandler.Push(new GetScoresRequest(), newScores =>
             {
                 scores.Clear();
                 scores.AddRange(newScores);
@@ -588,11 +651,13 @@ namespace Velo
         {
             getRunHandler.Run(onFailure);
             addedDeletedSincePushed = false;
+            eventsPushed = false;
+            popularThisWeekPushed = false;
         }
 
         public void RequestComment(int id, Action onSuccess, Action<Exception> onFailure)
         {
-            getCommentHandler.Push(new GetCommentsRequest(id), (text) =>
+            getCommentHandler.Push(new GetCommentsRequest(id), text =>
             {
                 SetComment(id, text);
                 onSuccess?.Invoke();
@@ -604,13 +669,34 @@ namespace Velo
         {
             if (getRunHandler.Time == 0)
                 return;
-            getRunHandler.Push(new GetAddedSinceRequest(getRunHandler.Time), (added) => { Add(added, true); });
-            getRunHandler.Push(new GetDeletedSinceRequest(getRunHandler.Time), (deleted) => { Remove(deleted, true); });
+            getRunHandler.Push(new GetAddedSinceRequest(getRunHandler.Time / TimeSpan.TicksPerSecond), added => { Add(added, true); });
+            getRunHandler.Push(new GetDeletedSinceRequest(getRunHandler.Time / TimeSpan.TicksPerSecond), deleted => { Remove(deleted, true); });
+        }
+
+        private void PushRequestEvents()
+        {
+            getRunHandler.Push(new GetEventsRequest(), events => 
+            { 
+                mapEvents.Clear();
+                foreach (var pair in events)
+                    mapEvents.Add(pair.Key, pair.Value);
+                eventTime = getRunHandler.Time;
+            });
+        }
+
+        private void PushRequestPopularThisWeek()
+        {
+            getRunHandler.Push(new GetPopularThisWeekRequest(), runs =>
+            {
+                popularThisWeek.Clear();
+                popularThisWeek.AddRange(runs.Select(r => r.Category.MapId));
+                Add(runs, false);
+            });
         }
 
         public void RequestRecording(int id, Action<Recording> onSuccess = null, Action<Exception> onFailure = null)
         {
-            getRecordingHandler.Push(new GetRecordingRequest(id), (recording) =>
+            getRecordingHandler.Push(new GetRecordingRequest(id), recording =>
             {
                 recording.Info.Id = id;
                 if (recordingCache.Count >= 10)
@@ -665,6 +751,11 @@ namespace Velo
         {
             base.PreUpdate();
 
+            TimeSpan delta = Velo.RealDelta;
+            if (delta > TimeSpan.FromSeconds(5))
+                delta = TimeSpan.FromSeconds(5);
+            eventTime += delta.Ticks;
+
             if (Leaderboard.Instance.DisableLeaderboard.Value)
                 return;
 
@@ -677,6 +768,7 @@ namespace Velo
                     initHandler.Push(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
                     initHandler.Push(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
                     initHandler.Push(new SendPlayerNameRequest());
+                    initHandler.Push(new GetEventsRequest());
                     initHandler.Run();
                     initRequest = true;
                 }

@@ -22,6 +22,7 @@ namespace Velo
         public FloatSetting SlideCooldown;
         public BoolSetting InfiniteJumps;
         public ToggleSetting FixGrappleGlitches;
+        public BoolSetting FixBounceGlitch;
         public BoolSetting EnableOldMoonwalk;
         public BoolSetting DisableGhostLaserInteraction;
         public BoolSetting DisableGhostFallTileInteraction;
@@ -92,6 +93,7 @@ namespace Velo
             SlideCooldown = AddFloat("slide cooldown", 0.5f, 0f, 2f);
             InfiniteJumps = AddBool("infinite jumps", false);
             FixGrappleGlitches = AddToggle("fix grapple glitches", new Toggle());
+            FixBounceGlitch = AddBool("fix bounce glitch", true);
             EnableOldMoonwalk = AddBool("enable old moonwalk", false);
             DisableGhostLaserInteraction = AddBool("disable ghost laser interaction", true);
             DisableGhostFallTileInteraction = AddBool("disable ghost fall tile interaction", true);
@@ -107,6 +109,9 @@ namespace Velo
             FixGrappleGlitches.Tooltip =
                 "Fixes reverse grapples, 90s, flaccid drops.\n" +
                 "You can specify a hotkey to hold in order to temporarily disable the fix.";
+            FixBounceGlitch.Tooltip =
+                "Partially fixes the flat slope glitch where 25 units behind the peak of a slope there is a 1 unit wide spot on the ground that has slope properties. " +
+                "This fix only makes it impossible to get bounced up by this spot while landing on it is still possible.";
             EnableOldMoonwalk.Tooltip =
                 "Reenables an old and long fixed glitch that allowed you to initiate a moonwalk" +
                 "by hitting ceiling slopes from below.";
@@ -516,6 +521,30 @@ namespace Velo
                 !InfiniteJumps.IsDefault() ||
                 !FixGrappleGlitches.IsDefault() ||
                 !EnableOldMoonwalk.IsDefault();
+        }
+
+        public float GetGrappleCooldown()
+        {
+            if (Velo.Online)
+                return GrappleCooldown.DefaultValue;
+
+            if (IsPlaybackRunning())
+            {
+                return (playback.Recording.Info.PhysicsFlags & RunInfo.FLAG_NEW_GCD) != 0 ? 0.20f : 0.25f;
+            }
+            return GrappleCooldown.Value;
+        }
+
+        public bool GetFixBounceGlitch()
+        {
+            if (Velo.Online)
+                return FixBounceGlitch.DefaultValue;
+
+            if (IsPlaybackRunning())
+            {
+                return (playback.Recording.Info.PhysicsFlags & RunInfo.FLAG_FIX_BOUNCE_GLITCH) != 0 ? true : false;
+            }
+            return FixBounceGlitch.Value;
         }
 
         public int CurrentRunStatus()

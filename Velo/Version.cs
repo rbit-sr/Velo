@@ -2,8 +2,8 @@
 {
     public class Version
     {
-        public static readonly ushort VERSION = 35;
-        public static readonly string VERSION_NAME = "2.2.11";
+        public static readonly ushort VERSION = 53;
+        public static readonly string VERSION_NAME = "2.2.18d";
         public static readonly string AUTHOR = "rbit, olsu";
 
         public static readonly ushort MIN_SAVESTATE_VERSION = 35;
@@ -21,6 +21,8 @@
                     number = 2;
                 else if (parts[i] == "c")
                     number = 3;
+                else if (parts[i] == "d")
+                    number = 4;
                 else
                     int.TryParse(parts[i], out number);
                 numbers[i] = number;

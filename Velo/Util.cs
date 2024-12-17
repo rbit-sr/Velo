@@ -12,6 +12,7 @@ using CEngine.Graphics.Camera;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
 using CEngine.World.Collision.Shape;
+using Microsoft.Win32;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
@@ -238,6 +239,56 @@ namespace Velo
             return text;
         }
 
+        public static string FormatLongTime(long seconds)
+        {
+            string text = "";
+            bool hasUnit = false;
+            int count = 0;
+            if (seconds >= 60 * 60 * 24)
+            {
+                long days = seconds / (60 * 60 * 24);
+                text = days.ToString() + "d ";
+                seconds -= days * 60 * 60 * 24;
+                hasUnit = true;
+                count++;
+            }
+            if (seconds >= 60 * 60 || hasUnit)
+            {
+                long hours = seconds / (60 * 60);
+                if (hasUnit)
+                    text += hours.ToString("00");
+                else
+                    text += hours.ToString();
+                text += "h ";
+                seconds -= hours * 60 * 60;
+                hasUnit = true;
+                count++;
+            }
+            if ((seconds >= 60 || hasUnit) && count < 2)
+            {
+                long minutes = seconds / 60;
+                if (hasUnit)
+                    text += minutes.ToString("00");
+                else
+                    text += minutes.ToString();
+                text += "m ";
+                seconds -= minutes * 60;
+                hasUnit = true;
+                count++;
+            }
+            if (count < 2)
+            {
+                if (hasUnit)
+                    text += seconds.ToString("00");
+                else
+                    text += seconds.ToString();
+                text += "s";
+            }
+            if (text.EndsWith(" "))
+                text = text.Substring(0, text.Length - 1);
+            return text;
+        }
+
         public static Color ApplyAlpha(Color color)
         {
             return new Color(color.R, color.G, color.B) * (color.A / 255f);
@@ -365,12 +416,60 @@ namespace Velo
         }
 
         [DllImport("Velo_UI.dll", EntryPoint = "IsSrFocused")]
-        private static extern bool IsSrFocused();
+        private static extern int IsSrFocused();
 
         public static bool IsFocused()
         {
-            return IsSrFocused();
+            return IsSrFocused() == 1;
+            //return true;
         }
+
+        private readonly static bool filterKeysEnabled = new Func<bool>(() =>
+        {
+            string flags = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "Flags", "0");
+            if (int.TryParse(flags, out int result))
+                return (result | 1) == 1;
+            else
+                return false;
+        })();
+        public readonly static TimeSpan RepeatDelay = new Func<TimeSpan>(() =>
+        {
+            if (!filterKeysEnabled)
+            {
+                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardDelay", "1");
+                if (int.TryParse(delay, out int result))
+                    return TimeSpan.FromSeconds(0.25d * (result + 1));
+                else
+                    return TimeSpan.FromSeconds(0.5d);
+            }
+            else
+            {
+                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "AutoRepeatDelay", "1000");
+                if (int.TryParse(delay, out int result))
+                    return TimeSpan.FromMilliseconds(result);
+                else
+                    return TimeSpan.FromSeconds(1d);
+            }
+        })();
+        public readonly static TimeSpan RepeatRate = new Func<TimeSpan>(() =>
+        {
+            if (!filterKeysEnabled)
+            {
+                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardSpeed", "31");
+                if (int.TryParse(delay, out int result))
+                    return TimeSpan.FromSeconds(1d / (result + 2));
+                else
+                    return TimeSpan.FromSeconds(0.03d);
+            }
+            else
+            {
+                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "AutoRepeatRate", "500");
+                if (int.TryParse(delay, out int result))
+                    return TimeSpan.FromMilliseconds(result);
+                else
+                    return TimeSpan.FromSeconds(0.5d);
+            }
+        })();
     }
 
     public static class StreamUtil
@@ -512,7 +611,6 @@ namespace Velo
             return Encoding.ASCII.GetString(bytes);
         }
     }
-
 
     public class CircArray<T>
     {

@@ -6,7 +6,7 @@ using System.IO;
 
 namespace Velo
 {
-    public class AutoUpdate : MenuContext
+    public class AutoUpdate : MenuModule
     {
         private readonly RequestHandler handler;
 
@@ -80,13 +80,14 @@ namespace Velo
         private readonly LayoutW buttonRow;
         private readonly LayoutW popupLayout;
 
-        public AutoUpdateWindow(MenuContext context, VeloUpdate update) :
-            base(context)
+        public AutoUpdateWindow(MenuModule module, VeloUpdate update) :
+            base(module)
         {
-            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", context.Fonts.FontLarge);
+            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
+            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
             Style.ApplyText(popupText);
 
-            yesButton = new LabelW("Yes", context.Fonts.FontLarge);
+            yesButton = new LabelW("Yes", module.Fonts.FontLarge);
             Style.ApplyButton(yesButton);
             yesButton.OnClick = wevent =>
             {
@@ -100,7 +101,7 @@ namespace Velo
                 }
             };
 
-            noButton = new LabelW("No", context.Fonts.FontLarge);
+            noButton = new LabelW("No", module.Fonts.FontLarge);
             Style.ApplyButton(noButton);
             noButton.OnClick = wevent =>
             {

@@ -142,6 +142,7 @@ namespace Velo
         bool BackgroundVisibleHovered { get; set; }
         Func<Color> BackgroundColorHovered { get; set; }
         Action<WEMouseClick> OnClick { get; set; }
+
         bool Crop { get; set; }
         IEnumerable<IWidget> Children { get; }
         void UpdateInput(bool mouseInsideParent, Events events);
@@ -188,6 +189,19 @@ namespace Velo
         public bool BackgroundVisibleHovered { get; set; }
         public Func<Color> BackgroundColorHovered { get; set; }
         public Action<WEMouseClick> OnClick { get; set; }
+        public Action OnLeftClick 
+        { 
+            set
+            {
+                OnClick = wevent =>
+                {
+                    if (wevent.Button == WEMouseClick.EButton.LEFT)
+                    {
+                        value();
+                    }
+                };
+            }
+        }
         public bool Crop { get; set; }
 
         public virtual IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
@@ -316,7 +330,6 @@ namespace Velo
 
         private readonly EOrientation orientation;
         private readonly List<LayoutChild> children;
-        private int fillChild = -1;
 
         public LayoutW(EOrientation orientation)
         {
@@ -324,16 +337,15 @@ namespace Velo
             children = new List<LayoutChild>();
         }
 
-        public void AddChild(Widget child, float size)
+        public int AddChild(Widget child, float size)
         {
             children.Add(new LayoutChild(child, size));
-            if (size == FILL)
-                fillChild = children.Count - 1;
+            return children.Count - 1;
         }
 
-        public void AddSpace(float space)
+        public int AddSpace(float space)
         {
-            AddChild(null, space);
+            return AddChild(null, space);
         }
 
         public void SetSize(int index, float size)
@@ -341,10 +353,14 @@ namespace Velo
             children[index].Size = size;
         }
 
+        public void SetSize(Widget child, float size)
+        {
+            children.Find(test => test.Widget == child).Size = size;
+        }
+
         public void ClearChildren()
         {
             children.Clear();
-            fillChild = -1;
         }
 
         public override IEnumerable<IWidget> Children => children.Select(child => child.Widget).Where(child => child != null);
@@ -353,44 +369,64 @@ namespace Velo
         {
             base.UpdateBounds(crop);
 
-            if (fillChild != -1)
-            {
-                float fillSize =
-                    orientation == EOrientation.HORIZONTAL ?
-                    Size.X : Size.Y;
+            float weightedSize =
+                orientation == EOrientation.HORIZONTAL ?
+                Size.X : Size.Y;
+            float weightSum = 0f;
 
-                int i = 0;
-                foreach (var child in children)
+            int lastWeighted = -1;
+
+            int i = 0;
+            foreach (var child in children)
+            {
+                if (child.Size < 0)
                 {
-                    if (i++ == fillChild)
-                        continue;
-                    fillSize -= child.Size;
+                    weightSum += -child.Size;
+                    lastWeighted = i;
                 }
-                children[fillChild].Size = fillSize;
+                else
+                    weightedSize -= child.Size;
+                i++;
             }
+
+            float remainingWeightedSize = weightedSize;
 
             float p =
                 orientation == EOrientation.HORIZONTAL ?
                 Position.X : Position.Y;
+            i = 0;
             foreach (var child in children)
             {
+                float size = child.Size;
+                if (size < 0)
+                {
+                    if (i == lastWeighted)
+                        size = remainingWeightedSize;
+                    else
+                    {
+                        size = weightedSize * -size / weightSum;
+                        remainingWeightedSize -= size;
+                    }
+                }
                 if (child.Widget != null)
                 {
+                    
                     if (orientation == EOrientation.HORIZONTAL)
                     {
                         child.Widget.Position = new Vector2(p, Position.Y) + Offset;
-                        child.Widget.Size = new Vector2(child.Size, Size.Y);
+                        child.Widget.Size = new Vector2(size, Size.Y);
                     }
                     else
                     {
                         child.Widget.Position = new Vector2(Position.X, p) + Offset;
-                        child.Widget.Size = new Vector2(Size.X, child.Size);
+                        child.Widget.Size = new Vector2(Size.X, size);
                     }
 
                     child.Widget.UpdateBounds(this.crop);
                 }
 
-                p += child.Size;
+                p += size;
+                i++;
             }
         }
 
@@ -600,6 +636,65 @@ namespace Velo
         }
     }
 
+    public class MoveW : HolderW<IWidget>
+    {
+        private TimeSpan lastTime;
+        public float R;
+        private float speed;
+        private Vector2 offset;
+        private Vector2 offsetTarget;
+        private Action onFinish;
+
+        public MoveW(IWidget child)
+        {
+            Child = child;
+            R = 1f;
+        }
+
+        private static float Ease(float r)
+        {
+            return 1f - (1f - r) * (1f - r);
+        }
+
+        public override void Draw(IWidget hovered, float scale, float opacity)
+        {
+            float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
+            lastTime = Velo.RealTime;
+            if (dt > 1f)
+                dt = 1f;
+
+            R += speed * dt;
+            if (R > 1f)
+            {
+                R = 1f;
+                if (onFinish != null)
+                {
+                    onFinish();
+                    onFinish = null;
+                }
+            }
+
+            Child.Offset = offset * (1f - Ease(R)) + offsetTarget * Ease(R);
+
+            base.Draw(hovered, scale, opacity);
+        }
+
+        public void MoveTo(float speed, Vector2 offset, Action onFinish = null)
+        {
+            this.speed = speed;
+            this.offset = this.offset * (1f - Ease(R)) + offsetTarget * Ease(R);
+            offsetTarget = offset;
+            lastTime = Velo.RealTime;
+            R = 0f;
+            this.onFinish = onFinish;
+        }
+
+        public bool Moving()
+        {
+            return R < 1f;
+        }
+    }
+
     public class ScrollW : Widget
     {
         private readonly Widget root;
@@ -778,14 +873,11 @@ namespace Velo
         private int firstEntry;
         private bool reachedEnd = false;
 
-        public int EntryCount { get; set; }
-
-        public ListW(int entryCount, IListEntryFactory<T> factory)
+        public ListW(IListEntryFactory<T> factory)
         {
             this.factory = factory;
             entries = new List<Entry>();
             firstEntry = 0;
-            EntryCount = entryCount;
         }
 
         public bool EntryBackgroundVisible { get; set; }
@@ -804,6 +896,7 @@ namespace Velo
             reachedEnd = false;
 
             IEnumerable<T> elems = factory.GetElems();
+            int elemsCount = elems.Count();
 
             float y = Position.Y;
             int i = 0;
@@ -835,7 +928,7 @@ namespace Velo
                     widget.Size = new Vector2(Size.X, height);
                     widget.Hoverable = EntryHoverable;
                     widget.UpdateBounds(this.crop);
-                    if (i == EntryCount - 1)
+                    if (i == elemsCount - 1)
                         reachedEnd = true;
 
                     j++;
@@ -844,7 +937,7 @@ namespace Velo
                 y += height;
                 i++;
 
-                if (i == EntryCount)
+                if (i == elemsCount)
                     break;
             }
             while (entries.Count > j)
@@ -912,7 +1005,10 @@ namespace Velo
             };
             textDraw.SetFont(font);
             this.text = text;
+            CropText = true;
         }
+
+        public bool CropText { get; set; }
 
         public Vector2 Align
         {
@@ -931,6 +1027,8 @@ namespace Velo
                 updateTextCrop = true;
             }
         }
+
+        public Vector2 MeasureTextSize => textDraw.Font.MeasureString(Text);
 
         public Vector2 Padding { get; set; }
 
@@ -959,17 +1057,20 @@ namespace Velo
 
             if (updateTextCrop)
             {
-                string[] textLines = Text.Split('\n');
-
-                for (int i = 0; i < textLines.Length; i++)
+                if (CropText)
                 {
-                    while (textDraw.Font.MeasureString(textLines[i]).X > Size.X)
-                    {
-                        textLines[i] = textLines[i].Substring(0, textLines[i].Length - 1);
-                    }
-                }
+                    string[] textLines = Text.Split('\n');
 
-                textDraw.Text = string.Join("\n", textLines);
+                    for (int i = 0; i < textLines.Length; i++)
+                    {
+                        while (textDraw.Font.MeasureString(textLines[i]).X > Size.X)
+                        {
+                            textLines[i] = textLines[i].Substring(0, textLines[i].Length - 1);
+                        }
+                    }
+
+                    textDraw.Text = string.Join("\n", textLines);
+                }
                 updateTextCrop = false;
             }
             textDraw.Offset = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Padding + Offset;
@@ -1024,6 +1125,7 @@ namespace Velo
         private float selectedRecR = 1f;
         private float selectedRecLeft = 0f;
         private float selectedRecInitX = 0f;
+        public int ShownCount;
 
         public SelectorButtonW(IEnumerable<string> labels, int selected, CachedFont font) :
             base(EOrientation.HORIZONTAL)
@@ -1036,23 +1138,21 @@ namespace Velo
             {
                 LabelW button = new LabelW(text, font);
                 int j = i;
-                button.OnClick = click =>
+                button.OnLeftClick = () =>
                     {
-                        if (click.Button == WEMouseClick.EButton.LEFT)
-                        {
-                            if (Selected == j)
-                                return;
-                            Selected = j;
-                            selectedRecInitX = selectedRecLeft;
-                            selectedRecR = 0f;
-                            OnSelect?.Invoke(Selected);
-                        }
+                        if (Selected == j)
+                            return;
+                        Selected = j;
+                        selectedRecInitX = selectedRecLeft;
+                        selectedRecR = 0f;
+                        OnSelect?.Invoke(Selected);
                     };
                 button.Hoverable = true;
                 buttons.Add(button);
                 AddChild(button, 0);
                 i++;
             }
+            ShownCount = buttons.Count;
         }
 
         public Action<int> OnSelect { get; set; }
@@ -1071,8 +1171,8 @@ namespace Velo
 
         public override void UpdateBounds(Rectangle crop)
         {
-            for (int i = 0; i < buttons.Count; i++)
-                SetSize(i, Size.X / buttons.Count); 
+            for (int i = 0; i < ShownCount; i++)
+                SetSize(i, Size.X / ShownCount); 
             
             base.UpdateBounds(crop);
 
@@ -1105,9 +1205,9 @@ namespace Velo
             recDraw.FillColor = ButtonBackgroundColorSelected() * opacity * Opacity;
             recDraw.Draw(null);
 
-            int i = 0;
-            foreach (LabelW button in buttons)
+            for (int i = 0; i < ShownCount; i++)
             {
+                LabelW button = buttons[i];
                 button.Color = Color;
                 float recLeft = button.Position.X + button.Offset.X;
                 float recRight = recLeft + button.Size.X;
@@ -1128,7 +1228,6 @@ namespace Velo
                     recDraw.FillColor = ButtonBackgroundColorHovered() * opacity * Opacity;
                 
                 recDraw.Draw(null);
-                i++;
             }
 
             base.Draw(hovered, scale, opacity);
@@ -1268,7 +1367,7 @@ namespace Velo
         private readonly ScrollW scroll;
         private readonly List<TableColumn<T>> columns;
 
-        public TableW(CachedFont font, int entryCount, float headerHeight, ITableEntryFactory<T> factory) :
+        public TableW(CachedFont font, float headerHeight, ITableEntryFactory<T> factory) :
             base(EOrientation.VERTICAL)
         {
             this.factory = factory;
@@ -1276,7 +1375,7 @@ namespace Velo
 
             headers = new LayoutW(EOrientation.HORIZONTAL);
             columns = new List<TableColumn<T>>();
-            list = new ListW<T>(entryCount, this);
+            list = new ListW<T>(this);
             scroll = new ScrollW(list);
 
             AddChild(headers, headerHeight);
@@ -1338,13 +1437,7 @@ namespace Velo
             columns.Add(new TableColumn<T>("", space, null));
         }
 
-        public int RowCount
-        {
-            get => list.EntryCount;
-            set => list.EntryCount = value;
-        }
-
-        public Action<WEMouseClick, Widget, T, int> OnClickRow { get; set; }
+        public Action<Widget, T, int> OnLeftClickRow { get; set; }
 
         public Func<T, int, LayoutW, Widget> Hook { get; set; }
 
@@ -1368,8 +1461,8 @@ namespace Velo
                 else
                     layout.AddSpace(column.Size);
             }
-            if (OnClickRow != null)
-                layout.OnClick = (wevent) => OnClickRow(wevent, layout, elem, i);
+            if (OnLeftClickRow != null)
+                layout.OnLeftClick = () => OnLeftClickRow(layout, elem, i);
 
             if (Hook != null)
                 return Hook(elem, i, layout);

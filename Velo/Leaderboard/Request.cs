@@ -38,6 +38,9 @@ namespace Velo
         GET_WRS_NON_CURATED,
         GET_NON_CURATED_ORDER,
         SEND_MAP_NAME,
+        GET_EVENTS,
+        GET_POPULARITY_ORDER,
+        GET_POPULAR_THIS_WEEK,
         SEND_SPEEDRUN_COM_DATA, // not implemented here
         GET_SPEEDRUN_COM_PLAYERS
     }
@@ -148,11 +151,11 @@ namespace Velo
                             throw e;
                         }
 
-                        ulong time = client.Receive<ulong>();
+                        long time = client.Receive<long>();
 
                         if (cancelToken.IsCancellationRequested)
                             throw new OperationCanceledException();
-                        Time = time;
+                        Time = time * TimeSpan.TicksPerSecond;
 
                         foreach (var request in requests2)
                         {
@@ -251,7 +254,7 @@ namespace Velo
             }
         }
 
-        public ulong Time { get; set; }
+        public long Time { get; set; }
     }
 
     public interface IRequest<T>
@@ -665,7 +668,7 @@ namespace Velo
     {
         public RunInfo RunInfo;
         public int TimeSave;
-        public bool NewWr;
+        public int RecordType;
     }
 
     public class SubmitRunRequest : IRequest<NewPbInfo>
@@ -714,13 +717,13 @@ namespace Velo
 
             int timeSave = client.Receive<int>();
 
-            if (timeSave == -1)
+            if (timeSave < 0)
             {
                 client.VerifyCrc();
-                return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = 0 };
+                return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = timeSave };
             }
 
-            int newWr = client.Receive<int>();
+            int recordType = client.Receive<int>();
 
             byte[] salt = new byte[32];
             byte[] sign = new byte[32];
@@ -816,7 +819,7 @@ namespace Velo
             { 
                 RunInfo = result, 
                 TimeSave = timeSave,
-                NewWr = newWr != 0
+                RecordType = recordType
             };
         }
 
@@ -998,9 +1001,9 @@ namespace Velo
 
     public class GetAddedSinceRequest : IRequest<List<RunInfo>>
     {
-        private readonly ulong time;
+        private readonly long time;
 
-        public GetAddedSinceRequest(ulong time)
+        public GetAddedSinceRequest(long time)
         {
             this.time = time;
         }
@@ -1034,9 +1037,9 @@ namespace Velo
 
     public class GetDeletedSinceRequest : IRequest<List<int>>
     {
-        private readonly ulong time;
+        private readonly long time;
 
-        public GetDeletedSinceRequest(ulong time)
+        public GetDeletedSinceRequest(long time)
         {
             this.time = time;
         }
@@ -1065,6 +1068,114 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.GET_DELETED_SINCE;
+        }
+    }
+
+    public class GetEventsRequest : IRequest<Dictionary<ulong, MapEvent>>
+    {
+        public GetEventsRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public Dictionary<ulong, MapEvent> Run(Client client)
+        {
+            Dictionary<ulong, MapEvent> result = new Dictionary<ulong, MapEvent>();
+            while (true)
+            {
+                ulong mapId = client.Receive<ulong>();
+                long from = client.Receive<long>();
+                long to = client.Receive<long>();
+                ulong categoryType = client.Receive<ulong>();
+                ulong winner = client.Receive<ulong>();
+                if (mapId == ulong.MaxValue)
+                    break;
+                result.Add(mapId, new MapEvent { From = from, To = to, CategoryType = (ECategoryType)categoryType, Winner = winner });
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_EVENTS;
+        }
+    }
+
+    public class GetPopularityOrderRequest : IRequest<List<ulong>>
+    {
+        private readonly int type;
+
+        public GetPopularityOrderRequest(int type)
+        {
+            this.type = type;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(type);
+        }
+
+        public List<ulong> Run(Client client)
+        {
+            List<ulong> result = new List<ulong>();
+            while (true)
+            {
+                ulong current = client.Receive<ulong>();
+                if (current == ulong.MaxValue)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_POPULARITY_ORDER;
+        }
+    }
+
+    public class GetPopularThisWeekRequest : IRequest<List<RunInfo>>
+    {
+        public GetPopularThisWeekRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_POPULAR_THIS_WEEK;
         }
     }
 

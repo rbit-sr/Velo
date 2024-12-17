@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace Velo
 {
-    public class ConsoleM : MenuContext
+    public class ConsoleM : MenuModule
     {
         public ConsoleM() : base("Console", addEnabledSetting: true, enableDim: false)
         {
@@ -22,16 +22,49 @@ namespace Velo
         }
     }
 
+    public enum ArgType
+    {
+        STRING, INT, FLOAT, BOOL
+    }
+
+    public struct Argument
+    {
+        public string Name;
+        public ArgType Type;
+        public bool Optional;
+
+        public Argument(string name, ArgType type, bool optional = false)
+        {
+            Name = name;
+            Type = type;
+            Optional = optional;
+        }
+    }
+
+    public class Command
+    {
+        public readonly string Name;
+        public readonly Argument[] Arguments;
+    }
+
+    public class Parser
+    {
+        public static object[] Parse(Command command)
+        {
+            return null;
+        }
+    }
+
     public class ConsoleWindow : Menu
     {
         private readonly LayoutW layout;
         private readonly ConsoleTextW test;
         private readonly ConsoleEditW test2;
 
-        public ConsoleWindow(MenuContext context) :
-            base(context)
+        public ConsoleWindow(MenuModule module) :
+            base(module)
         {
-            test = new ConsoleTextW(context.Fonts.FontMedium, (text, off) =>
+            test = new ConsoleTextW(module.Fonts.FontMedium, (text, off) =>
             {
                 int space = text.IndexOfAny(new char[] { ' ', '\n' }, off);
                 if (space == -1)
@@ -46,7 +79,7 @@ namespace Velo
             test.Text = test.Text + test.Text + test.Text + test.Text + test.Text;
             test.Text = test.Text + test.Text + test.Text + test.Text + test.Text;
             
-            test2 = new ConsoleEditW(context.Fonts.FontMedium, (text, off) => new KeyValuePair<Color, int>(Color.Red, text.Length));
+            test2 = new ConsoleEditW(module.Fonts.FontMedium, (text, off) => new KeyValuePair<Color, int>(Color.Red, text.Length));
 
             layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
             layout.AddChild(test, LayoutW.FILL);
@@ -223,6 +256,9 @@ namespace Velo
         private readonly CachedFont font;
         private readonly Func<string, int, KeyValuePair<Color, int>> colorFormatter;
 
+        private HotkeySetting leftKey = new HotkeySetting(null, "", (ushort)Keys.Left, autoRepeat: true);
+        private HotkeySetting rightKey = new HotkeySetting(null, "", (ushort)Keys.Right, autoRepeat: true);
+
         private int editPos = 0;
 
         private bool update = false;
@@ -242,8 +278,19 @@ namespace Velo
 
         private void InputChar(char c)
         {
-            text = text.Insert(editPos, c.ToString());
-            editPos++;
+            if (c == (char)Keys.Back)
+            {
+                if (editPos > 0)
+                {
+                    editPos--;
+                    text = text.Remove(editPos, 1);
+                }
+            }
+            else
+            {
+                text = text.Insert(editPos, c.ToString());
+                editPos++;
+            }
             update = true;
         }
 
@@ -314,13 +361,13 @@ namespace Velo
             if (!Visible)
                 return;
 
-            if (Input.IsPressed((ushort)Keys.Left))
+            if (leftKey.Pressed())
             {
                 editPos--;
                 if (editPos < 0)
                     editPos = 0;
             }
-            else if (Input.IsPressed((ushort)Keys.Right))
+            else if (rightKey.Pressed())
             {
                 editPos++;
                 if (editPos > text.Length)
@@ -347,7 +394,7 @@ namespace Velo
             };
 
             Vector2 cursorOff = font.Font.MeasureString(text.Substring(0, editPos));
-            cursor.Position = Position + new Vector2(cursorOff.X, 0f);
+            cursor.Position = Position + new Vector2(cursorOff.X, 5f);
             cursor.Draw(null);
         }
     }

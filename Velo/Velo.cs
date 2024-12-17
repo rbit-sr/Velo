@@ -12,11 +12,15 @@ using SDL2;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
+using CEngine.Util.Input;
+using CSpeedRunner.Library.Bundle;
 
 namespace Velo
 {
     public class Velo
     {
+        public static bool Exiting = false;
+
         private static TimeSpan lastFrameTime = TimeSpan.Zero;
         public static TimeSpan RealTime;
         public static TimeSpan RealDelta;
@@ -28,6 +32,7 @@ namespace Velo
         public static GraphicsDevice GraphicsDevice;
         public static Player MainPlayer = null;
         public static ModuleSolo ModuleSolo = null;
+        public static ModuleLevelEditor ModuleLevelEditor = null; 
         public static bool Ingame = false;
         public static bool IngamePrev = false;
         public static bool Paused = false;
@@ -61,6 +66,10 @@ namespace Velo
 
         private static readonly TimeSpan[] lastTrailUpdate = new TimeSpan[4];
         private static readonly bool[] trailAddPoint = new bool[4];
+
+        private static ICInputMap moduleSoloInputMap = null;
+
+        public static bool WindowMoved = false;
 
         public static Player GetMainPlayer()
         {
@@ -109,6 +118,21 @@ namespace Velo
             return default;
         }
 
+        public static ModuleLevelEditor GetModuleLevelEditor()
+        {
+            if (Main.game.stack.gameInfo == null)
+                return null;
+
+            List<IModule> modules = Main.game.stack.modules;
+            int count = modules.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (modules[i] is ModuleLevelEditor moduleLevelEditor)
+                    return moduleLevelEditor;
+            }
+            return default;
+        }
+
 #pragma warning disable IDE1006
 #pragma warning disable IDE0060
         // It follows a list of interface methods that the modded game client
@@ -125,7 +149,6 @@ namespace Velo
             RealTime = new TimeSpan(DateTime.Now.Ticks);
             MainThreadId = Thread.CurrentThread.ManagedThreadId;
 
-            Input.Init();
             ModuleManager.Instance.Init();
             Storage.Instance.Load();
             SettingsUI.Instance.SendUpdates = false;
@@ -135,6 +158,7 @@ namespace Velo
             Leaderboard.Instance.Enabled.Disable();
             Origins.Instance.Enabled.Disable();
             SettingsUI.Instance.SendUpdates = true;
+            Input.Init();
 
             if (!Verify.VerifyFiles(out Dictionary<string, bool> result))
             {
@@ -150,9 +174,9 @@ namespace Velo
 
             if (Directory.Exists("Velo\\update"))
                 Directory.Delete("Velo\\update", true);
-            if (File.Exists("VeloUpdater.exe"))
+            if (File.Exists("VeloUpdater.exe")) // old version
                 File.Delete("VeloUpdater.exe");
-            if (File.Exists("VeloVerifier.exe"))
+            if (File.Exists("VeloVerifier.exe")) // old version
                 File.Delete("VeloVerifier.exe");
         }
 
@@ -205,6 +229,7 @@ namespace Velo
 
             // cache a few commonly needed values
             ModuleSolo = GetModuleSolo();
+            ModuleLevelEditor = GetModuleLevelEditor();
             Online = IsOnline(); 
             MainPlayer = GetMainPlayer();
             IngamePrev = Ingame;
@@ -215,6 +240,9 @@ namespace Velo
             Paused = CEngineInst.IsPaused && !PauseMenu;
             ItemIdPrev = ItemId;
             ItemId = MainPlayer != null ? MainPlayer.item_id : (byte)0;
+
+            if (ModuleLevelEditor == null)
+                moduleSoloInputMap = null;
            
             if (is_origins() && Ingame && !Paused && PausedPrev && !timerTriggered)
             {
@@ -251,10 +279,192 @@ namespace Velo
 
             ghostPollCounter = 0;
 
+            WindowMoved = false;
+
             if (!originsLoaded)
+            //if (Input.IsPressed((ushort)Keys.F6))
             {
+                /*string[] bundles =
+                {
+                    "StageMetro",
+                    "StageShip",
+                    "StageMansion",
+                    "StagePlaza",
+                    "StageFactory",
+                    "StageThemePark",
+                    "StagePowerplant",
+                    "StageSilo",
+                    "StageLibrary",
+                    "StageNightclub",
+                    "StageZoo",
+                    "StageSki",
+                    "StageCasino",
+                    "StageFestival",
+                    "StageResort",
+                    "StageAirport",
+                    "StageBoostacoke",
+                    "StageVR",
+                    "StageAlley",
+                    "Common",
+                    "Menu",
+                    "OptionsMenu",
+                    "MenuLevel",
+                    "MultiplayerLevelMenu",
+                    "TipMenu",
+                    "Game",
+                    "StoryGame",
+                    "Multiplayer"
+                };
+
+                FileStream stream = File.OpenWrite("test.txt");
+                StreamWriter writer = new StreamWriter(stream);
+                
+                foreach (var bundle in bundles)
+                {
+                    int begin;
+                    int end;
+
+                    begin = 0;
+                    end = ContentManager.ContentCountInBundle(bundle);
+
+                    Dictionary<string, int> namesCount = new Dictionary<string, int>();
+                    List<string> graphicNames = new List<string>();
+                    List<string> soundNames = new List<string>();
+                    var format = (Func<string, int, string>)((path, type) =>
+                    {
+                        path = path.Substring(path.IndexOf('\\') + 1);
+                        path = path.Substring(path.IndexOf('\\') + 1);
+                        path = path.Substring(path.IndexOf('\\') + 1);
+                        path = path.Replace('\\', '_').Replace('-', '_').Replace(' ', '_').Replace('+', '_').Replace('/', '_');
+                        if (path == "out") path = "out_";
+                        if (!namesCount.ContainsKey(path))
+                        {
+                            namesCount.Add(path, 1);
+                        }
+                        else
+                        {
+                            namesCount[path] = namesCount[path] + 1;
+                            path += "_" + namesCount[path];
+                        }
+                        if (type == 0)
+                            graphicNames.Add(path);
+                        else
+                            soundNames.Add(path);
+                        return path;
+                    });
+
+                    var getSoundLabel = (Func<string, string>)(name =>
+                    {
+                        for (int i = 0; i <= 94; i++)
+                        {
+                            if (EditableSoundEmitter.soundFromId(i).Name == name)
+                                return EditableSoundEmitter.soundLabels[i];
+                        }
+                        return "";
+                    });
+
+                    writer.WriteLine("public class " + bundle.Replace("Stage", ""));
+                    writer.WriteLine("{");
+                    writer.WriteLine("public static readonly EBundle Bundle = FromName(\"" + bundle + "\");");
+                    writer.WriteLine();
+
+                    HashSet<ICContent> hashSet = new HashSet<ICContent>();
+                    for (int i = begin; i < end; i++)
+                    {
+                        ICContent content = ContentManager.GetContent(bundle, i);
+                        if (content == null)
+                            continue;
+                        if (!content.IsLoaded)
+                            ContentManager.Load(content, false);
+                        string contentType = "";
+                        if (content is CAnimatedImage)
+                            contentType = "ANIMATED_IMAGE";
+                        else if (content is CAnimation)
+                            contentType = "ANIMATION";
+                        else if (content is CAnimationEvent)
+                            contentType = "ANIMATION_EVENT";
+                        else if (content is CDynamicSpriteImage)
+                            contentType = "DYNAMIC_SPRITE_IMAGE";
+                        else if (content is CEffect)
+                            contentType = "EFFECT";
+                        else if (content is CFont)
+                            contentType = "FONT";
+                        else if (content is CImage)
+                            contentType = "IMAGE";
+                        else if (content is CMultiSpriteAtlas)
+                            contentType = "MULTI_SPRITE_ATLAS";
+                        else if (content is CSpriteAtlas)
+                            contentType = "SPRITE_ATLAS";
+                        else if (content is CSpriteImage)
+                            contentType = "SPRITE_IMAGE";
+                        else if (content is CTexture3D)
+                            contentType = "TEXTURE_3D";
+                        else if (content is CTileImage)
+                            contentType = "TILE_IMAGE";
+                        else if (content is CMusicTrack)
+                            contentType = "MUSIC_TRACK";
+                        else if (content is CSound)
+                            contentType = "SOUND";
+                        else if (content is CSoundCue)
+                            contentType = "SOUND_CUE";
+
+                        if (!hashSet.Contains(content) && content != null && content.Name != null)
+                        {
+                            hashSet.Add(content);
+                            if (content is CAnimatedImage anim)
+                            {
+                                writer.WriteLine("public static readonly Graphic " + format(content.Name + "_" + anim.animations.First().Value.name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + anim.AnimationSize(anim.DefaultAnimation).X + ", Height = " + anim.AnimationSize(anim.DefaultAnimation).Y + " };");
+                            }
+                            else if (content is CSpriteAtlas atlas2)
+                            {
+                                int c = atlas2.atlas.RegionCount;
+                                for (int j = 0; j < c; j++)
+                                {
+                                    writer.WriteLine("public static readonly Graphic " + format(atlas2.atlas.GetRegion(j).Key, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = " + j + ", FrameKey = \"" + atlas2.atlas.GetRegion(j).Key + "\", Width = " + atlas2.atlas.GetRegion(j).Bounds.Width + ", Height = " + atlas2.atlas.GetRegion(j).Bounds.Height + " };");
+                                }
+                            }
+                            else if (content is CMultiSpriteAtlas atlas)
+                            {
+                                foreach (var region in atlas.regions)
+                                {
+                                    writer.WriteLine("public static readonly Graphic " + format(content.Name + "_" + region.region.Key, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = " + atlas.GetIndexForKey(region.region.Key) + ", FrameKey = \"" + region.region.Key + "\", Width = " + region.region.Bounds.Width + ", Height = " + region.region.Bounds.Height + " };");
+                                }
+                            }
+                            else if (content is CSound && getSoundLabel(content.Name) != "")
+                            {
+                                writer.WriteLine("public static readonly Sound " + format(content.Name, 1) + " = new Sound { Type = ESoundType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", SoundLabel = \"" + getSoundLabel(content.Name) + "\" };");
+                            }
+                            else if (content is CImage image)
+                            {
+                                writer.WriteLine("public static readonly Graphic " + format(content.Name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + image.Image.Width + ", Height = " + image.Image.Height + " };");
+                            }
+                            else if (content is CSpriteImage sprite)
+                            {
+                                writer.WriteLine("public static readonly Graphic " + format(content.Name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + sprite.TileWidth + ", Height = " + sprite.TileHeight + " };");
+                            }
+                        }
+                    }
+                    writer.WriteLine();
+                    writer.Write("public static readonly Graphic[] AllGraphics = { ");
+                    foreach (string name in graphicNames)
+                    {
+                        writer.Write(name + ",");
+                    }
+                    writer.WriteLine(" };");
+                    writer.Write("public static readonly Sound[] AllSound = { ");
+                    foreach (string name in soundNames)
+                    {
+                        writer.Write(name + ",");
+                    }
+                    writer.WriteLine(" };");
+                    writer.WriteLine("}");
+                    writer.WriteLine();
+                }
+
+                writer.Close();*/
+
                 ContentManager.LoadBundle("Boss01", false);
-                ContentManager.AddBundle("Boss02", CSpeedRunner.Library.Bundle.Boss02Bundle.Content);
+                ContentManager.AddBundle("Boss02", Boss02Bundle.Content);
                 ContentManager.LoadBundle("Boss02", false);
                 ContentManager.LoadBundle("Boss03", false);
                 originsLoaded = true;
@@ -279,7 +489,8 @@ namespace Velo
 
         public static void on_exit()
         {
-            Input.RemoveLLHooks();
+            Exiting = true;
+            Input.RemoveHooks();
         }
 
         public static void AddOnPreUpdate(Action action)
@@ -353,7 +564,8 @@ namespace Velo
                 SettingsUI.Instance.Enabled.Value.Enabled ||
                 Leaderboard.Instance.Enabled.Value.Enabled ||
                 AutoUpdate.Instance.Enabled.Value.Enabled ||
-                Origins.Instance.Enabled.Value.Enabled;
+                Origins.Instance.Enabled.Value.Enabled ||
+                ModPortal.Instance.Enabled.Value.Enabled;
         }
 
         // hooked into FNA.dll's event loop
@@ -361,8 +573,6 @@ namespace Velo
         {
             SettingsUI.Instance.SdlPoll(ref sdl_event);
         }
-
-        public static TimeSpan test;
 
         // called in Player.Reset()
         // gets called twice on pressing reset for some reason
@@ -474,7 +684,7 @@ namespace Velo
 
         public static float get_wall_jump_strength(float jumpStrength, Player player)
         {
-            if (player is PlayerBot)
+            if (player is PlayerBot || player.gameInfo.Options[(int)EGameOptions.SUPER_SPEED_RUNNERS])
                 return jumpStrength;
 
             if (Online)
@@ -501,10 +711,7 @@ namespace Velo
 
         public static float get_grapple_cooldown()
         {
-            if (Online)
-                return OfflineGameMods.Instance.GrappleCooldown.DefaultValue;
-            
-            return OfflineGameMods.Instance.GrappleCooldown.Value;
+            return OfflineGameMods.Instance.GetGrappleCooldown();
         }
 
         public static float get_slide_cooldown()
@@ -523,6 +730,11 @@ namespace Velo
             return
                 OfflineGameMods.Instance.FixGrappleGlitches.Value.Enabled &&
                 !Input.IsDown(OfflineGameMods.Instance.FixGrappleGlitches.Value.Hotkey);
+        }
+
+        public static bool get_fix_bounce_glitch()
+        {
+            return OfflineGameMods.Instance.GetFixBounceGlitch();
         }
 
         public static bool get_enable_old_moonwalk()
@@ -607,8 +819,10 @@ namespace Velo
             measure("physics");
         }
 
-        public static int event_id()
+        public static int event_id(int id)
         {
+            if (Miscellaneous.Instance.Event.Value == EEvent.DEFAULT)
+                return id;
             return Miscellaneous.Instance.Event.Value.Id();
         }
 
@@ -763,6 +977,16 @@ namespace Velo
             return color;
         }
 
+        public static Color get_hovered_color()
+        {
+            return Miscellaneous.Instance.HoveredColor.Value;
+        }
+
+        public static Color get_resizing_color()
+        {
+            return Miscellaneous.Instance.ResizingColor.Value;
+        }
+
         public static bool draw_chunk(CBufferedTileMapLayer tilemap, Vector2 pos, int x, int y)
         {
             return TileMap.Instance.Draw(tilemap, pos, x, y);
@@ -904,9 +1128,16 @@ namespace Velo
                 Input.PollLLHooks();
         }
 
+        private static bool enabled_reduced_input_delay = false;
+
+        public static void enable_reduced_input_delay(bool enable)
+        {
+            enabled_reduced_input_delay = enable;
+        }
+
         public static bool is_down(bool isDown, Microsoft.Xna.Framework.Input.Keys key)
         {
-            if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value)
+            if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value || !enabled_reduced_input_delay)
                 return isDown;
             return Input.IsKeyDown((byte)key);
         }
@@ -926,6 +1157,72 @@ namespace Velo
         public static void set_mouse_inputs(Player player)
         {
             Miscellaneous.Instance.SetMouseInputs(player);
+        }
+
+        public static bool level_editor_reset_released()
+        {
+            if (!Miscellaneous.Instance.UseResetBind.Value)
+                return ModuleLevelEditor.inputMap.IsReleased("R");
+
+            if (moduleSoloInputMap == null)
+                moduleSoloInputMap = CEngineInst.GetInputMap(InputMapProvider.GetModuleSoloInputMap(Main.game.stack));
+            
+            return moduleSoloInputMap.IsReleased("ps_reset_practice_lap");
+        }
+
+        public static bool level_editor_select_frontmost_object()
+        {
+            return Miscellaneous.Instance.SelectFrontmostObject.Value;
+        }
+
+        public static bool level_editor_select_frontmost_graphic()
+        {
+            return Miscellaneous.Instance.SelectFrontmostGraphic.Value;
+        }
+
+        private class ColComparer : IComparer<CCollisionPair>
+        {
+            public Func<CCollisionPair, CCollisionPair, int> Func;
+
+            public int Compare(CCollisionPair x, CCollisionPair y)
+            {
+                return Func(x, y);
+            }
+        }
+
+        public static void sort_collisions_by_target(CCollisionPair[] collisions, int count)
+        {
+            Dictionary<CActor, int> actorIndices = new Dictionary<CActor, int>();
+            for (int i = 0; i < CEngineInst.World.CollisionEngine.ActorCount; i++)
+            {
+                actorIndices.Add(CEngineInst.World.CollisionEngine.actors[i], i);
+            }
+
+            Array.Sort(collisions, 0, count, new ColComparer
+            {
+                Func = (c1, c2) =>
+                {
+                    if (
+                    c1 != null && c2 != null &&
+                    c1.target is CActor a1 && c2.target is CActor a2 &&
+                    actorIndices.TryGetValue(a1, out int id1) && actorIndices.TryGetValue(a2, out int id2)
+                    )
+                    {
+                        return id1.CompareTo(id2);
+                    }
+                    return -1;
+                }
+            });
+        }
+
+        public static int save_actors_count(int count)
+        {
+            return count;
+        }
+
+        public static void save_additional_actors(BinaryWriter writer)
+        {
+            
         }
 
         public static void measure(string label)

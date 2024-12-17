@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 
 namespace Velo
 {
@@ -118,19 +119,33 @@ namespace Velo
                 {
                     requests.RemoveAt(i);
                     RunsDatabase.Instance.Remove(request.TempInfo.Id, false);
-                    if (result.RunInfo.Id != -1)
+                    if (result.TimeSave >= 0)
                     {
                         RunsDatabase.Instance.Add(result.RunInfo, true);
                         string message;
-                        if (result.NewWr)
-                            message = "New WR!";
-                        else
+                        if (result.RecordType == 0)
                             message = "New PB!";
+                        else if (result.RecordType == 1)
+                            message = "New event PB!";
+                        else if (result.RecordType == 2)
+                            message = "New WR!";
+                        else if (result.RecordType == 3)
+                            message = "New event WR!";
+                        else
+                            message = "";
 
                         if (result.TimeSave > 0)
                             message += " (-" + Util.FormatTime(result.TimeSave, Leaderboard.Instance.TimeFormat.Value) + ")";
 
                         Notifications.Instance.PushNotification(message);
+                    }
+                    if (result.TimeSave == -2)
+                    {
+                        Notifications.Instance.PushNotification("This map currently has an active event.\nPlease wait until it begins...", Color.LightGreen, TimeSpan.FromSeconds(5d));
+                    }
+                    if (result.TimeSave == -3)
+                    {
+                        Notifications.Instance.PushNotification("An event for this map has just finished.\nPlease wait until at least one hour has passed...", Color.LightGreen, TimeSpan.FromSeconds(5d));
                     }
                     request.DeleteFile();
                 }
@@ -171,8 +186,16 @@ namespace Velo
                 return;
 
             RunInfo pb = RunsDatabase.Instance.GetPB(Steamworks.SteamUser.GetSteamID().m_SteamID, recording.Info.Category);
+            Category eventCategory = recording.Info.Category;
+            eventCategory.TypeId = (ulong)ECategoryType.EVENT;
+            RunInfo eventPb = RunsDatabase.Instance.GetPB(Steamworks.SteamUser.GetSteamID().m_SteamID, eventCategory);
 
-            if (pb.Id != -1 && recording.Info.RunTime >= pb.RunTime)
+            MapEvent mapEvent = RunsDatabase.Instance.GetEvent(recording.Info.Category.MapId);
+            bool isEventCategory = (ECategoryType)recording.Info.Category.TypeId == mapEvent.CategoryType;
+            bool betterThanPb = pb.Id == -1 || recording.Info.RunTime < pb.RunTime;
+            bool betterThanEventPb = eventPb.Id == -1 || recording.Info.RunTime < eventPb.RunTime;
+
+            if (!(isEventCategory && betterThanEventPb && !mapEvent.CurrentlyNotRunning()) && !betterThanPb)
                 return;
 
             string message = "Submitting as ";

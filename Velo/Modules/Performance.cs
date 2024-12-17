@@ -116,7 +116,7 @@ namespace Velo
 
             FixInputDelay.Tooltip =
                 "There is a consistent input delay of at least 1 frame. " +
-                "This setting might break keyboard inputs entirely in some rare occasions, just open and close the settings UI or press ESC in these cases to fix.";
+                "This setting might break keyboard inputs entirely in some rare occasions, just press ESC or unfocus the game in these cases to fix.";
             DisableSteamInputApi.Tooltip =
                 "Disables the Steam input API. Might break controller inputs.";
             EnableControllerId.Tooltip =
@@ -444,7 +444,7 @@ namespace Velo
             {
                 try
                 {
-                    while (Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, poller.channel))
+                    while (!Velo.Exiting && Steamworks.SteamNetworking.IsP2PPacketAvailable(out uint num, poller.channel))
                     {
                         NetIncomingMessage msg;
                         lock (pools)
@@ -459,7 +459,9 @@ namespace Velo
                         }
                     }
 
+                    if (Velo.Exiting) break;
                     Task.Delay(1).Wait();
+                    if (Velo.Exiting) break;
                 }
                 catch (Exception) { }
             }

@@ -4,7 +4,7 @@ using System;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
 using System.Collections.Generic;
-using System.Runtime.Remoting.Contexts;
+using System.Linq;
 
 namespace Velo
 {
@@ -39,6 +39,34 @@ namespace Velo
             button.ButtonBackgroundColor = () => SettingsUI.Instance.ButtonColor.Value.Get();
             button.ButtonBackgroundColorHovered = () => SettingsUI.Instance.ButtonHoveredColor.Value.Get();
             button.ButtonBackgroundColorSelected = () => SettingsUI.Instance.ButtonSelectedColor.Value.Get();
+        }
+
+        public static void ApplyList<T>(ListW<T> list) where T : struct
+        {
+            list.EntryBackgroundVisible = true;
+            list.EntryBackgroundColor1 = SettingsUI.Instance.EntryColor1.Value.Get;
+            list.EntryBackgroundColor2 = SettingsUI.Instance.EntryColor2.Value.Get;
+            list.EntryHoverable = true;
+            list.EntryBackgroundColorHovered = SettingsUI.Instance.EntryHoveredColor.Value.Get;
+        }
+
+        public static void ApplyScroll(ScrollW scroll)
+        {
+            scroll.ScrollBarColor = SettingsUI.Instance.ButtonColor.Value.Get;
+            scroll.ScrollBarWidth = SettingsUI.Instance.ScrollBarWidth.Value;
+        }
+
+        public static void ApplyTable<T>(TableW<T> table) where T : struct
+        {
+            table.HeaderAlign = new Vector2(0f, 0.5f);
+            table.HeaderColor = SettingsUI.Instance.HeaderTextColor.Value.Get;
+            table.EntryBackgroundVisible = true;
+            table.EntryBackgroundColor1 = SettingsUI.Instance.EntryColor1.Value.Get;
+            table.EntryBackgroundColor2 = SettingsUI.Instance.EntryColor2.Value.Get;
+            table.EntryHoverable = true;
+            table.EntryBackgroundColorHovered = SettingsUI.Instance.EntryHoveredColor.Value.Get;
+            table.ScrollBarColor = SettingsUI.Instance.ButtonColor.Value.Get;
+            table.ScrollBarWidth = SettingsUI.Instance.ScrollBarWidth.Value;
         }
     }
 
@@ -95,12 +123,12 @@ namespace Velo
 
     public abstract class Menu : HolderW<Widget>, IMenu
     {
-        protected MenuContext context;
+        protected MenuModule module;
 
-        public Menu(MenuContext context) :
+        public Menu(MenuModule module) :
             base()
         {
-            this.context = context;
+            this.module = module;
         }
 
         public abstract void Refresh();
@@ -108,12 +136,12 @@ namespace Velo
 
     public abstract class RequestingMenu : HolderW<Widget>, IMenu
     {
-        protected RequestingMenuContext context;
+        protected RequestingMenuModule module;
         
-        public RequestingMenu(RequestingMenuContext context) :
+        public RequestingMenu(RequestingMenuModule module) :
             base()
         {
-            this.context = context;
+            this.module = module;
         }
 
         public abstract void Refresh();
@@ -130,7 +158,7 @@ namespace Velo
         public CachedFont FontConsole;
     }
 
-    public abstract class MenuContext<T> : ToggleModule where T : class, IMenu
+    public abstract class MenuModule<T> : ToggleModule where T : class, IMenu
     {
         protected WidgetContainer container;
         protected TransitionW<Widget> menu;
@@ -145,7 +173,7 @@ namespace Velo
 
         public T Menu => page.Child;
 
-        public MenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : base(name, addEnabledSetting)
+        public MenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : base(name, addEnabledSetting)
         {
             this.enableDim = enableDim;
             
@@ -164,7 +192,7 @@ namespace Velo
 
             Fonts = new MenuFonts();
             
-            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15");
+            FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15,UI\\Font\\NotoSansCJKtc-Regular.otf:15,UI\\Font\\NotoSansCJKkr-Regular.otf:15");
             FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
             FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\NotoSans-Regular.ttf:24,UI\\Font\\NotoSansCJKtc-Regular.otf:24,UI\\Font\\NotoSansCJKkr-Regular.otf:24");
             FontCache.Get(ref Fonts.FontTitle, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
@@ -191,9 +219,9 @@ namespace Velo
                 menu.GoTo(null);
         }
 
-        public void ChangePage(T newPage)
+        public void ChangePage(T newPage, bool pushBackStack = true)
         {
-            if (page.Child != null)
+            if (page.Child != null && pushBackStack)
                 backStack.Push(page.Child);
             page.TransitionTo(newPage, 8f, Vector2.Zero);
 
@@ -205,25 +233,39 @@ namespace Velo
             backStack.Push(menu);
         }
 
+        public void PopBackStack()
+        {
+            backStack.Pop();
+        }
+
         public void PopPage()
         {
             page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
             OnGoBackPage();
         }
 
+        protected static T SelectT(IWidget widget)
+        {
+            if (widget is T)
+                return widget as T;
+            if (widget is TransitionW<T>)
+                return (widget as TransitionW<T>).Child;
+            return null;
+        }
+
         public virtual void OnGoToNewPage()
         {
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public virtual void OnChangePage()
         {
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public virtual void OnGoBackPage()
         {
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public override void PostRender()
@@ -272,18 +314,18 @@ namespace Velo
         public abstract T GetStartMenu();
     }
 
-    public abstract class MenuContext : MenuContext<Menu>
+    public abstract class MenuModule : MenuModule<Menu>
     {
-        protected MenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : 
+        protected MenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : 
             base(name, addEnabledSetting, enableDim, menuPos, menuSize)
         {
 
         }
     }
 
-    public abstract class RequestingMenuContext : MenuContext<RequestingMenu>
+    public abstract class RequestingMenuModule : MenuModule<RequestingMenu>
     {
-        public RequestingMenuContext(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) :
+        public RequestingMenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) :
             base(name, addEnabledSetting, enableDim, menuPos, menuSize)
         {
 
@@ -292,32 +334,32 @@ namespace Velo
         public override void OnGoToNewPage()
         {
             CancelAllRequests();
-            Menu.ResetState();
-            Menu.Rerequest();
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.ResetState());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public override void OnChangePage()
         {
             CancelAllRequests();
-            Menu.Rerequest();
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public override void OnGoBackPage()
         {
             CancelAllRequests();
-            Menu.Rerequest();
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public void ClearCacheRerequest()
         {
             CancelAllRequests();
             ClearCache();
-            Menu.ResetState();
-            Menu.Rerequest();
-            Menu.Refresh();
+            menuStack.Children.Select(SelectT).ForEach(c => c?.ResetState());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
+            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
         }
 
         public abstract void CancelAllRequests();

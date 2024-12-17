@@ -45,7 +45,7 @@ namespace Velo
                 Category = Category.Get(),
                 WasWR = WasWR,
                 HasComments = HasComments,
-                NewGCD = 0,
+                PhysicsFlags = 0,
                 Place = Place,
                 Dist = Dist,
                 GroundDist = GroundDist,

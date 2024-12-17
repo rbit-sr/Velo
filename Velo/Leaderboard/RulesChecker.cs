@@ -8,6 +8,8 @@ using System;
 using Microsoft.Xna.Framework;
 using System.Windows.Forms;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Velo
 {
@@ -54,6 +56,8 @@ namespace Velo
         NON_VELO_CURATED, // map is neither official nor curated workshop
         ILLEGAL_GAME_OPTION, // illegal game option
         PAUSED, // player paused the game
+        WINDOW_MOVED, // game window was moved
+        NOT_FOCUED, // game window was not focused
         FINISH_LINE_DRIFT, // finish line drifted by more than 100
         PRIMARY_CHECKPOINT_MISSED, // player missed a primary checkpoint
         SECONDARY_AND_TERNARY_CHECKPOINT_MISSED, // player missed a secondary checkpoint and a ternary checkpoint
@@ -224,6 +228,9 @@ namespace Velo
 
         private int frames = 0;
 
+        private bool lagFrame = false;
+        private bool unfocused = false;
+
         public RulesChecker()
         {
             Cooldowns.Add(EViolations.ITEM_USED, new Cooldown("item was used"));
@@ -247,7 +254,9 @@ namespace Velo
                 primaryI = primaryI,
                 secondaryI = secondaryI,
                 ternaryI = ternaryI,
-                frames = frames
+                frames = frames,
+                lagFrame = lagFrame,
+                unfocused = unfocused
             };
         }
 
@@ -368,10 +377,6 @@ namespace Velo
             if (Velo.GhostFallTileCollision)
                 Violations[(int)EViolations.GHOST_HIT_FALL_TILE] = "ghost destroyed a fall tile";
 
-            //double frameTime = CEngine.CEngine.Instance.gameTime.ElapsedGameTime.TotalSeconds;
-            //if (frames > 2 && frameTime > 0.25)
-            // Violations[(int)EViolations.LAG_FRAME] = "lag frame (" + frameTime + "ms)";
-
             if (OfflineGameMods.Instance.IsPlaybackRunning())
             {
                 if (OfflineGameMods.Instance.IsOwnPlaybackFromLeaderboard())
@@ -410,7 +415,18 @@ namespace Velo
 
             if (Velo.PauseMenu)
                 SetCooldown(EViolations.PAUSED, 5f);
-                           
+
+            if (Input.WindowDragging() == 1)
+                Violations[(int)EViolations.WINDOW_MOVED] = "game window was moved";
+
+            double frameTime = CEngine.CEngine.Instance.gameTime.ElapsedGameTime.TotalSeconds;
+            if (frames > 2 && frameTime > 0.15)
+                lagFrame = true;
+            if (!Input.Focused)
+                unfocused = true;
+            if (lagFrame && unfocused)
+                Violations[(int)EViolations.NOT_FOCUED] = "game window was not focused";
+
             CAABB hitboxAABB = (CAABB)Velo.MainPlayer.actor.Collision;
             RectangleF hitbox = new RectangleF(hitboxAABB.MinX, hitboxAABB.MinY, hitboxAABB.Width, hitboxAABB.Height);
 
@@ -440,6 +456,8 @@ namespace Velo
             secondaryI = 0;
             ternaryI = 0;
             frames = 0;
+            lagFrame = false;
+            unfocused = false;
 
             if (reset)
             {

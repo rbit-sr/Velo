@@ -8,7 +8,7 @@ using System.Linq;
 
 namespace Velo
 {
-    public class Origins : MenuContext
+    public class Origins : MenuModule
     {
         public ulong Selected = ulong.MaxValue;
         public ulong Current = ulong.MaxValue;
@@ -80,7 +80,7 @@ namespace Velo
 
         public void TouchFinishBomb(Player player)
         {
-            if (player != Velo.MainPlayer)
+            if (player != Velo.MainPlayer || Velo.ModuleSolo == null)
                 return;
             if (!finished)
             {
@@ -160,17 +160,14 @@ namespace Velo
             Padding = new Vector2(10f, 0f);
             Style.ApplyText(this);
 
-            OnClick = (wevent) =>
+            OnLeftClick = () =>
             {
-                if (wevent.Button == WEMouseClick.EButton.LEFT)
+                if (mapId == Origins.Instance.Selected)
+                    Origins.Instance.SelectOrigins(ulong.MaxValue);
+                else
                 {
-                    if (mapId == Origins.Instance.Selected)
-                        Origins.Instance.SelectOrigins(ulong.MaxValue);
-                    else
-                    {
-                        Origins.Instance.SelectOrigins(mapId);
-                        exitMenu();
-                    }
+                    Origins.Instance.SelectOrigins(mapId);
+                    exitMenu();
                 }
             };
         }
@@ -194,7 +191,7 @@ namespace Velo
         private readonly ListW<OriginMap> list;
         private readonly LayoutW layout;
 
-        public OriginsMenu(MenuContext context) :
+        public OriginsMenu(MenuModule context) :
             base(context)
         {
             layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
@@ -204,19 +201,12 @@ namespace Velo
                 Color = SettingsUI.Instance.HeaderTextColor.Value.Get
             };
 
-            list = new ListW<OriginMap>((int)(Map.ORIGINS_END - Map.ORIGINS_START), this)
-            {
-                EntryBackgroundVisible = true,
-                EntryBackgroundColor1 = SettingsUI.Instance.EntryColor1.Value.Get,
-                EntryBackgroundColor2 = SettingsUI.Instance.EntryColor2.Value.Get,
-                EntryHoverable = true,
-                EntryBackgroundColorHovered = SettingsUI.Instance.EntryHoveredColor.Value.Get
-            };
-            scroll = new ScrollW(list)
-            {
-                ScrollBarColor = SettingsUI.Instance.ButtonColor.Value.Get,
-                ScrollBarWidth = SettingsUI.Instance.ScrollBarWidth.Value
-            };
+            list = new ListW<OriginMap>(this);
+            Style.ApplyList(list);
+
+            scroll = new ScrollW(list);
+            Style.ApplyScroll(scroll);
+
             info = new LabelW("", context.Fonts.FontMedium)
             {
                 Align = new Vector2(0f, 0.5f),
@@ -243,7 +233,7 @@ namespace Velo
 
         public Widget Create(OriginMap elem, int i)
         {
-            return new OriginMapEntry(context.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
+            return new OriginMapEntry(module.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => module.ExitMenu(animation: false));
         }
 
         public IEnumerable<OriginMap> GetElems()

@@ -29,6 +29,8 @@ namespace Velo
         public ColorTransitionSetting PanelBackgroundColor;
         public ColorTransitionSetting DimColor;
 
+        public BoolSetting PopularThisWeekCompacted;
+
         private bool initialized = false;
 
         private string selectedDriver = "";
@@ -42,6 +44,9 @@ namespace Velo
 
             DisableWarning = AddBool("disable warning", false);
             DisableWarning.Hidden = true;
+
+            PopularThisWeekCompacted = AddBool("popular this week compacted", false);
+            PopularThisWeekCompacted.Hidden = true;
 
             DisableKeyInput = AddBool("disable key input", false);
             ControllerIndex = AddInt("controller index", 0, 0, 3);
@@ -72,7 +77,14 @@ namespace Velo
         {
             base.Init();
 
-            SetHwnd(CEngine.CEngine.Instance.Game.Window.Handle);
+            IntPtr sdlWin = CEngine.CEngine.Instance.Game.Window.Handle;
+
+            SDL.SDL_SysWMinfo sysWMInfo = new SDL.SDL_SysWMinfo();
+            SDL.SDL_GetVersion(out SDL.SDL_version version);
+            sysWMInfo.version = version;
+            SDL.SDL_GetWindowWMInfo(sdlWin, ref sysWMInfo);
+
+            SetHwnd(sysWMInfo.info.win.window);
         }
 
         public override void PreUpdate()

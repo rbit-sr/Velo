@@ -2,6 +2,8 @@
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Velo
 {
@@ -148,31 +150,42 @@ namespace Velo
         public static extern void InitLLKeyboardHook();
         [DllImport("Velo_UI.dll", EntryPoint = "InitLLMouseHook")]
         public static extern void InitLLMouseHook();
-        [DllImport("Velo_UI.dll", EntryPoint = "RemoveLLHooks")]
-        public static extern void RemoveLLHooks();
+        [DllImport("Velo_UI.dll", EntryPoint = "InitWndProcHook")]
+        public static extern void InitWndProcHook();
+        [DllImport("Velo_UI.dll", EntryPoint = "RemoveHooks")]
+        public static extern void RemoveHooks();
         [DllImport("Velo_UI.dll", EntryPoint = "PollLLHooks")]
         public static extern void PollLLHooks();
 
         [DllImport("Velo_UI.dll", EntryPoint = "IsDown")]
         public static extern bool IsKeyDown(byte key);
+        [DllImport("Velo_UI.dll", EntryPoint = "ClearKeys")]
+        public static extern void ClearKeys();
+
+        [DllImport("Velo_UI.dll", EntryPoint = "WindowDragging")]
+        public static extern int WindowDragging();
 
         public static void Init()
         {
             InitLLKeyboardHook();
-            AppDomain.CurrentDomain.ProcessExit += (_, __) => RemoveLLHooks();
-            AppDomain.CurrentDomain.DomainUnload += (_, __) => RemoveLLHooks();
-            System.Windows.Forms.Application.ApplicationExit += (_, __) => RemoveLLHooks();
-            Console.CancelKeyPress += (_, __) => RemoveLLHooks();
+            InitWndProcHook();
+            AppDomain.CurrentDomain.ProcessExit += (_, __) => RemoveHooks();
+            AppDomain.CurrentDomain.DomainUnload += (_, __) => RemoveHooks();
+            System.Windows.Forms.Application.ApplicationExit += (_, __) => RemoveHooks();
+            Console.CancelKeyPress += (_, __) => RemoveHooks();
         }
 
         private static bool first = true;
         private static bool focusedPrev = false;
         private static bool initializedLLMouseHook = false;
 
+        public static bool Focused = false;
+
         public static void Update()
         {
+            Focused = Util.IsFocused();
             if (first)
-                focusedPrev = Util.IsFocused();
+                focusedPrev = Focused;
 
             keysPrev = keysCurr;
             keysCurr = Keyboard.GetState();
@@ -180,7 +193,7 @@ namespace Velo
             keysOemPrev = keysOemCurr;
             keysOemCurr = new KeyboardOemState();
 
-            if (Util.IsFocused())
+            if (Focused)
             {
                 PollLLHooks(); 
                 keysOemCurr.Oem1 = IsKeyDown((byte)System.Windows.Forms.Keys.Oem1);
@@ -218,9 +231,16 @@ namespace Velo
             GamePadButtonsDown[(int)EGamePadButton.DPAD_UP] = gamePadCurr.DPad.Up == ButtonState.Pressed;
             GamePadButtonsDown[(int)EGamePadButton.DPAD_DOWN] = gamePadCurr.DPad.Down == ButtonState.Pressed;
 
-            if (IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev || focusedPrev != Util.IsFocused())
+            if (!Focused)
+            {
+                RemoveHooks();
+                ClearKeys();
+            }
+
+            if (IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev || (Focused && !focusedPrev))
             {
                 InitLLKeyboardHook();
+                InitWndProcHook();
                 if (initializedLLMouseHook || IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev)
                 {
                     InitLLMouseHook();
@@ -228,7 +248,7 @@ namespace Velo
                 }
             }
 
-            focusedPrev = Util.IsFocused();
+            focusedPrev = Focused;
 
             first = false;
         }

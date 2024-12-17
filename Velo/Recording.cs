@@ -277,7 +277,10 @@ namespace Velo
             Info.Category.TypeId = (ulong)Rules.CategoryType;
             Info.RunTime = (int)(time * 1000f);
             Info.CreateTime = DateTimeOffset.Now.ToUnixTimeSeconds();
-            Info.NewGCD = OfflineGameMods.Instance.GrappleCooldown.Value == 0.2f ? (byte)1 : (byte)0;
+            if (OfflineGameMods.Instance.GetGrappleCooldown() == 0.2f)
+                Info.PhysicsFlags |= RunInfo.FLAG_NEW_GCD;
+            if (OfflineGameMods.Instance.GetFixBounceGlitch())
+                Info.PhysicsFlags |= RunInfo.FLAG_FIX_BOUNCE_GLITCH;
             Info.Dist = (int)(Stats.Dist + 0.5);
             Info.GroundDist = (int)(Stats.GroundDist + 0.5);
             Info.SwingDist = (int)(Stats.SwingDist + 0.5);

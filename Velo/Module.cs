@@ -121,6 +121,27 @@ namespace Velo
                 modulesPostRender[i].PostRender();
         }
 
+        public static void Swap<T>(IList<T> list, T A, T B)
+        {
+            T temp = list[list.IndexOf(A)];
+            list[list.IndexOf(A)] = list[list.IndexOf(B)];
+            list[list.IndexOf(B)] = temp;
+        }
+
+        public void EnsureOrder(Module first, Module second)
+        {
+            if (modules.IndexOf(first) > modules.IndexOf(second))
+                Swap(modules, first, second);
+            if (modulesPreUpdate.IndexOf(first) > modulesPreUpdate.IndexOf(second))
+                Swap(modulesPreUpdate, first, second);
+            if (modulesPostUpdate.IndexOf(first) > modulesPostUpdate.IndexOf(second))
+                Swap(modulesPostUpdate, first, second);
+            if (modulesPreRender.IndexOf(first) > modulesPreRender.IndexOf(second))
+                Swap(modulesPreRender, first, second);
+            if (modulesPostRender.IndexOf(first) > modulesPostRender.IndexOf(second))
+                Swap(modulesPostRender, first, second);
+        }
+
         public JsonElement ToJson(ToJsonArgs args)
         {
             return new JsonObject(2).

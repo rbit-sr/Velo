@@ -3,8 +3,10 @@ using CEngine.World.Actor;
 using CEngine.World.Collision;
 using Microsoft.Xna.Framework;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Windows.Forms;
 
 namespace Velo
@@ -118,6 +120,17 @@ namespace Velo
         public EnumSetting<EInput> X2Button;
         public BoolSetting OverwriteInputs;
 
+        public BoolSetting EnableLayering;
+        public BoolSetting SelectFrontmostObject;
+        public BoolSetting SelectFrontmostGraphic;
+        public BoolSetting EnableBookcase;
+        public BoolSetting EnableDiscoLight;
+        public BoolSetting EnableDiscoGlow;
+        public BoolSetting EnableLeaves;
+        public BoolSetting UseResetBind;
+        public ColorSetting HoveredColor;
+        public ColorSetting ResizingColor;
+
         public bool contentsReloaded = false;
 
         private bool wasItemPressed = false;
@@ -185,6 +198,41 @@ namespace Velo
             X1Button = AddEnum("X1 button", EInput.NONE, labels);
             X2Button = AddEnum("X2 button", EInput.NONE, labels);
             OverwriteInputs = AddBool("overwrite inputs", false);
+
+            NewCategory("level editor");
+            EnableLayering = AddBool("enable layering", false);
+            SelectFrontmostObject = AddBool("select frontmost object", false);
+            SelectFrontmostGraphic = AddBool("select frontmost graphic", false);
+            EnableBookcase = AddBool("enable bookcase", false);
+            EnableDiscoLight = AddBool("enable disco light", false);
+            EnableDiscoGlow = AddBool("enable disco glow", false);
+            EnableLeaves = AddBool("enable leaves", false);
+            UseResetBind = AddBool("use reset bind", false);
+            HoveredColor = AddColor("hovered color", Color.Yellow * 0.4f);
+            ResizingColor = AddColor("resizing color", Color.Yellow * 0.8f);
+
+            EnableLayering.Tooltip =
+                "Hover over an object and press a number key (0-9) to move that object to the corresponding layer. " +
+                "Without holding SHIFT, 0 moves it behind all objects. " +
+                "With holding SHIFT, the situation is reversed and 0 moves it in front of all objects.";
+            SelectFrontmostObject.Tooltip =
+                "When hovering over objects, always select the frontmost one (highest layer / last placed).";
+            SelectFrontmostGraphic.Tooltip =
+                "When hovering over graphics, always select the frontmost one (highest layer / last placed).";
+            EnableBookcase.Tooltip =
+                "Allows you to place bookcase objects when using Library theme that are otherwise inaccessible.";
+            EnableDiscoLight.Tooltip =
+                "Allows you to place disco light objects when using Nightclub theme that are otherwise inaccessible.";
+            EnableDiscoGlow.Tooltip =
+                "Allows you to place disco glow objects when using Nightclub theme that are otherwise inaccessible.";
+            EnableLeaves.Tooltip =
+                "Allows you to place leaves that are otherwise inaccessible.";
+            UseResetBind.Tooltip =
+                "Make your reset bind match the bind you assigned for resetting practice laps instead of R only.";
+            HoveredColor.Tooltip =
+                "object highlighting color while hovering over it";
+            ResizingColor.Tooltip =
+                "graphic highlighting color while resizing it";
         }
 
         public static Miscellaneous Instance = new Miscellaneous();
@@ -219,6 +267,78 @@ namespace Velo
                         }
                     }
                 }
+            }
+
+            if (Velo.ModuleLevelEditor != null && EnableLayering.Value)
+            {
+                List<CActor> actors = Velo.CEngineInst.World.CollisionEngine.actors;
+                int layer = int.MinValue;
+                for (int i = 0; i <= 9; i++)
+                {
+                    if (Input.IsPressed((ushort)((ushort)Keys.D0 + (ushort)i)))
+                        layer = i;
+                    if (Input.IsPressed((ushort)(((ushort)Keys.D0 + (ushort)i) | 0x100)))
+                        layer = actors.Count - 1 - i;
+                }
+
+                if (layer != int.MinValue && Velo.ModuleLevelEditor.hovered != null)
+                {
+                    layer = Math.Max(0, Math.Min(actors.Count, layer));
+                    int index = actors.FindIndex(cactor => cactor == Velo.ModuleLevelEditor.hovered.actor);
+                    if (index != -1)
+                    {
+                        if (layer < index)
+                        {
+                            for (int i = index; i >= layer + 1; i--)
+                            {
+                                if (actors[i].controller is EditableActor ea1 && actors[i - 1].controller is EditableActor ea2)
+                                    ea1.Swap(ea2);
+                                else
+                                    Velo.CEngineInst.World.SwapActors(actors[i], actors[i - 1]);
+                            }
+                        }
+                        else if (layer > index)
+                        {
+                            for (int i = index; i <= layer - 1; i++)
+                            {
+                                if (actors[i].controller is EditableActor ea1 && actors[i + 1].controller is EditableActor ea2)
+                                    ea1.Swap(ea2);
+                                else
+                                    Velo.CEngineInst.World.SwapActors(actors[i], actors[i + 1]);
+                            }
+                        }
+
+                        for (int i = 0; i < actors.Count; i++)
+                        {
+                            if (actors[i].controller is EditableActor ea)
+                            {
+                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.rect);
+                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.lines);
+                                Velo.CEngineInst.LayerManager.AddDrawer(ea.rect.LayerId, ea.rect);
+                                Velo.CEngineInst.LayerManager.AddDrawer(ea.lines.LayerId, ea.lines);
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (Velo.ModuleLevelEditor != null)
+            {
+                Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is BookcaseDef)).ToArray();
+                if (EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageUniversity" || EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMansion")
+                    Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new BookcaseDef(Vector2.Zero, 1f, 1, true)).ToArray();
+
+                Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is DecoLightDef)).ToArray();
+                if (EnableDiscoLight.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageNightclub")
+                    Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new DecoLightDef(Vector2.Zero, true)).ToArray();
+
+                Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is DecoGlowDef)).ToArray();
+                if (EnableDiscoGlow.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageNightclub")
+                    Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new DecoGlowDef(Vector2.Zero, true)).ToArray();
+
+                Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is LeaveDef)).ToArray();
+                if (EnableLeaves.Value)
+                    Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new LeaveDef(Vector2.Zero, true)).ToArray();
             }
         }
 
@@ -400,8 +520,8 @@ namespace Velo
 
         public void SetMouseInputs(Player player)
         {
-            if (!Util.IsFocused())
-                return;
+            //if (!Util.IsFocused())
+               // return;
             SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton));
             SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton));
             SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton));

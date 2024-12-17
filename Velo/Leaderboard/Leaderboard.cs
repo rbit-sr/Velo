@@ -5,55 +5,7 @@ using System.Linq;
 
 namespace Velo
 {
-    public abstract class LbMenuContext : RequestingMenuContext
-    {
-        private LabelW profileButton;
-        private LabelW versionText;
-
-        public LbMenuContext(string name) : base(name)
-        {
-            
-        }
-
-        public override void Init()
-        {
-            base.Init();
-
-            profileButton = new LabelW("My profile", Fonts.FontMedium);
-            Style.ApplyButton(profileButton);
-            profileButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT)
-                {
-                    if (page.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
-                        return;
-
-                    ChangePage(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
-                }
-            };
-
-            versionText = new LabelW(Version.VERSION_NAME + " - " + Version.AUTHOR, Fonts.FontSmall);
-            Style.ApplyText(versionText);
-            versionText.Align = new Vector2(0f, 0.5f);
-            versionText.Color = () => Color.Gray * 0.5f;
-            menuStack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
-            menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-        }
-
-        public override void CancelAllRequests()
-        {
-            RunsDatabase.Instance.CancelAll();
-        }
-
-        public override void ClearCache()
-        {
-            RunsDatabase.Instance.Clear();
-            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-        }
-    }
-
-    public class Leaderboard : LbMenuContext
+    public class Leaderboard : RequestingMenuModule
     {
         public BoolSetting DisableLeaderboard;
         public BoolSetting PreciseTimer;
@@ -71,6 +23,10 @@ namespace Velo
         public ColorTransitionSetting RunStatusColor;
 
         private TextDraw runStatus;
+
+        private LabelW profileButton;
+        private LabelW versionText;
+        private PopularWindow popularWindow;
 
         private Leaderboard() : base("Leaderboard")
         {
@@ -112,6 +68,33 @@ namespace Velo
         }
 
         public static Leaderboard Instance = new Leaderboard();
+
+        public override void Init()
+        {
+            base.Init();
+
+            profileButton = new LabelW("My profile", Fonts.FontMedium);
+            Style.ApplyButton(profileButton);
+            profileButton.OnClick = wevent =>
+            {
+                if (wevent.Button == WEMouseClick.EButton.LEFT)
+                {
+                    if (page.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
+                        return;
+
+                    ChangePage(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
+                }
+            };
+
+            versionText = new LabelW(Version.VERSION_NAME + " - " + Version.AUTHOR, Fonts.FontSmall);
+            Style.ApplyText(versionText);
+            versionText.Align = new Vector2(0f, 0.5f);
+            versionText.Color = () => Color.Gray * 0.5f;
+            popularWindow = new PopularWindow(this);
+            menuStack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            menuStack.AddChild(popularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
+        }
 
         public override void PreUpdate()
         {
@@ -175,6 +158,18 @@ namespace Velo
 
                 runStatus.Draw();
             }
+        }
+
+        public override void CancelAllRequests()
+        {
+            RunsDatabase.Instance.CancelAll();
+        }
+
+        public override void ClearCache()
+        {
+            RunsDatabase.Instance.Clear();
+            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
+            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
         }
 
         public void OnRunFinished(Recording run)
