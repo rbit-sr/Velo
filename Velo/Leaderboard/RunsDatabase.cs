@@ -320,7 +320,7 @@ namespace Velo
 
         public void Clear()
         {
-            List<RunInfo> pending = pendingRuns.Where((i) => allRuns.ContainsKey(i)).Select((i) => allRuns[i]).ToList();
+            List<RunInfo> pending = pendingRuns.Where(i => allRuns.ContainsKey(i)).Select(i => allRuns[i]).ToList();
             allRuns.Clear();
             runsPerCategory.Clear();
             scores.Clear();

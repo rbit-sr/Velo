@@ -135,6 +135,7 @@ namespace Velo
         Vector2 Size { get; set; }
         Vector2 Offset { get; set; }
         float Opacity { get; set; }
+        Vector2 RequestedSize { get; }
         bool BackgroundVisible { get; set; }
         Func<Color> BackgroundColor { get; set; }
         bool DisableInput { get; set; }
@@ -182,6 +183,8 @@ namespace Velo
         public Vector2 Size { get; set; }
         public Vector2 Offset { get; set; }
         public float Opacity { get; set; }
+        protected Vector2 requestedSize = new Vector2(-1f, -1f);
+        public Vector2 RequestedSize => requestedSize;
         public bool BackgroundVisible { get; set; }
         public Func<Color> BackgroundColor { get; set; }
         public bool DisableInput { get; set; }
@@ -753,17 +756,17 @@ namespace Velo
 
             if (!scrollBarPicked)
             {
-                if (targetScroll > root.Size.Y - Size.Y)
+                if (targetScroll > root.RequestedSize.Y - Size.Y)
                 {
-                    targetScroll = root.Size.Y - Size.Y;
+                    targetScroll = root.RequestedSize.Y - Size.Y;
                 }
                 if (targetScroll < 0)
                 {
                     targetScroll = 0;
                 }
-                if (scroll > root.Size.Y - Size.Y)
+                if (scroll > root.RequestedSize.Y - Size.Y)
                 {
-                    scroll = root.Size.Y - Size.Y;
+                    scroll = root.RequestedSize.Y - Size.Y;
                 }
                 if (scroll < 0)
                 {
@@ -784,10 +787,10 @@ namespace Velo
             }
             else
             {
-                scroll = scrollBarPickScroll + (mouseY - scrollBarPickY) * root.Size.Y / Size.Y;
-                if (scroll > root.Size.Y - Size.Y)
+                scroll = scrollBarPickScroll + (mouseY - scrollBarPickY) * root.RequestedSize.Y / Size.Y;
+                if (scroll > root.RequestedSize.Y - Size.Y)
                 {
-                    scroll = root.Size.Y - Size.Y;
+                    scroll = root.RequestedSize.Y - Size.Y;
                 }
                 if (scroll < 0)
                 {
@@ -796,7 +799,7 @@ namespace Velo
                 targetScroll = scroll;
             }
 
-            if (root.Size.Y > Size.Y)
+            if (root.RequestedSize.Y > Size.Y)
             {
                 scrollBar = new Rectangle((int)(Position.X + Size.X - ScrollBarWidth), (int)(Position.Y + Size.Y * scroll / root.Size.Y), ScrollBarWidth, (int)(Size.Y * Size.Y / root.Size.Y));
             }
@@ -806,7 +809,7 @@ namespace Velo
             }
 
             root.Position = new Vector2(Position.X, Position.Y - scroll) + Offset;
-            root.Size = new Vector2(Size.X, root.Size.Y);
+            root.Size = new Vector2(Size.X, root.RequestedSize.Y);
             root.UpdateBounds(this.crop);
         }
 
@@ -841,7 +844,7 @@ namespace Velo
             if (ScrollBarColor != null)
                 scrollBarRec.FillColor = ScrollBarColor() * opacity * Opacity;
 
-            base.Draw(hovered, scale, 0f); // restore scissor rectangle
+            //base.Draw(hovered, scale, 0f); // restore scissor rectangle
             scrollBarRec.Draw(null);
         }
 
@@ -943,7 +946,7 @@ namespace Velo
             }
             while (entries.Count > j)
                 entries.RemoveAt(entries.Count - 1);
-            Size = new Vector2(Size.X, y - Position.Y);
+            requestedSize = new Vector2(-1f, y - Position.Y);
         }
 
         public override void Draw(IWidget hovered, float scale, float opacity)
@@ -1037,8 +1040,8 @@ namespace Velo
         {
             base.UpdateBounds(crop);
 
-            Vector2 requestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
-            Size = new Vector2(Math.Max(Size.X, requestedSize.X), Math.Max(Size.Y, requestedSize.Y));
+            requestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
+            //Size = new Vector2(Math.Max(Size.X, requestedSize.X), Math.Max(Size.Y, requestedSize.Y));
             if (Size != sizePrev)
             {
                 sizePrev = Size;
