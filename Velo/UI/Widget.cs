@@ -674,7 +674,8 @@ namespace Velo
                 }
             }
 
-            Child.Offset = offset * (1f - Ease(R)) + offsetTarget * Ease(R);
+            if (Child != null)
+                Child.Offset = offset * (1f - Ease(R)) + offsetTarget * Ease(R);
 
             base.Draw(hovered, scale, opacity);
         }
@@ -868,14 +869,14 @@ namespace Velo
             public bool Refresh;
         }
 
-        private readonly IListEntryFactory<T> factory;
+        public IListEntryFactory<T> Factory;
         private readonly List<Entry> entries;
         private int firstEntry;
         private bool reachedEnd = false;
 
         public ListW(IListEntryFactory<T> factory)
         {
-            this.factory = factory;
+            Factory = factory;
             entries = new List<Entry>();
             firstEntry = 0;
         }
@@ -895,7 +896,7 @@ namespace Velo
             firstEntry = 0;
             reachedEnd = false;
 
-            IEnumerable<T> elems = factory.GetElems();
+            IEnumerable<T> elems = Factory.GetElems();
             int elemsCount = elems.Count();
 
             float y = Position.Y;
@@ -903,7 +904,7 @@ namespace Velo
             int j = 0;
             foreach (T elem in elems)
             {
-                float height = factory.Height(elem, i);
+                float height = Factory.Height(elem, i);
                 if (y + height <= crop.Top)
                 {
                     firstEntry++;
@@ -916,12 +917,12 @@ namespace Velo
                     if (entries.Count > j)
                     {
                         if (entries[j].Index > i)
-                            entries.Insert(j, new Entry { Widget = factory.Create(elem, i), Elem = elem, Index = i });
+                            entries.Insert(j, new Entry { Widget = Factory.Create(elem, i), Elem = elem, Index = i });
                         else if (!entries[j].Elem.Equals(elem) || entries[j].Refresh)
-                            entries[j] = new Entry { Widget = factory.Create(elem, i), Elem = elem, Index = i };
+                            entries[j] = new Entry { Widget = Factory.Create(elem, i), Elem = elem, Index = i };
                     }
                     else
-                        entries.Add(new Entry { Widget = factory.Create(elem, i), Elem = elem, Index = i });
+                        entries.Add(new Entry { Widget = Factory.Create(elem, i), Elem = elem, Index = i });
 
                     Widget widget = entries[j].Widget;
                     widget.Position = new Vector2(Position.X, y) + Offset;
@@ -1234,7 +1235,7 @@ namespace Velo
         }
     }
 
-    public class TabbedW<W> : TransitionW<W> where W : Widget
+    public class TabbedW<W> : TransitionW<W> where W : class, IWidget
     {
         private readonly W[] tabs;
         private readonly SelectorButtonW selector;
@@ -1278,7 +1279,7 @@ namespace Velo
         public W Current => tabs[selected];
     }
 
-    public class DualTabbedW<W> : TransitionW<W> where W : Widget
+    public class DualTabbedW<W> : TransitionW<W> where W : class, IWidget
     {
         private readonly W[] tabs;
         private readonly SelectorButtonW selector1;
@@ -1360,7 +1361,7 @@ namespace Velo
 
     public class TableW<T> : LayoutW, IListEntryFactory<T> where T : struct
     {
-        private readonly ITableEntryFactory<T> factory;
+        public ITableEntryFactory<T> Factory;
         private readonly CachedFont font;
         private readonly LayoutW headers;
         private readonly ListW<T> list;
@@ -1370,7 +1371,7 @@ namespace Velo
         public TableW(CachedFont font, float headerHeight, ITableEntryFactory<T> factory) :
             base(EOrientation.VERTICAL)
         {
-            this.factory = factory;
+            Factory = factory;
             this.font = font;
 
             headers = new LayoutW(EOrientation.HORIZONTAL);
@@ -1441,16 +1442,6 @@ namespace Velo
 
         public Func<T, int, LayoutW, Widget> Hook { get; set; }
 
-        public IEnumerable<T> GetElems()
-        {
-            return factory.GetElems();
-        }
-
-        public float Height(T elem, int i)
-        {
-            return factory.Height(elem, i);
-        }
-
         public Widget Create(T elem, int i)
         {
             LayoutW layout = new LayoutW(EOrientation.HORIZONTAL);
@@ -1480,6 +1471,16 @@ namespace Velo
         public void Refresh(int index)
         {
             list.Refresh(index);
+        }
+
+        public virtual IEnumerable<T> GetElems()
+        {
+            return Factory.GetElems();
+        }
+
+        public virtual float Height(T elem, int i)
+        {
+            return Factory.Height(elem, i);
         }
     }
 }

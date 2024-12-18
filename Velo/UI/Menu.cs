@@ -116,37 +116,18 @@ namespace Velo
         }
     }
 
-    public interface IMenu : IWidget
-    {
-        void Refresh();
-    }
-
-    public abstract class Menu : HolderW<Widget>, IMenu
+    public abstract class Menu : LayoutW
     {
         protected MenuModule module;
 
-        public Menu(MenuModule module) :
-            base()
+        public Menu(MenuModule module, EOrientation orientation) :
+            base(orientation)
         {
             this.module = module;
         }
 
         public abstract void Refresh();
-    }
-
-    public abstract class RequestingMenu : HolderW<Widget>, IMenu
-    {
-        protected RequestingMenuModule module;
-        
-        public RequestingMenu(RequestingMenuModule module) :
-            base()
-        {
-            this.module = module;
-        }
-
-        public abstract void Refresh();
-        public abstract void Rerequest();
-        public abstract void ResetState();
+        public abstract void Reset();
     }
 
     public class MenuFonts
@@ -158,28 +139,30 @@ namespace Velo
         public CachedFont FontConsole;
     }
 
-    public abstract class MenuModule<T> : ToggleModule where T : class, IMenu
+    public abstract class MenuModule : ToggleModule
     {
-        protected WidgetContainer container;
-        protected TransitionW<Widget> menu;
-        protected StackW menuStack;
-        protected TransitionW<T> page;
-        
-        protected Stack<T> backStack;
+        private WidgetContainer container;
+        private TransitionW<Widget> menu;
+        private StackW menuStack;
+        private TransitionW<Menu> page;
+
+        private List<Menu> menuElems = new List<Menu>();
+
+        private Stack<Menu> backStack;
         public MenuFonts Fonts;
         public string Error;
 
         private readonly bool enableDim;
 
-        public T Menu => page.Child;
+        public Menu Page => page.Child;
 
         public MenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : base(name, addEnabledSetting)
         {
             this.enableDim = enableDim;
             
-            backStack = new Stack<T>();
+            backStack = new Stack<Menu>();
 
-            page = new TransitionW<T>();
+            page = new TransitionW<Menu>();
             menuStack = new StackW();
             menuStack.AddChild(page, menuPos != null ? menuPos.Value : new Vector2(375f, 100f), menuSize != null ? menuSize.Value : new Vector2(1170f, 880f));
             menu = new TransitionW<Widget>();
@@ -199,12 +182,14 @@ namespace Velo
             FontCache.Get(ref Fonts.FontConsole, "CEngine\\Debug\\FreeMonoBold.ttf:18");
         }
 
-        public void EnterMenu(T menu)
+        public void EnterMenu(Menu menu)
         {
             this.menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
             page.GoTo(menu);
 
-            OnGoToNewPage();
+            Reset();
+            Refresh();
+            OnChange();
         }
 
         public void ExitMenu(bool animation = true)
@@ -219,16 +204,18 @@ namespace Velo
                 menu.GoTo(null);
         }
 
-        public void ChangePage(T newPage, bool pushBackStack = true)
+        public void ChangePage(Menu newPage, bool pushBackStack = true)
         {
             if (page.Child != null && pushBackStack)
                 backStack.Push(page.Child);
             page.TransitionTo(newPage, 8f, Vector2.Zero);
 
-            OnGoToNewPage();
+            Reset();
+            Refresh();
+            OnChange();
         }
 
-        public void PushBackStack(T menu)
+        public void PushBackStack(Menu menu)
         {
             backStack.Push(menu);
         }
@@ -241,31 +228,32 @@ namespace Velo
         public void PopPage()
         {
             page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
-            OnGoBackPage();
+            Refresh();
+            OnChange();
         }
 
-        protected static T SelectT(IWidget widget)
+        public void AddElem(IWidget elem, Vector2 position, Vector2 size)
         {
-            if (widget is T)
-                return widget as T;
-            if (widget is TransitionW<T>)
-                return (widget as TransitionW<T>).Child;
-            return null;
+            menuStack.AddChild(elem, position, size);
+            if (elem is Menu menu)
+                menuElems.Add(menu);
         }
 
-        public virtual void OnGoToNewPage()
+        public void Refresh()
         {
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
+            Page.Refresh();
+            menuElems.ForEach(elem => elem.Refresh());
         }
 
-        public virtual void OnChangePage()
+        public void Reset()
         {
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
+            Page.Reset();
+            menuElems.ForEach(elem => elem.Reset());
         }
 
-        public virtual void OnGoBackPage()
+        public virtual void OnChange()
         {
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
+
         }
 
         public override void PostRender()
@@ -311,58 +299,6 @@ namespace Velo
             container.Draw();
         }
 
-        public abstract T GetStartMenu();
-    }
-
-    public abstract class MenuModule : MenuModule<Menu>
-    {
-        protected MenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : 
-            base(name, addEnabledSetting, enableDim, menuPos, menuSize)
-        {
-
-        }
-    }
-
-    public abstract class RequestingMenuModule : MenuModule<RequestingMenu>
-    {
-        public RequestingMenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) :
-            base(name, addEnabledSetting, enableDim, menuPos, menuSize)
-        {
-
-        }
-
-        public override void OnGoToNewPage()
-        {
-            CancelAllRequests();
-            menuStack.Children.Select(SelectT).ForEach(c => c?.ResetState());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
-        }
-
-        public override void OnChangePage()
-        {
-            CancelAllRequests();
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
-        }
-
-        public override void OnGoBackPage()
-        {
-            CancelAllRequests();
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
-        }
-
-        public void ClearCacheRerequest()
-        {
-            CancelAllRequests();
-            ClearCache();
-            menuStack.Children.Select(SelectT).ForEach(c => c?.ResetState());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Rerequest());
-            menuStack.Children.Select(SelectT).ForEach(c => c?.Refresh());
-        }
-
-        public abstract void CancelAllRequests();
-        public abstract void ClearCache();
+        public abstract Menu GetStartMenu();
     }
 }

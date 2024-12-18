@@ -62,6 +62,8 @@ namespace Velo
         public ToggleSetting Freeze;
         public HotkeySetting Step1Key;
         public HotkeySetting Step10Key;
+        public HotkeySetting JumpBack1Key;
+        public HotkeySetting JumpBack10Key;
 
         private readonly Savestates savestates;
         public TimeSpan SavestateLoadTime = TimeSpan.Zero;
@@ -75,9 +77,7 @@ namespace Velo
         private readonly Playback playback = new Playback();
         private readonly List<Playback> playbackGhosts = new List<Playback>();
 
-        public HotkeySetting Test;
-        public static bool test2;
-        public static bool test;
+        private readonly Stack<Savestate> rewindStack = new Stack<Savestate>();
 
         private OfflineGameMods() : base("Offline Game Mods")
         {
@@ -224,6 +224,8 @@ namespace Velo
             Freeze = AddToggle("freeze", new Toggle());
             Step1Key = AddHotkey("step 1 key", 0x97, autoRepeat: true);
             Step10Key = AddHotkey("step 10 key", 0x97, autoRepeat: true);
+            JumpBack1Key = AddHotkey("jump back 1 key", 0x97, autoRepeat: true);
+            JumpBack10Key = AddHotkey("jump back 10 key", 0x97, autoRepeat: true);
 
             Freeze.Tooltip =
                 "When frozen, the game stops doing any physics updates.";
@@ -237,9 +239,6 @@ namespace Velo
                 SavestateLoadTime = Velo.RealTime;
                 recorder.Restart();
             });
-
-            //NewCategory("test");
-            //Test = AddHotkey("test", 0x97);
         }
 
         public static OfflineGameMods Instance = new OfflineGameMods();
@@ -303,29 +302,6 @@ namespace Velo
             }
 
             savestates.PreUpdate();
-
-            /*if (Input.Held(Test.Value) && Velo.Ingame)
-            {
-                if (!test2)
-                {
-                    test = true;
-                    Velo.MainPlayer.gameInfo.setOption(2, true);
-                    test = false;
-                }
-                test2 = true;
-            }
-            if (!Input.Held(Test.Value) && Velo.Ingame)
-            {
-                if (test2)
-                {
-                    test = true;
-                    Velo.MainPlayer.gameInfo.setOption(2, false);
-                    test = false;
-                }
-                test2 = false;
-            }
-            if (Velo.MainPlayer != null && Velo.MainPlayer.gameInfo != null)
-                Velo.MainPlayer.gameInfo.options[2] = false;*/
 
             if (Velo.ModuleSolo != null)
             {
@@ -394,6 +370,20 @@ namespace Velo
                 stepCount = 10;
             }
 
+            if (JumpBack1Key.Pressed() && rewindStack.Count > 0)
+            {
+                rewindStack.Pop().Load(false);
+                Freeze.Enable();
+            }
+
+            if (JumpBack10Key.Pressed() && rewindStack.Count > 0)
+            {
+                for (int i = 0; i < 9 && rewindStack.Count > 1; i++)
+                    rewindStack.Pop();
+                rewindStack.Pop().Load(false);
+                Freeze.Enable();
+            }
+
             if (InfiniteJumps.Value)
             {
                 if (Velo.MainPlayer != null && Velo.MainPlayer.jump_state >= 2)
@@ -413,6 +403,21 @@ namespace Velo
                 if (!(cengine.isHoldingElapsedTime || cengine.isHoldingTotalTime || cengine.pausedLocal))
                     time += delta;
                 cengine.gameTime = new GameTime(new TimeSpan(time), new TimeSpan(delta));
+            
+                if (delta > 0)
+                {
+                    Savestate savestate = new Savestate();
+                    if (StoreAIVolumes.Value)
+                        savestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
+                    else
+                        savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
+                    rewindStack.Push(savestate);
+                }
+            }
+
+            if (!DtFixed)
+            {
+                rewindStack.Clear();
             }
 
             if (Velo.ModuleSolo != null)

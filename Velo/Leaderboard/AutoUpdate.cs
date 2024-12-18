@@ -78,11 +78,11 @@ namespace Velo
         private readonly LabelW yesButton;
         private readonly LabelW noButton;
         private readonly LayoutW buttonRow;
-        private readonly LayoutW popupLayout;
 
         public AutoUpdateWindow(MenuModule module, VeloUpdate update) :
-            base(module)
+            base(module, EOrientation.VERTICAL)
         {
+            this.module = module;
             popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
             popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
             Style.ApplyText(popupText);
@@ -111,28 +111,28 @@ namespace Velo
                 }
             };
 
-            buttonRow = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-            buttonRow.AddSpace(LayoutW.FILL);
+            buttonRow = new LayoutW(EOrientation.HORIZONTAL);
+            buttonRow.AddSpace(FILL);
             buttonRow.AddChild(yesButton, 120f);
             buttonRow.AddSpace(10f);
             buttonRow.AddChild(noButton, 120f);
             buttonRow.AddSpace(10f);
 
-            popupLayout = new LayoutW(LayoutW.EOrientation.VERTICAL)
-            {
-                BackgroundVisible = true,
-                BackgroundColor = () => new Color(20, 20, 20, 150)
-            };
-            popupLayout.AddSpace(10f);
-            popupLayout.AddChild(popupText, LayoutW.FILL);
-            popupLayout.AddSpace(10f);
-            popupLayout.AddChild(buttonRow, 45f);
-            popupLayout.AddSpace(10f);
-
-            Child = popupLayout;
+            BackgroundVisible = true;
+            BackgroundColor = () => new Color(20, 20, 20, 150);
+            AddSpace(10f);
+            AddChild(popupText, FILL);
+            AddSpace(10f);
+            AddChild(buttonRow, 45f);
+            AddSpace(10f);
         }
 
         public override void Refresh()
+        {
+
+        }
+
+        public override void Reset()
         {
 
         }

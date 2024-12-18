@@ -94,8 +94,10 @@ namespace Velo
             });
         }
 
-        public void Run(Action<Exception> onFailure = null, bool wait = false)
+        public void Run(Action onSuccess = null, Action<Exception> onFailure = null, bool wait = false)
         {
+            if (requests.Count == 0) return;
+
             List<RequestEntry> requests2 = requests;
             requests = new List<RequestEntry>();
 
@@ -187,6 +189,13 @@ namespace Velo
                         {
                             onSuccessAction();
                         }
+                        if (onSuccess != null)
+                        {
+                            Velo.AddOnPreUpdateTS(() =>
+                            {
+                                onSuccess();
+                            });
+                        }
 
                         return true;
                     }
@@ -225,7 +234,6 @@ namespace Velo
                 cancel.Dispose();
                 cancel = null;
             }
-            requests = new List<RequestEntry>();
         }
 
         public ERequestStatus Status

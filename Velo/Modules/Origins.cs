@@ -1,5 +1,4 @@
-﻿using CEngine.Graphics.Library;
-using CEngine.World.Actor;
+﻿using CEngine.World.Actor;
 using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
@@ -189,13 +188,11 @@ namespace Velo
         private readonly LabelW info;
         private readonly ScrollW scroll;
         private readonly ListW<OriginMap> list;
-        private readonly LayoutW layout;
 
-        public OriginsMenu(MenuModule context) :
-            base(context)
+        public OriginsMenu(MenuModule module) :
+            base(module, EOrientation.VERTICAL)
         {
-            layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-            title = new LabelW("Origins", context.Fonts.FontTitle)
+            title = new LabelW("Origins", module.Fonts.FontTitle)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = SettingsUI.Instance.HeaderTextColor.Value.Get
@@ -207,19 +204,17 @@ namespace Velo
             scroll = new ScrollW(list);
             Style.ApplyScroll(scroll);
 
-            info = new LabelW("", context.Fonts.FontMedium)
+            info = new LabelW("", module.Fonts.FontMedium)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = () => Color.Red
             };
 
-            layout.AddChild(title, 80f);
-            layout.AddSpace(10f);
-            layout.AddChild(info, 40f);
-            layout.AddSpace(10f);
-            layout.AddChild(scroll, LayoutW.FILL);
-            
-            Child = layout;
+            AddChild(title, 80f);
+            AddSpace(10f);
+            AddChild(info, 40f);
+            AddSpace(10f);
+            AddChild(scroll, FILL);
         }
 
         public override void Draw(IWidget hovered, float scale, float opacity)
@@ -247,6 +242,11 @@ namespace Velo
         }
 
         public override void Refresh()
+        {
+
+        }
+
+        public override void Reset()
         {
 
         }

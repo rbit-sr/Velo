@@ -1548,6 +1548,7 @@ namespace Velo
         public static readonly ActorType ATMovingPlatform = new ActorType<MovingPlatform>(Write, Read);
 
         private readonly MemoryStream stream;
+        private readonly List<int> chunkOffsets = new List<int>();
 
         private static long dt;
         private static int ghostIndex;
@@ -1658,6 +1659,9 @@ namespace Velo
 
             stream.Position = 0;
 
+            chunkOffsets.Clear();
+            chunkOffsets.Add((int)stream.Position);
+
             int version = VERSION;
 
             stream.Write(version);
@@ -1699,6 +1703,7 @@ namespace Velo
                     if (!player.slot.LocalPlayer && !player.slot.IsBot)
                         continue;
                     if (!include[ATPlayer.Id]) continue;
+                    chunkOffsets.Add((int)stream.Position);
                     stream.Write(ATPlayer.Id);
                     stream.Write<int>(player.slot.Index);
                     if (player == Velo.MainPlayer)
@@ -1710,6 +1715,7 @@ namespace Velo
                     if (!playerBot.slot.LocalPlayer && !playerBot.slot.IsBot)
                         continue;
                     if (!include[ATPlayerBot.Id]) continue;
+                    chunkOffsets.Add((int)stream.Position);
                     stream.Write(ATPlayerBot.Id);
                     stream.Write<int>(playerBot.slot.Index);
                     ATPlayerBot.Write(stream, playerBot);
@@ -1721,6 +1727,7 @@ namespace Velo
                         if (controller.GetType() == type.Type)
                         {
                             if (!include[type.Id]) continue;
+                            chunkOffsets.Add((int)stream.Position);
                             stream.Write(type.Id);
                             type.Write(stream, controller);
                             break;
@@ -1729,6 +1736,7 @@ namespace Velo
                 }
             }
 
+            chunkOffsets.Add((int)stream.Position);
             stream.Write(-1);
 
             foreach (var module in stack.modules)
@@ -1739,6 +1747,7 @@ namespace Velo
                     Write(stream, moduleMP);
             }
 
+            chunkOffsets.Add((int)stream.Position);
             stream.Write(Math.Min(LoadedVersion, Version.VERSION));
 
             var cooldowns = OfflineGameMods.Instance.CurrentRecording.Rules.Cooldowns;
@@ -1750,6 +1759,8 @@ namespace Velo
             }
 
             stream.Write(playerOffset);
+
+            chunkOffsets.Add((int)stream.Position);
         }
 
         private CActor GetOfType(Type type, int n, Func<CActor, bool> func = null)

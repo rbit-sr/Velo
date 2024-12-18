@@ -57,13 +57,13 @@ namespace Velo
 
     public class ConsoleWindow : Menu
     {
-        private readonly LayoutW layout;
         private readonly ConsoleTextW test;
         private readonly ConsoleEditW test2;
 
         public ConsoleWindow(MenuModule module) :
-            base(module)
+            base(module, EOrientation.VERTICAL)
         {
+            this.module = module;
             test = new ConsoleTextW(module.Fonts.FontMedium, (text, off) =>
             {
                 int space = text.IndexOfAny(new char[] { ' ', '\n' }, off);
@@ -81,14 +81,16 @@ namespace Velo
             
             test2 = new ConsoleEditW(module.Fonts.FontMedium, (text, off) => new KeyValuePair<Color, int>(Color.Red, text.Length));
 
-            layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-            layout.AddChild(test, LayoutW.FILL);
-            layout.AddChild(test2, 35f);
-
-            Child = layout;
+            AddChild(test, FILL);
+            AddChild(test2, 35f);
         }
 
         public override void Refresh()
+        {
+
+        }
+
+        public override void Reset()
         {
 
         }

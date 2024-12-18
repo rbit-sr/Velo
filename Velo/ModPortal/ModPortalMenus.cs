@@ -10,42 +10,39 @@ namespace Velo
     // just a base class for a menu page that provides a title bar, content and a button row at the bottom
     // it also handles the loading symbol / error message
     // this class may be rewritten or removed
-    public abstract class MpMenuPage : RequestingMenu
+    public abstract class MpMenuPage : Menu, IRequestable
     {
         protected LabelW title;
         protected LayoutW titleBar;
         protected HolderW<Widget> content; // Child classes will put their content in here
         protected readonly LayoutW buttonRow;
-        protected LayoutW layout;
 
         private readonly bool showStatus;
 
         private float loadingRotation = -(float)Math.PI / 2f;
 
-        public MpMenuPage(RequestingMenuModule module, string title, bool showStatus = true) :
-            base(module)
+        public MpMenuPage(MenuModule module, string title, bool showStatus = true) :
+            base(module, EOrientation.VERTICAL)
         {
+            this.module = module;
             this.showStatus = showStatus;
 
             content = new HolderW<Widget>();
 
-            layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
             this.title = new LabelW(title, module.Fonts.FontTitle)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = SettingsUI.Instance.HeaderTextColor.Value.Get
             };
-            titleBar = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-            titleBar.AddChild(this.title, LayoutW.FILL);
-            layout.AddChild(titleBar, 80f);
-            layout.AddSpace(10f);
-            layout.AddChild(content, LayoutW.FILL);
-            layout.AddSpace(10f);
+            titleBar = new LayoutW(EOrientation.HORIZONTAL);
+            titleBar.AddChild(this.title, FILL);
+            AddChild(titleBar, 80f);
+            AddSpace(10f);
+            AddChild(content, FILL);
+            AddSpace(10f);
 
-            buttonRow = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-            layout.AddChild(buttonRow, 35f);
-
-            Child = layout; // Never forget when inheriting from RequestingMenu
+            buttonRow = new LayoutW(EOrientation.HORIZONTAL);
+            AddChild(buttonRow, 35f);
         }
 
         public override void Draw(IWidget hovered, float scale, float opacity)
@@ -57,7 +54,7 @@ namespace Velo
 
             // maybe it would be more elegant to not draw these directly
             
-            IWidget lowest = layout.Children.Last();
+            IWidget lowest = Children.Last();
             if (lowest == null)
                 return;
 
@@ -112,6 +109,8 @@ namespace Velo
                 errorDraw.Draw(null);
             }
         }
+
+        public abstract void PushRequests();
     }
 
     // a test entity to show in the list
@@ -122,7 +121,7 @@ namespace Velo
     }
 
     // every category gets its own tab widget object
-    public class MpBrowseCategoryTab : RequestingMenu, IListEntryFactory<TestEntity>
+    public class MpBrowseCategoryTab : Menu, IListEntryFactory<TestEntity>, IRequestable
     {
         public enum ECategory
         {
@@ -135,9 +134,10 @@ namespace Velo
 
         private readonly ECategory category;
 
-        public MpBrowseCategoryTab(RequestingMenuModule module, ECategory category) :
-            base(module)
+        public MpBrowseCategoryTab(MenuModule module, ECategory category) :
+            base(module, EOrientation.VERTICAL)
         {
+            this.module = module;
             this.category = category;
 
             list = new ListW<TestEntity>(this);
@@ -146,25 +146,25 @@ namespace Velo
             scroll = new ScrollW(list);
             Style.ApplyScroll(scroll);
 
-            Child = scroll; // never forget
+            AddChild(scroll, FILL);
         }
 
-        // called when newly created, page changed, a request finished or refresh hotkey was pressed
+        // called when newly created, page changed, or refresh hotkey was pressed,
+        // or MenuModule.Refresh could be passed to a request callback
         public override void Refresh()
         {
             
         }
 
-        // called when newly created, page changed or refresh hotkey was pressed
-        public override void Rerequest()
-        {
-            // ModsDatabase.Instance.RequestSomething();
-        }
-
         // called when newly created or refresh hotkey was pressed
-        public override void ResetState()
+        public override void Reset()
         {
             // maybe reset the scroll state
+        }
+
+        public void PushRequests()
+        {
+
         }
 
         public IEnumerable<TestEntity> GetElems()
@@ -192,7 +192,7 @@ namespace Velo
         private readonly TabbedW<MpBrowseCategoryTab> tabs;
         private readonly LabelW backButton;
 
-        public MpBrowsePage(RequestingMenuModule module) :
+        public MpBrowsePage(MenuModule module) :
             base(module, "Browse")
         {
             categorySelect = new SelectorButtonW(new[] { "Characters", "Sounds", "Backgrounds" }, 0, module.Fonts.FontMedium);
@@ -203,7 +203,7 @@ namespace Velo
             {
                 tabs.SetTab(i, new MpBrowseCategoryTab(module, (MpBrowseCategoryTab.ECategory)i));
             }
-            tabs.OnSwitch = _ => module.OnChangePage(); // to refresh and rerequest and stuff
+            tabs.OnSwitch = _ => module.Refresh(); // to update and rerequest and stuff
 
             content.Child = tabs; // never forget
 
@@ -212,7 +212,7 @@ namespace Velo
             backButton.OnLeftClick = module.PopPage;
 
             buttonRow.AddChild(backButton, 190f);
-            buttonRow.AddSpace(LayoutW.FILL);
+            buttonRow.AddSpace(FILL);
             buttonRow.AddChild(categorySelect, 3 * 190f);
         }
 
@@ -221,14 +221,14 @@ namespace Velo
             tabs.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tabs.Current.Rerequest();
+            tabs.Tabs.ForEach(tab => tab.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            tabs.Tabs.ForEach(tab => tab.ResetState());
+            tabs.Current.PushRequests();
         }
     }
 }

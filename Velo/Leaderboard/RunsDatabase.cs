@@ -647,9 +647,9 @@ namespace Velo
             });
         }
 
-        public void RunRequestRuns(Action<Exception> onFailure)
+        public void RunRequestRuns(Action onSuccess, Action<Exception> onFailure)
         {
-            getRunHandler.Run(onFailure);
+            getRunHandler.Run(onSuccess, onFailure);
             addedDeletedSincePushed = false;
             eventsPushed = false;
             popularThisWeekPushed = false;
@@ -660,9 +660,8 @@ namespace Velo
             getCommentHandler.Push(new GetCommentsRequest(id), text =>
             {
                 SetComment(id, text);
-                onSuccess?.Invoke();
             });
-            getCommentHandler.Run(onFailure);
+            getCommentHandler.Run(onSuccess, onFailure);
         }
 
         private void PushAddedDeletedSince()
@@ -704,7 +703,7 @@ namespace Velo
                 recordingCache.Enqueue(new KeyValuePair<int, Recording>(id, recording));
                 onSuccess?.Invoke(recording);
             });
-            getRecordingHandler.Run(onFailure);
+            getRecordingHandler.Run(null, onFailure);
         }
 
         public void RequestRecordings(IEnumerable<int> ids, Action<Recording[]> onSuccess = null, Action<Exception> onFailure = null)
@@ -723,7 +722,7 @@ namespace Velo
                     getRecordingHandler.Push(new GetRecordingRequest(id), recording => recordings[j] = recording, false);
                     i++;
                 }
-                getRecordingHandler.Run(onFailure, wait: true);
+                getRecordingHandler.Run(null, onFailure, wait: true);
             }
 
             onSuccess(recordings);

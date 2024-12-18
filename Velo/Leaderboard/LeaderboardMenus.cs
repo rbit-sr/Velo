@@ -10,27 +10,31 @@ using System.Threading.Tasks;
 
 namespace Velo
 {
-    public abstract class LbMenuPage : RequestingMenu
+    public interface IRequestable
+    {
+        void PushRequests();
+    }
+
+    public abstract class LbMenuPage : Menu, IRequestable
     {
         protected LabelW title;
         protected LayoutW titleBar;
         protected HolderW<Widget> content;
         protected readonly LayoutW buttonRowUpper;
         protected readonly LayoutW buttonRowLower;
-        protected LayoutW layout;
 
         private readonly bool showStatus;
 
         private float loadingRotation = -(float)Math.PI / 2f;
 
-        public LbMenuPage(RequestingMenuModule module, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true, bool showStatus = true) :
-            base(module)
+        public LbMenuPage(MenuModule module, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true, bool showStatus = true)
+            : base(module, EOrientation.VERTICAL)
         {
+            this.module = module;
             this.showStatus = showStatus;
 
             content = new HolderW<Widget>();
 
-            layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
             if (title != "")
             {
                 this.title = new LabelW(title, module.Fonts.FontTitle)
@@ -40,24 +44,22 @@ namespace Velo
                 };
                 titleBar = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
                 titleBar.AddChild(this.title, LayoutW.FILL);
-                layout.AddChild(titleBar, 80f);
-                layout.AddSpace(10f);
+                AddChild(titleBar, 80f);
+                AddSpace(10f);
             }
-            layout.AddChild(content, LayoutW.FILL);
+            AddChild(content, FILL);
             if (buttonRowSpace && (buttonRowLower || buttonRowUpper))
-                layout.AddSpace(10f);
+                AddSpace(10f);
             if (buttonRowUpper)
             {
-                this.buttonRowUpper = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-                layout.AddChild(this.buttonRowUpper, 35f);
+                this.buttonRowUpper = new LayoutW(EOrientation.HORIZONTAL);
+                AddChild(this.buttonRowUpper, 35f);
             }
             if (buttonRowLower)
             {
-                this.buttonRowLower = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-                layout.AddChild(this.buttonRowLower, 35f);
+                this.buttonRowLower = new LayoutW(EOrientation.HORIZONTAL);
+                AddChild(this.buttonRowLower, 35f);
             }
-
-            Child = layout;
         }
 
         public override void Draw(IWidget hovered, float scale, float opacity)
@@ -67,7 +69,7 @@ namespace Velo
             if (!showStatus)
                 return;
 
-            IWidget lowest = layout.Children.Last();
+            IWidget lowest = Children.Last();
             if (lowest == null)
                 return;
 
@@ -118,26 +120,30 @@ namespace Velo
                 errorDraw.Draw(null);
             }
         }
+
+        public abstract void PushRequests();
     }
 
-    public abstract class LbTable<T> : RequestingMenu, ITableEntryFactory<T> where T : struct
+    public abstract class LbTable<T> : Menu, ITableEntryFactory<T>, IRequestable where T : struct
     {
-        protected readonly TableW<T> table;
-
-        public LbTable(RequestingMenuModule module) :
-            base(module)
+        protected TableW<T> table;
+        
+        public LbTable(MenuModule module) :
+            base(module, EOrientation.VERTICAL)
         {
             table = new TableW<T>(module.Fonts.FontMedium, 40, this);
+            this.module = module;
             Style.ApplyTable(table);
             table.AddSpace(10f);
 
-            Child = table;
+            AddChild(table, FILL);
         }
 
-        public override void ResetState()
+        public override void Reset()
         {
             table.ResetScrollState();
         }
+        public abstract void PushRequests();
         public abstract IEnumerable<T> GetElems();
         public abstract float Height(T elem, int i);
     }
@@ -420,7 +426,7 @@ namespace Velo
             public Widget Original => original;
             public Widget Expanded => layout;
 
-            public ExpandedRow(Widget original, RequestingMenuModule module, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
+            public ExpandedRow(Widget original, MenuModule module, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
             {
                 this.run = run;
                 this.original = original;
@@ -490,21 +496,21 @@ namespace Velo
                     module.ChangePage(new LbMapMenuPage(module, run.Category.MapId));
                 };
 
-                LayoutW avatarLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+                LayoutW avatarLayout = new LayoutW(EOrientation.VERTICAL);
                 avatarLayout.AddSpace(30f);
                 avatarLayout.AddChild(avatar, 200f);
                 avatarLayout.AddSpace(10f);
                 avatarLayout.AddChild(viewProfile, 40f);
-                avatarLayout.AddSpace(LayoutW.FILL);
+                avatarLayout.AddSpace(FILL);
 
-                LayoutW infos = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
+                LayoutW infos = new LayoutW(EOrientation.HORIZONTAL);
                 infos.AddSpace(40f);
                 infos.AddChild(generalLabels, 145f);
                 infos.AddChild(generalValues, 280f);
                 infos.AddSpace(20f);
                 infos.AddChild(statsLabels, 195f);
                 infos.AddChild(statsValues, 150f);
-                infos.AddSpace(LayoutW.FILL);
+                infos.AddSpace(FILL);
                 infos.AddChild(avatarLayout, 200f);
                 infos.AddSpace(40f);
 
@@ -532,7 +538,7 @@ namespace Velo
                     requestRecording(run.Id, Playback.EPlaybackType.VERIFY);
                 };
                 
-                LayoutW buttons = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
+                LayoutW buttons = new LayoutW(EOrientation.HORIZONTAL);
                 //if (mapEvent.CurrentlyNotRunning() || run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 {
                     buttons.AddSpace(40f);
@@ -542,14 +548,14 @@ namespace Velo
                     buttons.AddSpace(10f);
                     buttons.AddChild(verify, 240f);
                 }
-                buttons.AddSpace(LayoutW.FILL);
+                buttons.AddSpace(FILL);
                 if (mapPageButton)
                 {
                     buttons.AddChild(mapPage, 200f);
                     buttons.AddSpace(40f);
                 }
 
-                layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+                layout = new LayoutW(EOrientation.VERTICAL);
                 layout.AddSpace(10f);
                 layout.AddChild(infos, 280f);
                 layout.AddSpace(10f);
@@ -566,9 +572,9 @@ namespace Velo
                         ScrollBarColor = () => SettingsUI.Instance.ButtonColor.Value.Get()
                     };
 
-                    LayoutW commentsLayout = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
+                    LayoutW commentsLayout = new LayoutW(EOrientation.HORIZONTAL);
                     commentsLayout.AddSpace(20f);
-                    commentsLayout.AddChild(scroll, LayoutW.FILL);
+                    commentsLayout.AddChild(scroll, FILL);
                     commentsLayout.AddSpace(20f);
 
                     layout.AddChild(commentsLayout, 200f);
@@ -629,6 +635,7 @@ namespace Velo
 
         protected int Count;
         private int requestCount;
+        private bool initialRequest = true;
 
         private int expandedId = -1;
         private readonly Dictionary<int, ExpandedRow> expanded = new Dictionary<int, ExpandedRow>();
@@ -636,7 +643,7 @@ namespace Velo
         private int requestedId = -1;
         private Playback.EPlaybackType requestedPlaybackType = default;
 
-        public LbRunsTable(RequestingMenuModule module, bool mapPageButton) :
+        public LbRunsTable(MenuModule module, bool mapPageButton) :
             base(module)
         {
             table.OnLeftClickRow = (row, elem, i) =>
@@ -718,26 +725,42 @@ namespace Velo
             );
         }
 
+        private bool NeedRequestMore()
+        {
+            return !initialRequest && table.ReachedEnd && Count == requestCount && Count <= GetElems().Count();
+        }
+
         public override void Refresh()
         {
-
+           
         }
 
-        public override void Rerequest()
+        public override void PushRequests()
         {
-            if (Count == 0)
+
+            if (NeedRequestMore())
             {
-                Count = 100;
-                requestCount = 100;
+                requestCount += 100;
+                PushRequests(Count, 100, () =>
+                {
+                    Count += 100;
+                });
             }
-            Request(Math.Max(0, Count - 100), 100, Refresh, (error) => module.Error = error.Message);
+            else
+            {
+                if (initialRequest)
+                    requestCount = 100;
+                initialRequest = false;
+                PushRequests(Math.Max(0, Count - 100), 100, null);
+            }
         }
 
-        public override void ResetState()
+        public override void Reset()
         {
-            base.ResetState();
-            Count = 0;
+            base.Reset();
+            Count = 100;
             requestCount = 0;
+            initialRequest = true;
         }
 
         public override float Height(RunInfo elem, int i)
@@ -757,19 +780,13 @@ namespace Velo
         {
             base.UpdateBounds(crop);
             
-            if (table.ReachedEnd && Count == requestCount && Count <= GetElems().Count())
+            if (NeedRequestMore())
             {
-                requestCount += 100;
-                Request(Count, 100, () =>
-                {
-                    Count += 100;
-                    Refresh();
-                },
-                (error) => module.Error = error.Message);
+                module.OnChange();
             }
         }
 
-        protected abstract void Request(int start, int count, Action onSuccess, Action<Exception> onFailure);
+        protected abstract void PushRequests(int start, int count, Action onSuccess);
     }
 
     public class LbMapRunsTable : LbRunsTable
@@ -783,14 +800,14 @@ namespace Velo
         private readonly Category category;
         private readonly EFilter filter;
 
-        public LbMapRunsTable(RequestingMenuModule module, Category category, EFilter filter) :
+        public LbMapRunsTable(MenuModule module, Category category, EFilter filter) :
             base(module, mapPageButton: false)
         {
             this.category = category;
             this.filter = filter;
 
             table.AddColumn("#", 50, (run) => new PlaceEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Player", LayoutW.FILL, (run) => new PlayerEntry(module.Fonts.FontMedium, run));
+            table.AddColumn("Player", FILL, (run) => new PlayerEntry(module.Fonts.FontMedium, run));
             table.AddColumn("Time", 200, (run) => new TimeEntry(module.Fonts.FontMedium, run));
             table.AddColumn("Age", 200, (run) => new AgeEntry(module.Fonts.FontMedium, run));
         }
@@ -810,7 +827,7 @@ namespace Velo
             }
         }
 
-        protected override void Request(int start, int count, Action onSuccess, Action<Exception> onFailure)
+        protected override void PushRequests(int start, int count, Action onSuccess)
         {
             switch (filter)
             {
@@ -824,7 +841,6 @@ namespace Velo
                     RunsDatabase.Instance.PushRequestRuns(new GetAllForCategoryRequest(category, start, count), onSuccess);
                     break;
             }
-            RunsDatabase.Instance.RunRequestRuns(onFailure);
         }
     }
 
@@ -847,7 +863,7 @@ namespace Velo
         private bool eventsTabShown = true;
         private int showEventButtonId = 0;
 
-        public LbMapMenuPage(RequestingMenuModule module, ulong mapId) :
+        public LbMapMenuPage(MenuModule module, ulong mapId) :
             base(module, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
         {
             this.mapId = mapId;
@@ -890,7 +906,7 @@ namespace Velo
                     tables.SetTab(i1, i2, new LbMapRunsTable(module, new Category { MapId = mapId, TypeId = (ulong)categories[i1] }, (LbMapRunsTable.EFilter)i2));
                 }
             }
-            tables.OnSwitch = _ => module.OnChangePage();
+            tables.OnSwitch = _ => module.OnChange();
 
             if (mapEvent.CurrentlyNotRunning())
             {
@@ -992,21 +1008,21 @@ namespace Velo
 
         public override void Refresh()
         {
+            tables.Current.Refresh();
+
             MapEvent mapEvent = RunsDatabase.Instance.GetEvent(mapId);
             if (!mapEvent.CurrentlyNotRunning())
                 ShowEventsTab();
-
-            tables.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tables.Current.Rerequest();
+            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            tables.Tabs.ForEach(tab => tab.ResetState());
+            tables.Current.PushRequests();
         }
 
         public override void UpdateBounds(Rectangle crop)
@@ -1053,14 +1069,14 @@ namespace Velo
 
         public ulong PlayerId => playerId;
 
-        public LbPlayerRunsTable(RequestingMenuModule module, ulong playerId, EFilter filter) :
+        public LbPlayerRunsTable(MenuModule module, ulong playerId, EFilter filter) :
             base(module)
         {
             this.playerId = playerId;
             this.filter = filter;
 
             int colWidth = filter != EFilter.OTHER && filter != EFilter.ORIGINS ? 230 : 280;
-            table.AddColumn("Map", LayoutW.FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
+            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
             if (filter != EFilter.ORIGINS)
             {
                 table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.NewLap));
@@ -1108,10 +1124,10 @@ namespace Velo
 
         public override void Refresh()
         {
-
+            
         }
 
-        public override void Rerequest()
+        public override void PushRequests()
         {
             RunsDatabase.Instance.PushRequestPopularityOrder(null, curated: false);
             RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(PlayerId), null);
@@ -1136,7 +1152,7 @@ namespace Velo
 
         public ulong PlayerId => playerId;
 
-        public LbPlayerMenuPage(RequestingMenuModule module, ulong playerId) :
+        public LbPlayerMenuPage(MenuModule module, ulong playerId) :
             base(module, RunsDatabase.Instance.GetPlayerName(playerId), buttonRowLower: true)
         {
             this.playerId = playerId;
@@ -1177,12 +1193,12 @@ namespace Velo
             {
                 tables.SetTab(i, new LbPlayerRunsTable(module, playerId, (LbPlayerRunsTable.EFilter)i));
             }
-            tables.OnSwitch = _ => module.OnChangePage();
+            tables.OnSwitch = _ => module.OnChange();
 
             content.Child = tables;
 
             buttonRowLower.AddChild(backButton, 190f);
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 950f);
 
             steamPageButton = new LabelW("Steam page", module.Fonts.FontMedium);
@@ -1202,6 +1218,14 @@ namespace Velo
             titleBar.AddChild(statsValues1, 95f);
             titleBar.AddChild(statsTitles2, 130f);
             titleBar.AddChild(statsValues2, 80f);
+        }
+
+        public override void PushRequests()
+        {
+            tables.Current.PushRequests();
+
+            RunsDatabase.Instance.PushRequestScores(null);
+            RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(0), Refresh);
         }
 
         public override void Refresh()
@@ -1271,19 +1295,12 @@ namespace Velo
                 statsValues2.Text += "-";
             else
                 statsValues2.Text += new RoundingMultiplier("0.01").ToStringRounded((float)((double)perfectTimeSum / timeSum * 100.0)) + "%";
+
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tables.Current.Rerequest();
-            RunsDatabase.Instance.PushRequestScores(null);
-            RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(0), Refresh);
-            RunsDatabase.Instance.RunRequestRuns((error) => module.Error = error.Message);
-        }
-
-        public override void ResetState()
-        {
-            tables.Tabs.ForEach(tab => tab.ResetState());
+            tables.Tabs.ForEach(tab => tab.Reset());
         }
     }
 
@@ -1306,22 +1323,22 @@ namespace Velo
 
         public ESorting Sorting;
 
-        public LbTopRunsTable(RequestingMenuModule module, EFilter filter, Func<int> place) :
+        public LbTopRunsTable(MenuModule module, EFilter filter, Func<int> place) :
             base(module)
         {
             Filter = filter;
             this.place = place;
 
             int colWidth = (filter != EFilter.OTHER && filter != EFilter.ORIGINS) ? 230 : 380;
-            table.AddColumn("Map", LayoutW.FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
+            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
             if (filter != EFilter.ORIGINS)
             {
                 table.AddColumn("New Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
-                    table.AddSpace(40f);
+                    AddSpace(40f);
                 table.AddColumn("1 Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.OneLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
-                    table.AddSpace(15f);
+                    AddSpace(15f);
                 if (filter != EFilter.OTHER)
                 {
                     table.AddColumn("New Lap (Skip)", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLapSkip));
@@ -1388,17 +1405,16 @@ namespace Velo
 
         public override void Refresh()
         {
-
+            
         }
 
-        public override void Rerequest()
+        public override void PushRequests()
         {
             RunsDatabase.Instance.PushRequestPopularityOrder(null, curated: Filter != EFilter.OTHER);
             if (Filter != EFilter.OTHER)
                 RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(place()), Refresh);
             else
                 RunsDatabase.Instance.PushRequestRuns(new GetWRsNonCuratedRequest(place()), Refresh);
-            RunsDatabase.Instance.RunRequestRuns((error) => module.Error = error.Message);
         }
     }
 
@@ -1477,7 +1493,7 @@ namespace Velo
 
         private int place = 0;
 
-        public LbTopRunsMenuPage(RequestingMenuModule module) :
+        public LbTopRunsMenuPage(MenuModule module) :
             base(module, "Top runs", buttonRowLower: true, showStatus: false)
         {
 
@@ -1497,13 +1513,13 @@ namespace Velo
             {
                 place = 0;
                 UpdatePlaceLabel();
-                module.OnChangePage();
+                module.OnChange();
                 newTab.Sorting = newTab.Filter.DefaultSorting();
                 sortingButton.Text = newTab.Sorting.Label();
             };
             content.Child = tables;
 
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 950f);
 
             orderByLabel = new LabelW("Order by:", module.Fonts.FontMedium);
@@ -1545,7 +1561,7 @@ namespace Velo
                 else
                 {
                     UpdatePlaceLabel();
-                    module.OnChangePage();
+                    module.OnChange();
                 }
             };
             placeIncrButton = new LabelW("+", module.Fonts.FontMedium);
@@ -1554,7 +1570,7 @@ namespace Velo
             {
                 place++;
                 UpdatePlaceLabel();
-                module.OnChangePage();
+                module.OnChange();
             };
             placeSelectLayoutH = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
             placeSelectLayoutH.AddChild(placeDecrButton, 50f);
@@ -1573,14 +1589,14 @@ namespace Velo
             tables.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tables.Current.Rerequest();
+            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            tables.Tabs.ForEach(tab => tab.ResetState());
+            tables.Current.PushRequests();
         }
 
         private void UpdatePlaceLabel()
@@ -1610,12 +1626,12 @@ namespace Velo
 
         private readonly EFilter filter;
 
-        public LbRecentRunsTable(RequestingMenuModule module, EFilter filter) :
+        public LbRecentRunsTable(MenuModule module, EFilter filter) :
             base(module, mapPageButton: true)
         {
             this.filter = filter;
 
-            table.AddColumn("Map", LayoutW.FILL, (run) => new MapEntry(module.Fonts.FontMedium, run));
+            table.AddColumn("Map", FILL, (run) => new MapEntry(module.Fonts.FontMedium, run));
             table.AddColumn("Category", 170f, (run) => new CategoryEntry(module.Fonts.FontMedium, run));
             table.AddColumn("Player", 350f, (run) => new PlayerEntry(module.Fonts.FontMedium, run));
             table.AddColumn("Time", 170f, (run) => new TimeEntry(module.Fonts.FontMedium, run));
@@ -1636,7 +1652,7 @@ namespace Velo
             }
         }
 
-        protected override void Request(int start, int count, Action onSuccess, Action<Exception> onFailure)
+        protected override void PushRequests(int start, int count, Action onSuccess)
         {
             switch (filter)
             {
@@ -1647,7 +1663,6 @@ namespace Velo
                     RunsDatabase.Instance.PushRequestRuns(new GetRecentWRsRequest(start, count), onSuccess);
                     break;
             }
-            RunsDatabase.Instance.RunRequestRuns(onFailure);
         }
     }
 
@@ -1656,7 +1671,7 @@ namespace Velo
         private readonly SelectorButtonW filterSelect;
         private readonly TabbedW<LbRecentRunsTable> tables;
 
-        public LbRecentMenuPage(RequestingMenuModule module) :
+        public LbRecentMenuPage(MenuModule module) :
             base(module, "Recent runs", buttonRowLower: true, showStatus: false)
         {
             string[] filters = new string[] { "All", "WRs only" };
@@ -1669,11 +1684,11 @@ namespace Velo
             {
                 tables.SetTab(i, new LbRecentRunsTable(module, (LbRecentRunsTable.EFilter)i));
             }
-            tables.OnSwitch = _ => module.OnChangePage();
+            tables.OnSwitch = _ => module.OnChange();
 
             content.Child = tables;
 
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 380f);
         }
 
@@ -1682,14 +1697,14 @@ namespace Velo
             tables.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tables.Current.Rerequest();
+            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            tables.Tabs.ForEach(tab => tab.ResetState());
+            tables.Current.PushRequests();
         }
     }
 
@@ -1757,11 +1772,11 @@ namespace Velo
             }
         }
 
-        public LbTopPlayersScoreTable(RequestingMenuModule module) :
+        public LbTopPlayersScoreTable(MenuModule module) :
             base(module)
         {
             table.AddColumn("#", 50f, (player) => new PlaceEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("Player", LayoutW.FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
+            table.AddColumn("Player", FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
             table.AddColumn("Score", 120f, (player) => new ScoreEntry(module.Fonts.FontMedium, player));
 
             table.OnLeftClickRow = (row, player, i) =>
@@ -1782,13 +1797,12 @@ namespace Velo
 
         public override void Refresh()
         {
-
+            
         }
 
-        public override void Rerequest()
+        public override void PushRequests()
         {
             RunsDatabase.Instance.PushRequestScores(Refresh);
-            RunsDatabase.Instance.RunRequestRuns((error) => module.Error = error.Message);
         }
     }
 
@@ -1856,11 +1870,11 @@ namespace Velo
             }
         }
 
-        public LbTopPlayersWRsTable(RequestingMenuModule module) :
+        public LbTopPlayersWRsTable(MenuModule module) :
             base(module)
         {
             table.AddColumn("#", 50f, (player) => new PlaceEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("Player", LayoutW.FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
+            table.AddColumn("Player", FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
             table.AddColumn("WRs", 80f, (player) => new WrCountEntry(module.Fonts.FontMedium, player));
 
             table.OnLeftClickRow = (row, player, i) =>
@@ -1879,15 +1893,14 @@ namespace Velo
             return 40f;
         }
 
+        public override void PushRequests()
+        {
+            RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(0), Refresh);
+        }
+
         public override void Refresh()
         {
 
-        }
-
-        public override void Rerequest()
-        {
-            RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(0), Refresh);
-            RunsDatabase.Instance.RunRequestRuns((error) => module.Error = error.Message);
         }
     }
 
@@ -1900,9 +1913,9 @@ namespace Velo
         }
 
         private readonly SelectorButtonW typeSelector;
-        private readonly TabbedW<RequestingMenu> tables;
+        private readonly TabbedW<Menu> tables;
 
-        public LbTopPlayersMenuPage(RequestingMenuModule module) :
+        public LbTopPlayersMenuPage(MenuModule module) :
             base(module, "Top players", buttonRowLower: true, showStatus: false)
         {
             string[] types = new[] { "Score", "WR count" };
@@ -1910,14 +1923,14 @@ namespace Velo
             typeSelector = new SelectorButtonW(types, 0, module.Fonts.FontMedium);
             Style.ApplySelectorButton(typeSelector);
 
-            tables = new TabbedW<RequestingMenu>(typeSelector);
+            tables = new TabbedW<Menu>(typeSelector);
             tables.SetTab((int)EType.SCORE, new LbTopPlayersScoreTable(module));
             tables.SetTab((int)EType.WR_COUNT, new LbTopPlayersWRsTable(module));
-            tables.OnSwitch = _ => module.OnChangePage();
+            tables.OnSwitch = _ => module.OnChange();
 
             content.Child = tables;
 
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(typeSelector, 380f);
         }
 
@@ -1926,14 +1939,14 @@ namespace Velo
             tables.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            tables.Current.Rerequest();
+            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            tables.Tabs.ForEach(tab => tab.ResetState());
+            (tables.Current as IRequestable).PushRequests();
         }
     }
 
@@ -1942,8 +1955,8 @@ namespace Velo
         protected LabelW rules;
         protected ScrollW scroll;
 
-        public LbRulesMenuPage(RequestingMenuModule module) :
-            base(module, "Rules")
+        public LbRulesMenuPage(MenuModule module) :
+            base(module, "Rules", showStatus: false)
         {
             rules = new LabelW("", module.Fonts.FontMedium)
             {
@@ -1962,7 +1975,7 @@ namespace Velo
 
             content.Child = scroll;
 
-            layout.AddSpace(10f);
+            AddSpace(10f);
             
             rules.Text =
 @"All runs are automatically verified and categorized by Velo itself before being automatically submitted as
@@ -2047,12 +2060,12 @@ you can see whether it was applied for a run under ""Fix BG"".";
             
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
 
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
 
         }
@@ -2068,7 +2081,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
         private readonly SelectorButtonW pageSelector;
         private readonly TabbedW<LbMenuPage> pages;
 
-        public LbMainMenuPage(RequestingMenuModule module) :
+        public LbMainMenuPage(MenuModule module) :
             base(module, "", buttonRowLower: true, buttonRowSpace: false)
         {
             string[] pages = new[] { "Top runs", "Top players", "Recent runs", "Rules" };
@@ -2081,7 +2094,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
             this.pages.SetTab((int)EPages.RECENT_RUNS, new LbRecentMenuPage(module));
             this.pages.SetTab((int)EPages.TOP_PLAYERS, new LbTopPlayersMenuPage(module));
             this.pages.SetTab((int)EPages.RULES, new LbRulesMenuPage(module));
-            this.pages.OnSwitch = _ => module.OnChangePage();
+            this.pages.OnSwitch = _ => module.OnChange();
 
             content.Child = this.pages;
 
@@ -2094,18 +2107,18 @@ you can see whether it was applied for a run under ""Fix BG"".";
             pages.Current.Refresh();
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
-            pages.Current.Rerequest();
+            pages.Tabs.ForEach(page => page.Reset());
         }
 
-        public override void ResetState()
+        public override void PushRequests()
         {
-            pages.Tabs.ForEach(page => page.ResetState());
+            pages.Current.PushRequests();
         }
     }
 
-    public class PopularWindow : RequestingMenu, IListEntryFactory<ulong>
+    public class PopularWindow : Menu, IListEntryFactory<ulong>
     {
         public class PopularMapEntry : LayoutW
         {
@@ -2148,7 +2161,8 @@ you can see whether it was applied for a run under ""Fix BG"".";
         private readonly LayoutW layout;
         private readonly MoveW move;
 
-        public PopularWindow(RequestingMenuModule module) : base(module)
+        public PopularWindow(MenuModule module) :
+            base(module, EOrientation.VERTICAL)
         {
             title = new LabelW("Popular this week", module.Fonts.FontMedium);
             Style.ApplyText(title);
@@ -2162,8 +2176,8 @@ you can see whether it was applied for a run under ""Fix BG"".";
                 SettingsUI.Instance.PopularThisWeekCompacted.Value = !SettingsUI.Instance.PopularThisWeekCompacted.Value;
                 Compact(SettingsUI.Instance.PopularThisWeekCompacted.Value, 2f);
             };
-            headerLayout = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-            headerLayout.AddChild(title, LayoutW.FILL);
+            headerLayout = new LayoutW(EOrientation.HORIZONTAL);
+            headerLayout.AddChild(title, FILL);
             headerLayout.AddChild(compactButton, 40f);
 
             maps = new ListW<ulong>(this);
@@ -2171,13 +2185,15 @@ you can see whether it was applied for a run under ""Fix BG"".";
             
             scroll = new ScrollW(maps);
 
-            layout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+            layout = new LayoutW(EOrientation.VERTICAL);
             layout.AddChild(headerLayout, 25f);
             layout.AddSpace(8f);
-            layout.AddChild(scroll, LayoutW.FILL);
+            layout.AddChild(scroll, FILL);
+
             move = new MoveW(layout);
+            AddChild(move, FILL);
+
             Compact(SettingsUI.Instance.PopularThisWeekCompacted.Value, 10000f);
-            Child = move;
         }
 
         public void Compact(bool compact, float speed)
@@ -2203,7 +2219,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
             {
                 OnLeftClick = () =>
                 {
-                    module.ChangePage(new LbMapMenuPage((RequestingMenuModule)module, elem), pushBackStack: !(module.Menu is LbMapMenuPage));
+                    module.ChangePage(new LbMapMenuPage(module, elem), pushBackStack: !(module.Page is LbMapMenuPage));
                 }
             };
         }
@@ -2223,14 +2239,14 @@ you can see whether it was applied for a run under ""Fix BG"".";
 
         }
 
-        public override void Rerequest()
+        public override void Reset()
         {
             
         }
 
-        public override void ResetState()
+        public void PushRequests()
         {
-            
+
         }
     }
 }

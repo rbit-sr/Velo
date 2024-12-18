@@ -1,4 +1,5 @@
 ﻿using Microsoft.Xna.Framework;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace Velo
@@ -6,7 +7,7 @@ namespace Velo
     // the Velo module itself
     // base class would be Module
     // a RequestingMenuModule is a special Module type that has a Menu and does requests on certain actions
-    public class ModPortal : RequestingMenuModule
+    public class ModPortal : MenuModule
     {
         public BoolSetting ExampleSetting1;
         public FloatSetting ExampleSetting2;
@@ -38,7 +39,7 @@ namespace Velo
             versionText.Align = new Vector2(0f, 0.5f);
             versionText.Color = () => Color.Gray * 0.5f;
 
-            menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            AddElem(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
         }
 
         public override void PreUpdate()
@@ -46,17 +47,14 @@ namespace Velo
             base.PreUpdate();
         }
 
-        public override void CancelAllRequests()
+        public override void OnChange()
         {
             // ModsDatabase.Instance.CancelAll();
+            (Page as IRequestable).PushRequests();
+            // ModsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
         }
 
-        public override void ClearCache()
-        {
-            // ModsDatabase.Instance.Clear();
-        }
-
-        public override RequestingMenu GetStartMenu()
+        public override Menu GetStartMenu()
         {
             return new MpBrowsePage(this);
         }

@@ -5,14 +5,14 @@ using System.Linq;
 
 namespace Velo
 {
-    public class Leaderboard : RequestingMenuModule
+    public class Leaderboard : MenuModule
     {
         public BoolSetting DisableLeaderboard;
         public BoolSetting PreciseTimer;
         public BoolSetting ShowCheckpoints;
 
-        public HotkeySetting Refresh;
-        public HotkeySetting ShowAppliedRules;
+        public HotkeySetting RefreshHotkey;
+        public HotkeySetting ShowAppliedRulesHotkey;
 
         public EnumSetting<ETimeFormat> TimeFormat;
 
@@ -46,12 +46,12 @@ namespace Velo
             ShowCheckpoints.Tooltip = "Show the primary and secondary checkpoints of Velo's rule checking system.";
 
             NewCategory("hotkeys");
-            Refresh = AddHotkey("refresh", 0x97);
-            ShowAppliedRules = AddHotkey("show applied rules", 0x97);
+            RefreshHotkey = AddHotkey("refresh", 0x97);
+            ShowAppliedRulesHotkey = AddHotkey("show applied rules", 0x97);
 
-            Refresh.Tooltip = 
+            RefreshHotkey.Tooltip = 
                 "Clears the runs cache.";
-            ShowAppliedRules.Tooltip = 
+            ShowAppliedRulesHotkey.Tooltip = 
                 "Shows the rules that have been applied to the previous run leading to its categorization and validation.";
             
             NewCategory("run status");
@@ -79,7 +79,7 @@ namespace Velo
             {
                 if (wevent.Button == WEMouseClick.EButton.LEFT)
                 {
-                    if (page.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
+                    if (Page is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
                         return;
 
                     ChangePage(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
@@ -91,9 +91,9 @@ namespace Velo
             versionText.Align = new Vector2(0f, 0.5f);
             versionText.Color = () => Color.Gray * 0.5f;
             popularWindow = new PopularWindow(this);
-            menuStack.AddChild(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
-            menuStack.AddChild(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            menuStack.AddChild(popularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
+            AddElem(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            AddElem(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            AddElem(popularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
         }
 
         public override void PreUpdate()
@@ -103,7 +103,7 @@ namespace Velo
             if (DisableLeaderboard.Value)
                 return;
 
-            if (ShowAppliedRules.Pressed())
+            if (ShowAppliedRulesHotkey.Pressed())
             {
                 OfflineGameMods.Instance.ShowLastAppliedRules();
             }
@@ -114,9 +114,14 @@ namespace Velo
             if (DisableLeaderboard.Value || AutoUpdate.Instance.Enabled.Value.Enabled)
                 Enabled.Disable(); 
             
-            if (Refresh.Pressed() && Enabled.Value.Enabled)
+            if (RefreshHotkey.Pressed() && Enabled.Value.Enabled)
             {
-                ClearCacheRerequest();
+                RunsDatabase.Instance.CancelAll();
+                RunsDatabase.Instance.Clear();
+                RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
+                RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
+                Reset();
+                Refresh();
             }
 
             base.PostRender();
@@ -160,18 +165,6 @@ namespace Velo
             }
         }
 
-        public override void CancelAllRequests()
-        {
-            RunsDatabase.Instance.CancelAll();
-        }
-
-        public override void ClearCache()
-        {
-            RunsDatabase.Instance.Clear();
-            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-            RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-        }
-
         public void OnRunFinished(Recording run)
         {
             if (DisableLeaderboard.Value)
@@ -180,7 +173,15 @@ namespace Velo
             RecordingSubmitter.Instance.Submit(run);
         }
 
-        public override RequestingMenu GetStartMenu()
+        public override void OnChange()
+        {
+            RunsDatabase.Instance.CancelAll();
+            (Page as IRequestable).PushRequests();
+            popularWindow.PushRequests();
+            RunsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
+        }
+
+        public override Menu GetStartMenu()
         {
             ulong mapId = Map.GetCurrentMapId();
             if (Velo.Ingame && Velo.ModuleSolo != null && mapId != ulong.MaxValue)
