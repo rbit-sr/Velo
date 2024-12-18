@@ -325,6 +325,7 @@ namespace Velo
             runsPerCategory.Clear();
             scores.Clear();
             comments.Clear();
+            popularThisWeek.Clear();
             foreach (var info in pending)
             {
                 Add(new List<RunInfo> { info }, false);

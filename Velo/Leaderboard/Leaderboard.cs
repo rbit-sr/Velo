@@ -122,6 +122,7 @@ namespace Velo
                 RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
                 Reset();
                 Refresh();
+                OnChange();
             }
 
             base.PostRender();

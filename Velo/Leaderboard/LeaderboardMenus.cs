@@ -1335,10 +1335,10 @@ namespace Velo
             {
                 table.AddColumn("New Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
-                    AddSpace(40f);
+                    table.AddSpace(40f);
                 table.AddColumn("1 Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.OneLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
-                    AddSpace(15f);
+                    table.AddSpace(15f);
                 if (filter != EFilter.OTHER)
                 {
                     table.AddColumn("New Lap (Skip)", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLapSkip));
@@ -1572,11 +1572,11 @@ namespace Velo
                 UpdatePlaceLabel();
                 module.OnChange();
             };
-            placeSelectLayoutH = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
+            placeSelectLayoutH = new LayoutW(EOrientation.HORIZONTAL);
             placeSelectLayoutH.AddChild(placeDecrButton, 50f);
             placeSelectLayoutH.AddChild(placeSelectLabel, 90f);
             placeSelectLayoutH.AddChild(placeIncrButton, 50f);
-            placeSelectLayoutV = new LayoutW(LayoutW.EOrientation.VERTICAL);
+            placeSelectLayoutV = new LayoutW(EOrientation.VERTICAL);
             placeSelectLayoutV.AddChild(placeLabel, 25f);
             placeSelectLayoutV.AddSpace(10f);
             placeSelectLayoutV.AddChild(placeSelectLayoutH, 35f);
