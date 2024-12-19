@@ -564,8 +564,8 @@ namespace Velo
                 SettingsUI.Instance.Enabled.Value.Enabled ||
                 Leaderboard.Instance.Enabled.Value.Enabled ||
                 AutoUpdate.Instance.Enabled.Value.Enabled ||
-                Origins.Instance.Enabled.Value.Enabled ||
-                ModPortal.Instance.Enabled.Value.Enabled;
+                Origins.Instance.Enabled.Value.Enabled;// ||
+                //ModPortal.Instance.Enabled.Value.Enabled;
         }
 
         // hooked into FNA.dll's event loop

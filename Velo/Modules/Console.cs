@@ -1,4 +1,4 @@
-﻿using CEngine.Graphics.Component;
+﻿/*using CEngine.Graphics.Component;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
 using System;
@@ -14,7 +14,7 @@ namespace Velo
 
         }
 
-        public static ConsoleM Instance/* = new ConsoleM()*/;
+        public static ConsoleM Instance = new ConsoleM();
 
         public override Menu GetStartMenu()
         {
@@ -167,27 +167,6 @@ namespace Velo
                         autoLineBreak = true;
                     }
 
-                    /*bool autoLineBreak = false;
-                    if (font.Font.MeasureString(lines[i]).X > Size.X) // line is too long, binary search to find the fitting length and split the line
-                    {
-                        int stride = lines[i].Length / 2;
-                        int testLength = lines[i].Length - stride;
-                        do
-                        {
-                            stride = (stride + 1) / 2;
-                            if (font.Font.MeasureString(lines[i].Substring(0, testLength)).X > Size.X)
-                                testLength -= stride;
-                            else
-                                testLength += stride;
-                        } while (stride > 1);
-                        if (font.Font.MeasureString(lines[i].Substring(0, testLength)).X > Size.X)
-                            testLength--;
-                        else if (font.Font.MeasureString(lines[i].Substring(0, testLength + 1)).X <= Size.X)
-                            testLength++;
-                        lines.Insert(i + 1, lines[i].Substring(testLength));
-                        lines[i] = lines[i].Substring(0, testLength);
-                        autoLineBreak = true;
-                    }*/
                     Vector2 offset = new Vector2(0f, (i - scroll) * font.Font.LineSpacing);
                     if (offset.Y + font.Font.LineSpacing > Size.Y)
                         break;
@@ -401,3 +380,4 @@ namespace Velo
         }
     }
 }
+*/

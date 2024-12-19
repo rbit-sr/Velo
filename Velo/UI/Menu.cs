@@ -3,7 +3,6 @@ using Microsoft.Xna.Framework;
 using System;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
-using System.Collections.Generic;
 
 namespace Velo
 {
@@ -115,20 +114,6 @@ namespace Velo
         }
     }
 
-    public abstract class Menu : LayoutW
-    {
-        protected MenuModule module;
-
-        public Menu(MenuModule module, EOrientation orientation) :
-            base(orientation)
-        {
-            this.module = module;
-        }
-
-        public abstract void Refresh();
-        public abstract void Reset();
-    }
-
     public class MenuFonts
     {
         public CachedFont FontSmall;
@@ -138,42 +123,30 @@ namespace Velo
         public CachedFont FontConsole;
     }
 
-    public abstract class MenuModule : ToggleModule
+    public abstract class MenuContext
     {
+        public ToggleSetting Enabled;
+
         private WidgetContainer container;
         private TransitionW<Widget> menu;
         private StackW menuStack;
-        private TransitionW<Menu> page;
 
-        private List<Menu> menuElems = new List<Menu>();
-
-        private Stack<Menu> backStack;
         public MenuFonts Fonts;
         public string Error;
 
         private readonly bool enableDim;
 
-        public Menu Page => page.Child;
-
-        public MenuModule(string name, bool addEnabledSetting = true, bool enableDim = true, Vector2? menuPos = null, Vector2? menuSize = null) : base(name, addEnabledSetting)
+        public MenuContext(ToggleSetting enabled, bool enableDim = true)
         {
+            Enabled = enabled;
             this.enableDim = enableDim;
             
-            backStack = new Stack<Menu>();
-
-            page = new TransitionW<Menu>();
             menuStack = new StackW();
-            menuStack.AddChild(page, menuPos != null ? menuPos.Value : new Vector2(375f, 100f), menuSize != null ? menuSize.Value : new Vector2(1170f, 880f));
             menu = new TransitionW<Widget>();
             container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
-        }
-
-        public override void Init()
-        {
-            base.Init();
 
             Fonts = new MenuFonts();
-            
+
             FontCache.Get(ref Fonts.FontSmall, "UI\\Font\\NotoSans-Regular.ttf:15,UI\\Font\\NotoSansCJKtc-Regular.otf:15,UI\\Font\\NotoSansCJKkr-Regular.otf:15");
             FontCache.Get(ref Fonts.FontMedium, "UI\\Font\\NotoSans-Regular.ttf:18,UI\\Font\\NotoSansCJKtc-Regular.otf:18,UI\\Font\\NotoSansCJKkr-Regular.otf:18");
             FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\NotoSans-Regular.ttf:24,UI\\Font\\NotoSansCJKtc-Regular.otf:24,UI\\Font\\NotoSansCJKkr-Regular.otf:24");
@@ -181,84 +154,41 @@ namespace Velo
             FontCache.Get(ref Fonts.FontConsole, "CEngine\\Debug\\FreeMonoBold.ttf:18");
         }
 
-        public void EnterMenu(Menu menu)
+        public virtual void EnterMenu()
         {
-            this.menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
-            page.GoTo(menu);
-
-            Reset();
-            Refresh();
-            OnChange();
+            menuStack.Reset();
+            menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
         }
 
-        public void ExitMenu(bool animation = true)
+        public virtual void ExitMenu(bool animation = true)
         {
             if (menu.Child == null)
                 return;
             Enabled.Disable();
-            backStack.Clear();
+
             if (animation)
                 menu.TransitionTo(null, 4f, new Vector2(-500f, 0f));
             else
                 menu.GoTo(null);
         }
 
-        public void ChangePage(Menu newPage, bool pushBackStack = true)
-        {
-            if (page.Child != null && pushBackStack)
-                backStack.Push(page.Child);
-            page.TransitionTo(newPage, 8f, Vector2.Zero);
-
-            Reset();
-            Refresh();
-            OnChange();
-        }
-
-        public void PushBackStack(Menu menu)
-        {
-            backStack.Push(menu);
-        }
-
-        public void PopBackStack()
-        {
-            backStack.Pop();
-        }
-
-        public void PopPage()
-        {
-            page.TransitionTo(backStack.Pop(), 8f, Vector2.Zero);
-            Refresh();
-            OnChange();
-        }
-
         public void AddElem(IWidget elem, Vector2 position, Vector2 size)
         {
             menuStack.AddChild(elem, position, size);
-            if (elem is Menu menu)
-                menuElems.Add(menu);
         }
 
         public void Refresh()
         {
-            Page.Refresh();
-            menuElems.ForEach(elem => elem.Refresh());
+            menu.Refresh();
         }
 
         public void Reset()
         {
-            Page.Reset();
-            menuElems.ForEach(elem => elem.Reset());
+            menu.Reset();
         }
 
-        public virtual void OnChange()
+        public void Render()
         {
-
-        }
-
-        public override void PostRender()
-        {
-            base.PostRender();
-
             bool modified = Enabled.Modified();
 
             if (modified)
@@ -272,7 +202,7 @@ namespace Velo
             if (modified)
             {
                 if (Enabled.Value.Enabled)
-                    EnterMenu(GetStartMenu());
+                    EnterMenu();
                 else
                     ExitMenu(animation: true);
             }
@@ -297,7 +227,5 @@ namespace Velo
 
             container.Draw();
         }
-
-        public abstract Menu GetStartMenu();
     }
 }

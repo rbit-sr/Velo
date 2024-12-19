@@ -77,7 +77,7 @@ namespace Velo
         private readonly Playback playback = new Playback();
         private readonly List<Playback> playbackGhosts = new List<Playback>();
 
-        private readonly Stack<Savestate> rewindStack = new Stack<Savestate>();
+        private readonly SavestateStream rewindList = new SavestateStream();
 
         private OfflineGameMods() : base("Offline Game Mods")
         {
@@ -370,17 +370,17 @@ namespace Velo
                 stepCount = 10;
             }
 
-            if (JumpBack1Key.Pressed() && rewindStack.Count > 0)
+            if (JumpBack1Key.Pressed() && rewindList.Position > 0)
             {
-                rewindStack.Pop().Load(false);
+                rewindList.Position -= 2;
+                rewindList.Read().Load(false);
                 Freeze.Enable();
             }
 
-            if (JumpBack10Key.Pressed() && rewindStack.Count > 0)
+            if (JumpBack10Key.Pressed() && rewindList.Position > 0)
             {
-                for (int i = 0; i < 9 && rewindStack.Count > 1; i++)
-                    rewindStack.Pop();
-                rewindStack.Pop().Load(false);
+                rewindList.Position -= 11;
+                rewindList.Read().Load(false);
                 Freeze.Enable();
             }
 
@@ -411,13 +411,13 @@ namespace Velo
                         savestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
                     else
                         savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
-                    rewindStack.Push(savestate);
+                    rewindList.Write(savestate);
                 }
             }
 
             if (!DtFixed)
             {
-                rewindStack.Clear();
+                rewindList.Clear();
             }
 
             if (Velo.ModuleSolo != null)

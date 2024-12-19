@@ -6,19 +6,36 @@ using System.IO;
 
 namespace Velo
 {
-    public class AutoUpdate : MenuModule
+    public class AuContext : MenuContext
+    {
+        public HolderW<AutoUpdateWindow> Window;
+
+        public AuContext(ToggleSetting enabled) 
+            : base(enabled, enableDim: true)
+        {
+            Window = new HolderW<AutoUpdateWindow>();
+            AddElem(Window, new Vector2(610f, 415f), new Vector2(700f, 250f));
+        }
+
+        public void Show(VeloUpdate update)
+        {
+            Window.Child = new AutoUpdateWindow(this, update);
+            Enabled.Enable();
+        }
+    }
+
+    public class AutoUpdate : ToggleModule
     {
         private readonly RequestHandler handler;
 
-        private VeloUpdate update;
         private bool updateAvailable = false;
+
+        private AuContext context;
 
         public AutoUpdate() :
             base(
                 "Auto Update",
-                addEnabledSetting: false,
-                menuPos: new Vector2(610f, 415f),
-                menuSize: new Vector2(700f, 250f)
+                addEnabledSetting: false
                 )
         {
             handler = new RequestHandler();
@@ -52,9 +69,8 @@ namespace Velo
                 {
                     return;
                 }
-                this.update = update;
                 updateAvailable = true;
-                Enabled.Enable();
+                context.Show(update);
             }, onSuccessPreUpdate: true);
             handler.Run();
         }
@@ -63,31 +79,33 @@ namespace Velo
         {
             base.Init();
 
+            context = new AuContext(Enabled);
+
             Check();
         }
 
-        public override Menu GetStartMenu()
+        public override void PostRender()
         {
-            return new AutoUpdateWindow(this, update);
+            base.PostRender();
+
+            context.Render();
         }
     }
 
-    public class AutoUpdateWindow : Menu
+    public class AutoUpdateWindow : LayoutW
     {
         private readonly LabelW popupText;
         private readonly LabelW yesButton;
         private readonly LabelW noButton;
         private readonly LayoutW buttonRow;
 
-        public AutoUpdateWindow(MenuModule module, VeloUpdate update) :
-            base(module, EOrientation.VERTICAL)
+        public AutoUpdateWindow(AuContext context, VeloUpdate update) :
+            base(EOrientation.VERTICAL)
         {
-            this.module = module;
-            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
-            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", module.Fonts.FontLarge);
+            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", context.Fonts.FontLarge);
             Style.ApplyText(popupText);
 
-            yesButton = new LabelW("Yes", module.Fonts.FontLarge);
+            yesButton = new LabelW("Yes", context.Fonts.FontLarge);
             Style.ApplyButton(yesButton);
             yesButton.OnClick = wevent =>
             {
@@ -101,7 +119,7 @@ namespace Velo
                 }
             };
 
-            noButton = new LabelW("No", module.Fonts.FontLarge);
+            noButton = new LabelW("No", context.Fonts.FontLarge);
             Style.ApplyButton(noButton);
             noButton.OnClick = wevent =>
             {
@@ -125,16 +143,6 @@ namespace Velo
             AddSpace(10f);
             AddChild(buttonRow, 45f);
             AddSpace(10f);
-        }
-
-        public override void Refresh()
-        {
-
-        }
-
-        public override void Reset()
-        {
-
         }
     }
 }

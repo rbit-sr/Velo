@@ -147,12 +147,11 @@ namespace Velo
         bool Crop { get; set; }
         IEnumerable<IWidget> Children { get; }
         void UpdateInput(bool mouseInsideParent, Events events);
-
         void UpdateBounds(Rectangle crop);
-
         IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent);
-
         void Draw(IWidget hovered, float scale, float opacity);
+        void Refresh();
+        void Reset();
     }
 
     public abstract class Widget : IWidget
@@ -183,7 +182,7 @@ namespace Velo
         public Vector2 Size { get; set; }
         public Vector2 Offset { get; set; }
         public float Opacity { get; set; }
-        protected Vector2 requestedSize = new Vector2(-1f, -1f);
+        protected Vector2 requestedSize = new Vector2(0f, 0f);
         public Vector2 RequestedSize => requestedSize;
         public bool BackgroundVisible { get; set; }
         public Func<Color> BackgroundColor { get; set; }
@@ -307,6 +306,16 @@ namespace Velo
 
             recDraw.IsVisible = Visible;
             recDraw.Draw(null);
+        }
+
+        public virtual void Refresh()
+        {
+            Children.ForEach(child => child.Refresh());
+        }
+
+        public virtual void Reset()
+        {
+            Children.ForEach(child => child.Reset());
         }
     }
 
@@ -622,6 +631,7 @@ namespace Velo
             child.Offset = offset * (1 - R);
             childFadeout.Offset = offsetFadeout * R;
             this.onFinish = onFinish;
+            widget?.Refresh();
         }
 
         public void GoTo(W widget)
@@ -631,6 +641,7 @@ namespace Velo
             R = 1f;
             child.Opacity = 1f;
             childFadeout.Opacity = 0f;
+            widget?.Refresh();
         }
 
         public bool Transitioning()
@@ -853,6 +864,12 @@ namespace Velo
             scroll = 0f;
             targetScroll = 0f;
         }
+
+        public override void Reset()
+        {
+            base.Reset();
+            ResetScrollState();
+        }
     }
 
     public interface IListEntryFactory<T>
@@ -974,7 +991,7 @@ namespace Velo
             }
         }
 
-        public void Refresh(int index)
+        public void RefreshEntry(int index)
         {
             for (int i = 0; i < entries.Count; i++)
             {
@@ -1280,6 +1297,11 @@ namespace Velo
         }
 
         public W Current => tabs[selected];
+
+        public override void Reset()
+        {
+            tabs.ForEach(tab => tab.Reset());
+        }
     }
 
     public class DualTabbedW<W> : TransitionW<W> where W : class, IWidget
@@ -1326,6 +1348,11 @@ namespace Velo
         }
 
         public W Current => tabs[selected];
+
+        public override void Reset()
+        {
+            tabs.ForEach(tab => tab.Reset());
+        }
     }
 
     public class TableColumn
@@ -1471,9 +1498,9 @@ namespace Velo
             scroll.ResetScrollState();
         }
 
-        public void Refresh(int index)
+        public void RefreshEntry(int index)
         {
-            list.Refresh(index);
+            list.RefreshEntry(index);
         }
 
         public virtual IEnumerable<T> GetElems()
@@ -1484,6 +1511,50 @@ namespace Velo
         public virtual float Height(T elem, int i)
         {
             return Factory.Height(elem, i);
+        }
+    }
+
+    public class BackstackW<T> : TransitionW<T> where T : class, IWidget
+    {
+        private readonly Stack<T> backStack = new Stack<T>();
+
+        public new void TransitionTo(T widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
+        {
+            if (Child != null)
+                backStack.Push(Child);
+            base.TransitionTo(widget, speed, offset, opposite, onFinish);
+        }
+
+        public void TransitionBack(float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
+        {
+            base.TransitionTo(backStack.Pop(), speed, offset, opposite, onFinish);
+        }
+
+        public new void GoTo(T widget)
+        {
+            if (Child != null)
+                backStack.Push(Child);
+            base.GoTo(widget);
+        }
+
+        public void GoBack(float speed)
+        {
+            base.GoTo(backStack.Pop());
+        }
+
+        public void Push(T widget)
+        {
+            backStack.Push(widget);
+        }
+
+        public void PopLast()
+        {
+            backStack.Pop();
+        }
+
+        public void Clear()
+        {
+            backStack.Clear();
         }
     }
 }

@@ -7,7 +7,19 @@ using System.Linq;
 
 namespace Velo
 {
-    public class Origins : MenuModule
+    public class OrContext : MenuContext
+    {
+        public OriginsMenu Menu;
+
+        public OrContext(ToggleSetting enabled) : 
+            base(enabled, enableDim: true)
+        {
+            Menu = new OriginsMenu(this);
+            AddElem(Menu, new Vector2(375f, 100f), new Vector2(1170f, 880f));
+        }
+    }
+
+    public class Origins : ToggleModule
     {
         public ulong Selected = ulong.MaxValue;
         public ulong Current = ulong.MaxValue;
@@ -20,6 +32,8 @@ namespace Velo
             Enumerable.Range((int)Map.ORIGINS_START, (int)(Map.ORIGINS_END - Map.ORIGINS_START)).
             Select(m => new OriginMap(Map.MapIdToFileName[(ulong)m]));
 
+        public OrContext context;
+
         private Origins() : base("Origins", addEnabledSetting: false)
         {
 
@@ -30,6 +44,8 @@ namespace Velo
         public override void Init()
         {
             base.Init();
+
+            context = new OrContext(Enabled);
 
             Velo.OnMainPlayerReset.Add(ResetActors);
         }
@@ -45,6 +61,13 @@ namespace Velo
             }
             if (!Velo.Ingame && Selected == ulong.MaxValue)
                 isOrigins = false;
+        }
+
+        public override void PostRender()
+        {
+            base.PostRender();
+
+            context.Render();
         }
 
         public void SelectOrigins(ulong mapId)
@@ -129,11 +152,6 @@ namespace Velo
                 }
             }
         }
-
-        public override Menu GetStartMenu()
-        {
-            return new OriginsMenu(this);
-        }
     }
 
     public struct OriginMap
@@ -182,17 +200,20 @@ namespace Velo
         }
     }
 
-    public class OriginsMenu : Menu, IListEntryFactory<OriginMap>
+    public class OriginsMenu : LayoutW, IListEntryFactory<OriginMap>
     {
+        private readonly OrContext context;
+
         private readonly LabelW title;
         private readonly LabelW info;
         private readonly ScrollW scroll;
         private readonly ListW<OriginMap> list;
 
-        public OriginsMenu(MenuModule module) :
-            base(module, EOrientation.VERTICAL)
+        public OriginsMenu(OrContext context) :
+            base(EOrientation.VERTICAL)
         {
-            title = new LabelW("Origins", module.Fonts.FontTitle)
+            this.context = context;
+            title = new LabelW("Origins", context.Fonts.FontTitle)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = SettingsUI.Instance.HeaderTextColor.Value.Get
@@ -204,7 +225,7 @@ namespace Velo
             scroll = new ScrollW(list);
             Style.ApplyScroll(scroll);
 
-            info = new LabelW("", module.Fonts.FontMedium)
+            info = new LabelW("", context.Fonts.FontMedium)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = () => Color.Red
@@ -228,7 +249,7 @@ namespace Velo
 
         public Widget Create(OriginMap elem, int i)
         {
-            return new OriginMapEntry(module.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => module.ExitMenu(animation: false));
+            return new OriginMapEntry(context.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
         }
 
         public IEnumerable<OriginMap> GetElems()
@@ -239,16 +260,6 @@ namespace Velo
         public float Height(OriginMap elem, int i)
         {
             return 40f;
-        }
-
-        public override void Refresh()
-        {
-
-        }
-
-        public override void Reset()
-        {
-
         }
     }
 }

@@ -5,7 +5,70 @@ using System.Linq;
 
 namespace Velo
 {
-    public class Leaderboard : MenuModule
+    public class LbContext : MenuContext
+    {
+        public BackstackW<ILbWidget> Page;
+        public LabelW ProfileButton;
+        public LabelW VersionText;
+        public PopularWindow PopularWindow;
+
+        public LbContext(ToggleSetting enabled) 
+            : base(enabled, enableDim: true)
+        {
+            Page = new BackstackW<ILbWidget>();
+            ProfileButton = new LabelW("My profile", Fonts.FontMedium);
+            Style.ApplyButton(ProfileButton);
+            ProfileButton.OnClick = wevent =>
+            {
+                if (wevent.Button == WEMouseClick.EButton.LEFT)
+                {
+                    if (Page.Child is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
+                        return;
+
+                    Page.TransitionTo(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID), 8f, Vector2.Zero);
+                    Request();
+                }
+            };
+
+            VersionText = new LabelW(Version.VERSION_NAME + " - " + Version.AUTHOR, Fonts.FontSmall);
+            Style.ApplyText(VersionText);
+            VersionText.Align = new Vector2(0f, 0.5f);
+            VersionText.Color = () => Color.Gray * 0.5f;
+            PopularWindow = new PopularWindow(this);
+            AddElem(Page, new Vector2(375f, 100f), new Vector2(1170f, 880f));
+            AddElem(ProfileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            AddElem(VersionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
+            AddElem(PopularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
+        }
+
+        public override void EnterMenu()
+        {
+            ulong mapId = Map.GetCurrentMapId();
+            if (Velo.Ingame && Velo.ModuleSolo != null && mapId != ulong.MaxValue)
+            {
+                Page.Push(new LbMainMenuPage(this));
+                Page.TransitionTo(new LbMapMenuPage(this, mapId), 8f, Vector2.Zero);
+            }
+            else
+            {
+                Page.TransitionTo(new LbMainMenuPage(this), 8f, Vector2.Zero);
+            }
+
+            base.EnterMenu();
+
+            Request();
+        }
+
+        public void Request()
+        {
+            RunsDatabase.Instance.CancelAll();
+            Page.Child.PushRequests();
+            PopularWindow.PushRequests();
+            RunsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
+        }
+    }
+
+    public class Leaderboard : ToggleModule
     {
         public BoolSetting DisableLeaderboard;
         public BoolSetting PreciseTimer;
@@ -24,9 +87,7 @@ namespace Velo
 
         private TextDraw runStatus;
 
-        private LabelW profileButton;
-        private LabelW versionText;
-        private PopularWindow popularWindow;
+        public LbContext context;
 
         private Leaderboard() : base("Leaderboard")
         {
@@ -73,27 +134,7 @@ namespace Velo
         {
             base.Init();
 
-            profileButton = new LabelW("My profile", Fonts.FontMedium);
-            Style.ApplyButton(profileButton);
-            profileButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT)
-                {
-                    if (Page is LbPlayerMenuPage playerMenu && playerMenu.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID)
-                        return;
-
-                    ChangePage(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID));
-                }
-            };
-
-            versionText = new LabelW(Version.VERSION_NAME + " - " + Version.AUTHOR, Fonts.FontSmall);
-            Style.ApplyText(versionText);
-            versionText.Align = new Vector2(0f, 0.5f);
-            versionText.Color = () => Color.Gray * 0.5f;
-            popularWindow = new PopularWindow(this);
-            AddElem(profileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
-            AddElem(versionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            AddElem(popularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
+            context = new LbContext(Enabled);
         }
 
         public override void PreUpdate()
@@ -120,9 +161,9 @@ namespace Velo
                 RunsDatabase.Instance.Clear();
                 RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
                 RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
-                Reset();
-                Refresh();
-                OnChange();
+                context.Reset();
+                context.Refresh();
+                context.Request();
             }
 
             base.PostRender();
@@ -164,6 +205,8 @@ namespace Velo
 
                 runStatus.Draw();
             }
+
+            context.Render();
         }
 
         public void OnRunFinished(Recording run)
@@ -172,28 +215,6 @@ namespace Velo
                 return;
 
             RecordingSubmitter.Instance.Submit(run);
-        }
-
-        public override void OnChange()
-        {
-            RunsDatabase.Instance.CancelAll();
-            (Page as IRequestable).PushRequests();
-            popularWindow.PushRequests();
-            RunsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
-        }
-
-        public override Menu GetStartMenu()
-        {
-            ulong mapId = Map.GetCurrentMapId();
-            if (Velo.Ingame && Velo.ModuleSolo != null && mapId != ulong.MaxValue)
-            {
-                PushBackStack(new LbMainMenuPage(this));
-                return new LbMapMenuPage(this, mapId);
-            }
-            else
-            {
-                return new LbMainMenuPage(this);
-            }
         }
     }
 }

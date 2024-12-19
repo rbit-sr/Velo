@@ -45,7 +45,7 @@ namespace Velo
         }
     }
 
-    public class Savestate : IDisposable
+    public class Savestate
     {
         private readonly int VERSION = 4;
         public static ushort LoadedVersion = Version.VERSION;
@@ -1547,7 +1547,8 @@ namespace Velo
         public static readonly ActorType ATFallBlock = new ActorType<FallBlock>(Write, Read);
         public static readonly ActorType ATMovingPlatform = new ActorType<MovingPlatform>(Write, Read);
 
-        private readonly MemoryStream stream;
+        private MemoryStream stream;
+
         private readonly List<int> chunkOffsets = new List<int>();
 
         private static long dt;
@@ -1559,17 +1560,9 @@ namespace Velo
         private static readonly HashSet<CActor> fixedIndexActors = new HashSet<CActor>();
         private static readonly HashSet<int> fixedIds = new HashSet<int>();
 
-        private static readonly Stack<MemoryStream> memoryPool = new Stack<MemoryStream>();
-
         public Savestate()
         {
-            if (memoryPool.Count > 0)
-                lock (memoryPool)
-                {
-                    stream = memoryPool.Pop();
-                }
-            else
-                stream = new MemoryStream();
+            stream = new MemoryStream();
             stream.Write(-1);
         }
 
@@ -2055,13 +2048,203 @@ namespace Velo
             return true;
         }
 
-        void IDisposable.Dispose()
+        public Savestate Clone()
         {
-            lock (memoryPool)
+            Savestate savestate = new Savestate();
+            stream.Position = 0;
+            savestate.stream.Position = 0;
+            stream.CopyTo(savestate.stream);
+            return savestate;
+        }
+
+        public void Compress(Savestate reference)
+        {
+            MemoryStream compressed = new MemoryStream();
+            stream.Position = 0;
+            reference.stream.Position = 0;
+
+            const bool COPY_MODE = false;
+            const bool DIFF_MODE = true;
+            bool mode = COPY_MODE;
+
+            while (stream.Position < stream.Length)
             {
-                stream.Position = 0;
-                memoryPool.Push(stream);
+                if (mode == COPY_MODE)
+                {
+                    int count = 0;
+                    while (count < 255 && stream.Position < stream.Length && reference.stream.Position < reference.stream.Length)
+                    {
+                        if (stream.ReadByte() != reference.stream.ReadByte())
+                        {
+                            stream.Position--;
+                            reference.stream.Position--;
+                            break;
+                        }
+                        count++;
+                    }
+                    compressed.WriteByte((byte)count);
+                }
+                if (mode == DIFF_MODE)
+                {
+                    compressed.WriteByte(0);
+                    int count = 0;
+                    while (count < 255 && stream.Position < stream.Length)
+                    {
+                        int b = stream.ReadByte();
+                        if (reference.stream.Position < reference.stream.Length && b == reference.stream.ReadByte())
+                        {
+                            stream.Position--;
+                            reference.stream.Position--;
+                            break;
+                        }
+                        count++;
+                        compressed.WriteByte((byte)b);
+                    }
+                    compressed.Position -= count + 1;
+                    compressed.WriteByte((byte)count);
+                    compressed.Position += count;
+                }
+                mode = !mode;
             }
+            stream.Close();
+            stream = compressed;
+        }
+
+        public void Decompress(Savestate reference)
+        {
+            MemoryStream uncompressed = new MemoryStream();
+            stream.Position = 0;
+            reference.stream.Position = 0;
+
+            const bool COPY_MODE = false;
+            const bool DIFF_MODE = true;
+            bool mode = COPY_MODE;
+
+            while (stream.Position < stream.Length)
+            {
+                if (mode == COPY_MODE)
+                {
+                    int count = stream.ReadByte();
+                    for (int i = 0; i < count; i++)
+                    {
+                        uncompressed.WriteByte((byte)reference.stream.ReadByte());
+                    }
+                }
+                if (mode == DIFF_MODE)
+                {
+                    int count = stream.ReadByte();
+                    for (int i = 0; i < count; i++)
+                    {
+                        uncompressed.WriteByte((byte)stream.ReadByte());
+                    }
+                    reference.stream.Position += count;
+                }
+                mode = !mode;
+            }
+            stream.Close();
+            stream = uncompressed;
+        }
+    }
+
+    public class SavestateStream
+    {
+        public static readonly int CHUNK_SIZE = 64;
+
+        public class Chunk
+        {
+            public Savestate[] Savestates = new Savestate[CHUNK_SIZE];
+            public int Count = 0;
+            public bool Compressed = false;
+
+            public void Clean()
+            {
+                for (int i = Count; i < CHUNK_SIZE; i++)
+                {
+                    if (Savestates[i] == null)
+                        break;
+                    Savestates[i] = null;
+                }
+            }
+
+            public void Compress()
+            {
+                if (Compressed)
+                    return;
+                for (int i = Count - 1; i >= 1; i--)
+                {
+                    Savestates[i].Compress(Savestates[i - 1]);
+                }
+                Compressed = true;
+            }
+
+            public void Decompress()
+            {
+                if (!Compressed)
+                    return;
+                for (int i = 1; i < Count; i++)
+                {
+                    Savestates[i].Decompress(Savestates[i - 1]);
+                }
+                Compressed = false;
+            }
+        }
+
+        private readonly List<Chunk> chunks = new List<Chunk>();
+        private int position = 0;
+        public int Position
+        {
+            get => position;
+            set
+            {
+                int oldChunkIndex = position / CHUNK_SIZE;
+                int newChunkIndex = value / CHUNK_SIZE;
+                if (oldChunkIndex != newChunkIndex)
+                {
+                    chunks[oldChunkIndex].Compress();
+                    if (chunks.Count > newChunkIndex)
+                        chunks[newChunkIndex].Decompress();
+                }
+                position = value;
+            }
+        }
+        public int Length => chunks.Count == 0 ? 0 : CHUNK_SIZE * (chunks.Count - 1) + chunks.Last().Count;
+
+        public SavestateStream()
+        {
+
+        }
+
+        public void Write(Savestate savestate)
+        {
+            int chunkIndex = Position / CHUNK_SIZE;
+            int savestateIndex = Position % CHUNK_SIZE;
+            if (chunks.Count <= chunkIndex)
+            {
+                chunks.Add(new Chunk());
+            }
+            Chunk chunk = chunks[chunkIndex];
+            chunk.Savestates[savestateIndex] = savestate;
+            chunk.Count = savestateIndex + 1;
+            chunk.Clean();
+            chunks.RemoveRange(chunkIndex + 1, chunks.Count - chunkIndex - 1);
+
+            Position++;
+        }
+
+        public Savestate Read()
+        {
+            int chunkIndex = Position / CHUNK_SIZE;
+            int savestateIndex = Position % CHUNK_SIZE;
+            Chunk chunk = chunks[chunkIndex];
+            Savestate savestate = chunk.Savestates[savestateIndex];
+
+            Position++;
+            return savestate;
+        }
+
+        public void Clear()
+        {
+            chunks.Clear();
         }
     }
 }

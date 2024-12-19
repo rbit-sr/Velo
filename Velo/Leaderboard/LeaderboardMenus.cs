@@ -10,13 +10,15 @@ using System.Threading.Tasks;
 
 namespace Velo
 {
-    public interface IRequestable
+    public interface ILbWidget : IWidget
     {
         void PushRequests();
     }
 
-    public abstract class LbMenuPage : Menu, IRequestable
+    public abstract class LbMenuPage : LayoutW, ILbWidget
     {
+        protected readonly LbContext context;
+
         protected LabelW title;
         protected LayoutW titleBar;
         protected HolderW<Widget> content;
@@ -27,17 +29,17 @@ namespace Velo
 
         private float loadingRotation = -(float)Math.PI / 2f;
 
-        public LbMenuPage(MenuModule module, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true, bool showStatus = true)
-            : base(module, EOrientation.VERTICAL)
+        public LbMenuPage(LbContext context, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true, bool showStatus = true)
+            : base(EOrientation.VERTICAL)
         {
-            this.module = module;
+            this.context = context;
             this.showStatus = showStatus;
 
             content = new HolderW<Widget>();
 
             if (title != "")
             {
-                this.title = new LabelW(title, module.Fonts.FontTitle)
+                this.title = new LabelW(title, context.Fonts.FontTitle)
                 {
                     Align = new Vector2(0f, 0.5f),
                     Color = SettingsUI.Instance.HeaderTextColor.Value.Get
@@ -75,7 +77,7 @@ namespace Velo
 
             if (RunsDatabase.Instance.Pending())
             {
-                module.Error = null;
+                context.Error = null;
 
                 float dt = (float)Velo.RealDelta.TotalSeconds;
                 if (dt > 1f)
@@ -96,15 +98,15 @@ namespace Velo
             {
                 loadingRotation = -(float)Math.PI / 2f;
             }
-            if (module.Error != "" && module.Error != null)
+            if (context.Error != "" && context.Error != null)
             {
                 Velo.SpriteBatch.End();
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
 
-                CTextDrawComponent errorDraw = new CTextDrawComponent("", module.Fonts.FontMedium.Font, Vector2.Zero)
+                CTextDrawComponent errorDraw = new CTextDrawComponent("", context.Fonts.FontMedium.Font, Vector2.Zero)
                 {
                     IsVisible = true,
-                    StringText = Util.LineBreaks("Error: " + module.Error, 30),
+                    StringText = Util.LineBreaks("Error: " + context.Error, 30),
                     Color = Color.Red,
                     HasDropShadow = true,
                     DropShadowColor = Color.Black,
@@ -124,25 +126,24 @@ namespace Velo
         public abstract void PushRequests();
     }
 
-    public abstract class LbTable<T> : Menu, ITableEntryFactory<T>, IRequestable where T : struct
+    public abstract class LbTable<T> : LayoutW, ILbWidget, ITableEntryFactory<T> where T : struct
     {
+        protected readonly LbContext context;
+
         protected TableW<T> table;
         
-        public LbTable(MenuModule module) :
-            base(module, EOrientation.VERTICAL)
+        public LbTable(LbContext context) :
+            base(EOrientation.VERTICAL)
         {
-            table = new TableW<T>(module.Fonts.FontMedium, 40, this);
-            this.module = module;
+            this.context = context;
+            table = new TableW<T>(context.Fonts.FontMedium, 40, this);
+            this.context = context;
             Style.ApplyTable(table);
             table.AddSpace(10f);
 
             AddChild(table, FILL);
         }
 
-        public override void Reset()
-        {
-            table.ResetScrollState();
-        }
         public abstract void PushRequests();
         public abstract IEnumerable<T> GetElems();
         public abstract float Height(T elem, int i);
@@ -426,12 +427,12 @@ namespace Velo
             public Widget Original => original;
             public Widget Expanded => layout;
 
-            public ExpandedRow(Widget original, MenuModule module, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
+            public ExpandedRow(Widget original, LbContext context, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
             {
                 this.run = run;
                 this.original = original;
 
-                LabelW generalLabels = new LabelW("", module.Fonts.FontMedium)
+                LabelW generalLabels = new LabelW("", context.Fonts.FontMedium)
                 {
                     Align = Vector2.Zero,
                     Text =
@@ -439,7 +440,7 @@ namespace Velo
                 };
                 Style.ApplyTextHeader(generalLabels);
 
-                LabelW generalValues = new LabelW("", module.Fonts.FontMedium)
+                LabelW generalValues = new LabelW("", context.Fonts.FontMedium)
                 {
                     Align = Vector2.Zero,
                     Text =
@@ -456,7 +457,7 @@ namespace Velo
                 };
                 Style.ApplyText(generalValues);
 
-                LabelW statsLabels = new LabelW("", module.Fonts.FontMedium)
+                LabelW statsLabels = new LabelW("", context.Fonts.FontMedium)
                 {
                     Align = Vector2.Zero,
                     Text =
@@ -464,7 +465,7 @@ namespace Velo
                 };
                 Style.ApplyTextHeader(statsLabels);
 
-                LabelW statsValues = new LabelW("", module.Fonts.FontMedium)
+                LabelW statsValues = new LabelW("", context.Fonts.FontMedium)
                 {
                     Align = Vector2.Zero,
                     Text =
@@ -481,19 +482,19 @@ namespace Velo
 
                 ImageW avatar = new ImageW(SteamCache.GetAvatar(run.PlayerId));
 
-                viewProfile = new LabelW("View profile", module.Fonts.FontMedium);
+                viewProfile = new LabelW("View profile", context.Fonts.FontMedium);
                 Style.ApplyButton(viewProfile);
                 viewProfile.Hoverable = false;
                 viewProfile.OnLeftClick = () =>
                 {
-                    module.ChangePage(new LbPlayerMenuPage(module, run.PlayerId));
+                    context.Page.TransitionTo(new LbPlayerMenuPage(context, run.PlayerId), 8f, Vector2.Zero);
                 };
-                mapPage = new LabelW("Map page", module.Fonts.FontMedium);
+                mapPage = new LabelW("Map page", context.Fonts.FontMedium);
                 Style.ApplyButton(mapPage);
                 mapPage.Hoverable = false;
                 mapPage.OnLeftClick = () =>
                 {
-                    module.ChangePage(new LbMapMenuPage(module, run.Category.MapId));
+                    context.Page.TransitionTo(new LbMapMenuPage(context, run.Category.MapId), 8f, Vector2.Zero);
                 };
 
                 LayoutW avatarLayout = new LayoutW(EOrientation.VERTICAL);
@@ -516,21 +517,21 @@ namespace Velo
 
                 MapEvent mapEvent = RunsDatabase.Instance.GetEvent(run.Category.MapId);
                 
-                setGhost = new LabelW("Set ghost", module.Fonts.FontMedium);
+                setGhost = new LabelW("Set ghost", context.Fonts.FontMedium);
                 Style.ApplyButton(setGhost);
                 setGhost.Hoverable = false;
                 setGhost.OnLeftClick = () =>
                 {
                     requestRecording(run.Id, Playback.EPlaybackType.SET_GHOST);
                 };
-                viewReplay = new LabelW("Watch replay", module.Fonts.FontMedium);
+                viewReplay = new LabelW("Watch replay", context.Fonts.FontMedium);
                 Style.ApplyButton(viewReplay);
                 viewReplay.Hoverable = false;
                 viewReplay.OnLeftClick = () =>
                 {
                     requestRecording(run.Id, Playback.EPlaybackType.VIEW_REPLAY);
                 };
-                verify = new LabelW("Verify", module.Fonts.FontMedium);
+                verify = new LabelW("Verify", context.Fonts.FontMedium);
                 Style.ApplyButton(verify);
                 verify.Hoverable = false;
                 verify.OnLeftClick = () =>
@@ -561,7 +562,7 @@ namespace Velo
                 layout.AddSpace(10f);
                 if (run.HasComments != 0)
                 {
-                    comments = new LabelW(RunsDatabase.Instance.GetComment(run.Id), module.Fonts.FontMedium);
+                    comments = new LabelW(RunsDatabase.Instance.GetComment(run.Id), context.Fonts.FontMedium);
                     Style.ApplyText(comments);
                     comments.Align = Vector2.Zero;
                     comments.Padding = 10f * Vector2.One;
@@ -633,8 +634,8 @@ namespace Velo
             }
         }
 
-        protected int Count;
-        private int requestCount;
+        protected int Count = 100;
+        private int requestCount = 0;
         private bool initialRequest = true;
 
         private int expandedId = -1;
@@ -643,8 +644,8 @@ namespace Velo
         private int requestedId = -1;
         private Playback.EPlaybackType requestedPlaybackType = default;
 
-        public LbRunsTable(MenuModule module, bool mapPageButton) :
-            base(module)
+        public LbRunsTable(LbContext context, bool mapPageButton) :
+            base(context)
         {
             table.OnLeftClickRow = (row, elem, i) =>
             {
@@ -663,7 +664,7 @@ namespace Velo
                     expandedId = elem.Id;
                     if (!expanded.TryGetValue(expandedId, out ExpandedRow expandedRow) || expandedRow == null)
                     {
-                        expandedRow = new ExpandedRow(row, module, elem, mapPageButton, InitiatePlayback)
+                        expandedRow = new ExpandedRow(row, context, elem, mapPageButton, InitiatePlayback)
                         {
                             OnClick = row.OnClick
                         };
@@ -673,12 +674,12 @@ namespace Velo
                     expandedRow.TransitionTo(expandedRow.Expanded);
 
                     if (expandedId != -1 && elem.HasComments != 0)
-                        RunsDatabase.Instance.RequestComment(elem.Id, expandedRow.RefreshComments, (error) => module.Error = error.Message);
+                        RunsDatabase.Instance.RequestComment(elem.Id, expandedRow.RefreshComments, (error) => context.Error = error.Message);
                     else
                         RunsDatabase.Instance.CancelRequestComment();
                 }
 
-                table.Refresh(i);
+                table.RefreshEntry(i);
             };
             table.Hook = (elem, i, widget) =>
             {
@@ -700,7 +701,7 @@ namespace Velo
             ulong currentMapId = Map.GetCurrentMapId();
             if (currentMapId == ulong.MaxValue || RunsDatabase.Instance.Get(id).Category.MapId != currentMapId)
             {
-                module.Error = "Please enter the respective map first!";
+                context.Error = "Please enter the respective map first!";
                 return;
             }
 
@@ -716,12 +717,12 @@ namespace Velo
                             Ghosts.Instance.WaitForGhost(ghostIndex);
                         Velo.AddOnPreUpdate(() =>
                         {
-                            module.ExitMenu(false);
+                            context.ExitMenu(false);
                             OfflineGameMods.Instance.StartPlayback(recording, type, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
                         });
                     });
                 },
-                (error) => module.Error = error.Message
+                (error) => context.Error = error.Message
             );
         }
 
@@ -730,14 +731,8 @@ namespace Velo
             return !initialRequest && table.ReachedEnd && Count == requestCount && Count <= GetElems().Count();
         }
 
-        public override void Refresh()
-        {
-           
-        }
-
         public override void PushRequests()
         {
-
             if (NeedRequestMore())
             {
                 requestCount += 100;
@@ -782,7 +777,7 @@ namespace Velo
             
             if (NeedRequestMore())
             {
-                module.OnChange();
+                context.Request();
             }
         }
 
@@ -800,16 +795,16 @@ namespace Velo
         private readonly Category category;
         private readonly EFilter filter;
 
-        public LbMapRunsTable(MenuModule module, Category category, EFilter filter) :
-            base(module, mapPageButton: false)
+        public LbMapRunsTable(LbContext context, Category category, EFilter filter) :
+            base(context, mapPageButton: false)
         {
             this.category = category;
             this.filter = filter;
 
-            table.AddColumn("#", 50, (run) => new PlaceEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Player", FILL, (run) => new PlayerEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Time", 200, (run) => new TimeEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Age", 200, (run) => new AgeEntry(module.Fonts.FontMedium, run));
+            table.AddColumn("#", 50, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Player", FILL, (run) => new PlayerEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Time", 200, (run) => new TimeEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Age", 200, (run) => new AgeEntry(context.Fonts.FontMedium, run));
         }
 
         public override IEnumerable<RunInfo> GetElems()
@@ -863,8 +858,8 @@ namespace Velo
         private bool eventsTabShown = true;
         private int showEventButtonId = 0;
 
-        public LbMapMenuPage(MenuModule module, ulong mapId) :
-            base(module, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
+        public LbMapMenuPage(LbContext context, ulong mapId) :
+            base(context, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
         {
             this.mapId = mapId;
 
@@ -890,12 +885,12 @@ namespace Velo
             categories.Add(ECategoryType.EVENT);
 
             string[] categoryLabels = categories.Select(c => c.Label()).ToArray();
-            categorySelect = new SelectorButtonW(categoryLabels, 0, module.Fonts.FontMedium);
+            categorySelect = new SelectorButtonW(categoryLabels, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(categorySelect);
            
             string[] filters = new string[] { "PBs only", "WR history", "All" };
 
-            filterSelect = new SelectorButtonW(filters, 0, module.Fonts.FontMedium);
+            filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(filterSelect);
 
             tables = new DualTabbedW<LbMapRunsTable>(categorySelect, filterSelect);
@@ -903,10 +898,10 @@ namespace Velo
             {
                 for (int i2 = 0; i2 < filters.Length; i2++)
                 {
-                    tables.SetTab(i1, i2, new LbMapRunsTable(module, new Category { MapId = mapId, TypeId = (ulong)categories[i1] }, (LbMapRunsTable.EFilter)i2));
+                    tables.SetTab(i1, i2, new LbMapRunsTable(context, new Category { MapId = mapId, TypeId = (ulong)categories[i1] }, (LbMapRunsTable.EFilter)i2));
                 }
             }
-            tables.OnSwitch = _ => module.OnChange();
+            tables.OnSwitch = _ => context.Request();
 
             if (mapEvent.CurrentlyNotRunning())
             {
@@ -916,9 +911,9 @@ namespace Velo
 
             content.Child = tables;
 
-            backButton = new LabelW("Back", module.Fonts.FontMedium);
+            backButton = new LabelW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
-            backButton.OnLeftClick = module.PopPage;
+            backButton.OnLeftClick = () => context.Page.TransitionBack(8f, Vector2.Zero);
 
             buttonRowUpper.AddSpace(LayoutW.FILL);
             buttonRowUpper.AddChild(filterSelect, 570f);
@@ -927,11 +922,11 @@ namespace Velo
             buttonRowLower.AddSpace(LayoutW.FILL);
             buttonRowLower.AddChild(categorySelect, categorySelect.ShownCount * 190);
 
-            eventLabel = new LabelW("", module.Fonts.FontMedium);
+            eventLabel = new LabelW("", context.Fonts.FontMedium);
             Style.ApplyText(eventLabel);
             eventLabel.Align = new Vector2(1f, 0.5f);
 
-            showEventButton = new LabelW("View event", module.Fonts.FontMedium);
+            showEventButton = new LabelW("View event", context.Fonts.FontMedium);
             Style.ApplyButton(showEventButton);
             showEventButton.OnLeftClick = () =>
             {
@@ -964,7 +959,7 @@ namespace Velo
             ulong fileId = mapId;
             if (Map.IsOther(mapId) || Map.MapIdToFileId.TryGetValue(mapId, out fileId))
             {
-                workshopPageButton = new LabelW("Workshop page", module.Fonts.FontMedium);
+                workshopPageButton = new LabelW("Workshop page", context.Fonts.FontMedium);
                 Style.ApplyButton(workshopPageButton);
                 workshopPageButton.OnLeftClick = () =>
                 {
@@ -978,12 +973,12 @@ namespace Velo
             }
             if (Map.IsOrigins(mapId))
             {
-                enterMapButton = new LabelW("Enter map", module.Fonts.FontMedium);
+                enterMapButton = new LabelW("Enter map", context.Fonts.FontMedium);
                 Style.ApplyButton(enterMapButton);
                 enterMapButton.OnLeftClick = () =>
                 {
                     Origins.Instance.SelectOrigins(mapId);
-                    module.ExitMenu(animation: false);
+                    context.ExitMenu(animation: false);
                 };
                 enterMapButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
                 enterMapButtonLayout.AddSpace(LayoutW.FILL);
@@ -1008,16 +1003,11 @@ namespace Velo
 
         public override void Refresh()
         {
-            tables.Current.Refresh();
+            base.Refresh();
 
             MapEvent mapEvent = RunsDatabase.Instance.GetEvent(mapId);
             if (!mapEvent.CurrentlyNotRunning())
                 ShowEventsTab();
-        }
-
-        public override void Reset()
-        {
-            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
         public override void PushRequests()
@@ -1069,32 +1059,32 @@ namespace Velo
 
         public ulong PlayerId => playerId;
 
-        public LbPlayerRunsTable(MenuModule module, ulong playerId, EFilter filter) :
-            base(module)
+        public LbPlayerRunsTable(LbContext context, ulong playerId, EFilter filter) :
+            base(context)
         {
             this.playerId = playerId;
             this.filter = filter;
 
             int colWidth = filter != EFilter.OTHER && filter != EFilter.ORIGINS ? 230 : 280;
-            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
+            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium, runs.MapId));
             if (filter != EFilter.ORIGINS)
             {
-                table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.NewLap));
-                table.AddColumn("1 Lap", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.OneLap));
+                table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.NewLap));
+                table.AddColumn("1 Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.OneLap));
                 if (filter != EFilter.OTHER)
                 {
-                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.NewLapSkip));
-                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.OneLapSkip));
+                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.NewLapSkip));
+                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.OneLapSkip));
                 }
             }
             else
             {
-                table.AddColumn("Any%", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.AnyPerc));
-                table.AddColumn("100%", colWidth, (runs) => new TimePlaceEntry(module.Fonts.FontMedium, runs.HundredPerc));
+                table.AddColumn("Any%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.AnyPerc));
+                table.AddColumn("100%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.HundredPerc));
             }
             table.OnLeftClickRow = (row, runs, i) =>
             {
-                module.ChangePage(new LbMapMenuPage(module, runs.MapId));
+                context.Page.TransitionTo(new LbMapMenuPage(context, runs.MapId), 8f, Vector2.Zero);
             };
         }
 
@@ -1122,11 +1112,6 @@ namespace Velo
             return 40f;
         }
 
-        public override void Refresh()
-        {
-            
-        }
-
         public override void PushRequests()
         {
             RunsDatabase.Instance.PushRequestPopularityOrder(null, curated: false);
@@ -1152,48 +1137,48 @@ namespace Velo
 
         public ulong PlayerId => playerId;
 
-        public LbPlayerMenuPage(MenuModule module, ulong playerId) :
-            base(module, RunsDatabase.Instance.GetPlayerName(playerId), buttonRowLower: true)
+        public LbPlayerMenuPage(LbContext context, ulong playerId) :
+            base(context, RunsDatabase.Instance.GetPlayerName(playerId), buttonRowLower: true)
         {
             this.playerId = playerId;
 
             titleBar.ClearChildren();
             avatar = new ImageW(SteamCache.GetAvatar(playerId));
-            statsTitles1 = new LabelW("PBs:\nWRs:", module.Fonts.FontMedium);
+            statsTitles1 = new LabelW("PBs:\nWRs:", context.Fonts.FontMedium);
             Style.ApplyText(statsTitles1);
             statsTitles1.Align = new Vector2(0f, 0.5f);
-            statsValues1 = new LabelW("", module.Fonts.FontMedium);
+            statsValues1 = new LabelW("", context.Fonts.FontMedium);
             Style.ApplyText(statsValues1);
             statsValues1.Align = new Vector2(0f, 0.5f);
-            statsTitles2 = new LabelW("Score:\nPerfection:", module.Fonts.FontMedium);
+            statsTitles2 = new LabelW("Score:\nPerfection:", context.Fonts.FontMedium);
             Style.ApplyText(statsTitles2);
             statsTitles2.Align = new Vector2(0f, 0.5f);
-            statsValues2 = new LabelW("", module.Fonts.FontMedium);
+            statsValues2 = new LabelW("", context.Fonts.FontMedium);
             Style.ApplyText(statsValues2);
             statsValues2.Align = new Vector2(0f, 0.5f);
             titleBar.AddChild(avatar, 60f);
             titleBar.AddSpace(10f);
             titleBar.AddChild(title, LayoutW.FILL);
 
-            backButton = new LabelW("Back", module.Fonts.FontMedium);
+            backButton = new LabelW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
             backButton.OnLeftClick = () =>
             {
                 RunsDatabase.Instance.CancelAll();
-                module.PopPage();
+                context.Page.TransitionBack(8f, Vector2.Zero);
             };
 
             string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
 
-            filterSelect = new SelectorButtonW(filters, 0, module.Fonts.FontMedium);
+            filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(filterSelect);
 
             tables = new TabbedW<LbPlayerRunsTable>(filterSelect);
             for (int i = 0; i < filters.Length; i++)
             {
-                tables.SetTab(i, new LbPlayerRunsTable(module, playerId, (LbPlayerRunsTable.EFilter)i));
+                tables.SetTab(i, new LbPlayerRunsTable(context, playerId, (LbPlayerRunsTable.EFilter)i));
             }
-            tables.OnSwitch = _ => module.OnChange();
+            tables.OnSwitch = _ => context.Request();
 
             content.Child = tables;
 
@@ -1201,7 +1186,7 @@ namespace Velo
             buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 950f);
 
-            steamPageButton = new LabelW("Steam page", module.Fonts.FontMedium);
+            steamPageButton = new LabelW("Steam page", context.Fonts.FontMedium);
             Style.ApplyButton(steamPageButton);
             steamPageButton.OnLeftClick = () =>
             {
@@ -1230,7 +1215,7 @@ namespace Velo
 
         public override void Refresh()
         {
-            tables.Current.Refresh();
+            base.Refresh();
 
             statsValues1.Text = "";
             statsValues2.Text = "";
@@ -1297,11 +1282,6 @@ namespace Velo
                 statsValues2.Text += new RoundingMultiplier("0.01").ToStringRounded((float)((double)perfectTimeSum / timeSum * 100.0)) + "%";
 
         }
-
-        public override void Reset()
-        {
-            tables.Tabs.ForEach(tab => tab.Reset());
-        }
     }
 
     public class LbTopRunsTable : LbTable<MapRunInfos>
@@ -1323,38 +1303,38 @@ namespace Velo
 
         public ESorting Sorting;
 
-        public LbTopRunsTable(MenuModule module, EFilter filter, Func<int> place) :
-            base(module)
+        public LbTopRunsTable(LbContext context, EFilter filter, Func<int> place) :
+            base(context)
         {
             Filter = filter;
             this.place = place;
 
             int colWidth = (filter != EFilter.OTHER && filter != EFilter.ORIGINS) ? 230 : 380;
-            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(module.Fonts.FontMedium, runs.MapId));
+            table.AddColumn("Map", FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium, runs.MapId));
             if (filter != EFilter.ORIGINS)
             {
-                table.AddColumn("New Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLap, compact: filter == EFilter.OTHER));
+                table.AddColumn("New Lap", colWidth, runs => new PlayerTimeEntry(context.Fonts.FontMedium, runs.NewLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
                     table.AddSpace(40f);
-                table.AddColumn("1 Lap", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.OneLap, compact: filter == EFilter.OTHER));
+                table.AddColumn("1 Lap", colWidth, runs => new PlayerTimeEntry(context.Fonts.FontMedium, runs.OneLap, compact: filter == EFilter.OTHER));
                 if (filter == EFilter.OTHER)
                     table.AddSpace(15f);
                 if (filter != EFilter.OTHER)
                 {
-                    table.AddColumn("New Lap (Skip)", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.NewLapSkip));
-                    table.AddColumn("1 Lap (Skip)", colWidth, runs => new PlayerTimeEntry(module.Fonts.FontMedium, runs.OneLapSkip));
+                    table.AddColumn("New Lap (Skip)", colWidth, runs => new PlayerTimeEntry(context.Fonts.FontMedium, runs.NewLapSkip));
+                    table.AddColumn("1 Lap (Skip)", colWidth, runs => new PlayerTimeEntry(context.Fonts.FontMedium, runs.OneLapSkip));
                 }
             }
             else
             {
-                table.AddColumn("Any%", colWidth, (runs) => new PlayerTimeEntry(module.Fonts.FontMedium, runs.AnyPerc, compact: true));
+                table.AddColumn("Any%", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium, runs.AnyPerc, compact: true));
                 table.AddSpace(40f);
-                table.AddColumn("100%", colWidth, (runs) => new PlayerTimeEntry(module.Fonts.FontMedium, runs.HundredPerc, compact: true));
+                table.AddColumn("100%", colWidth, (runs) => new PlayerTimeEntry(context.Fonts.FontMedium, runs.HundredPerc, compact: true));
                 table.AddSpace(15f);
             }
             table.OnLeftClickRow = (row, runs, i) =>
                 {
-                    module.ChangePage(new LbMapMenuPage(module, runs.MapId));
+                    context.Page.TransitionTo(new LbMapMenuPage(context, runs.MapId), 8f, Vector2.Zero);
                 };
         }
 
@@ -1401,11 +1381,6 @@ namespace Velo
         public override float Height(MapRunInfos elem, int i)
         {
             return Filter != EFilter.ORIGINS && Filter != EFilter.OTHER ? 74f : 40f;
-        }
-
-        public override void Refresh()
-        {
-            
         }
 
         public override void PushRequests()
@@ -1493,19 +1468,19 @@ namespace Velo
 
         private int place = 0;
 
-        public LbTopRunsMenuPage(MenuModule module) :
-            base(module, "Top runs", buttonRowLower: true, showStatus: false)
+        public LbTopRunsMenuPage(LbContext context) :
+            base(context, "Top runs", buttonRowLower: true, showStatus: false)
         {
 
             string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
 
-            filterSelect = new SelectorButtonW(filters, 0, module.Fonts.FontMedium);
+            filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(filterSelect);
 
             tables = new TabbedW<LbTopRunsTable>(filterSelect);
             for (int i = 0; i < filters.Length; i++)
             {
-                LbTopRunsTable next = new LbTopRunsTable(module, (LbTopRunsTable.EFilter)i, () => place);
+                LbTopRunsTable next = new LbTopRunsTable(context, (LbTopRunsTable.EFilter)i, () => place);
                 next.Sorting = next.Filter.DefaultSorting();
                 tables.SetTab(i, next);
             }
@@ -1513,7 +1488,7 @@ namespace Velo
             {
                 place = 0;
                 UpdatePlaceLabel();
-                module.OnChange();
+                context.Request();
                 newTab.Sorting = newTab.Filter.DefaultSorting();
                 sortingButton.Text = newTab.Sorting.Label();
             };
@@ -1522,9 +1497,9 @@ namespace Velo
             buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 950f);
 
-            orderByLabel = new LabelW("Order by:", module.Fonts.FontMedium);
+            orderByLabel = new LabelW("Order by:", context.Fonts.FontMedium);
             Style.ApplyText(orderByLabel);
-            sortingButton = new LabelW(tables.Current.Sorting.Label(), module.Fonts.FontMedium);
+            sortingButton = new LabelW(tables.Current.Sorting.Label(), context.Fonts.FontMedium);
             Style.ApplyButton(sortingButton);
             sortingButton.OnLeftClick = () =>
             {
@@ -1547,11 +1522,11 @@ namespace Velo
             sortingLayout.AddChild(sortingButton, 35f);
             titleBar.AddChild(sortingLayout, 190f);
 
-            placeLabel = new LabelW("Place:", module.Fonts.FontMedium);
+            placeLabel = new LabelW("Place:", context.Fonts.FontMedium);
             Style.ApplyText(placeLabel);
-            placeSelectLabel = new LabelW("1st", module.Fonts.FontMedium);
+            placeSelectLabel = new LabelW("1st", context.Fonts.FontMedium);
             Style.ApplyText(placeSelectLabel);
-            placeDecrButton = new LabelW("-", module.Fonts.FontMedium);
+            placeDecrButton = new LabelW("-", context.Fonts.FontMedium);
             Style.ApplyButton(placeDecrButton);
             placeDecrButton.OnLeftClick = () =>
             {
@@ -1561,16 +1536,16 @@ namespace Velo
                 else
                 {
                     UpdatePlaceLabel();
-                    module.OnChange();
+                    context.Request();
                 }
             };
-            placeIncrButton = new LabelW("+", module.Fonts.FontMedium);
+            placeIncrButton = new LabelW("+", context.Fonts.FontMedium);
             Style.ApplyButton(placeIncrButton);
             placeIncrButton.OnLeftClick = () =>
             {
                 place++;
                 UpdatePlaceLabel();
-                module.OnChange();
+                context.Request();
             };
             placeSelectLayoutH = new LayoutW(EOrientation.HORIZONTAL);
             placeSelectLayoutH.AddChild(placeDecrButton, 50f);
@@ -1582,16 +1557,6 @@ namespace Velo
             placeSelectLayoutV.AddChild(placeSelectLayoutH, 35f);
             titleBar.AddSpace(10f);
             titleBar.AddChild(placeSelectLayoutV, 190f);
-        }
-
-        public override void Refresh()
-        {
-            tables.Current.Refresh();
-        }
-
-        public override void Reset()
-        {
-            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
         public override void PushRequests()
@@ -1626,17 +1591,17 @@ namespace Velo
 
         private readonly EFilter filter;
 
-        public LbRecentRunsTable(MenuModule module, EFilter filter) :
-            base(module, mapPageButton: true)
+        public LbRecentRunsTable(LbContext context, EFilter filter) :
+            base(context, mapPageButton: true)
         {
             this.filter = filter;
 
-            table.AddColumn("Map", FILL, (run) => new MapEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Category", 170f, (run) => new CategoryEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Player", 350f, (run) => new PlayerEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Time", 170f, (run) => new TimeEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("Age", 150f, (run) => new AgeEntry(module.Fonts.FontMedium, run));
-            table.AddColumn("#", 40f, (run) => new PlaceEntry(module.Fonts.FontMedium, run));
+            table.AddColumn("Map", FILL, (run) => new MapEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Category", 170f, (run) => new CategoryEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Player", 350f, (run) => new PlayerEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Time", 170f, (run) => new TimeEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Age", 150f, (run) => new AgeEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("#", 40f, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
         }
 
         public override IEnumerable<RunInfo> GetElems()
@@ -1671,35 +1636,25 @@ namespace Velo
         private readonly SelectorButtonW filterSelect;
         private readonly TabbedW<LbRecentRunsTable> tables;
 
-        public LbRecentMenuPage(MenuModule module) :
-            base(module, "Recent runs", buttonRowLower: true, showStatus: false)
+        public LbRecentMenuPage(LbContext context) :
+            base(context, "Recent runs", buttonRowLower: true, showStatus: false)
         {
             string[] filters = new string[] { "All", "WRs only" };
 
-            filterSelect = new SelectorButtonW(filters, 0, module.Fonts.FontMedium);
+            filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(filterSelect);
 
             tables = new TabbedW<LbRecentRunsTable>(filterSelect);
             for (int i = 0; i < filters.Length; i++)
             {
-                tables.SetTab(i, new LbRecentRunsTable(module, (LbRecentRunsTable.EFilter)i));
+                tables.SetTab(i, new LbRecentRunsTable(context, (LbRecentRunsTable.EFilter)i));
             }
-            tables.OnSwitch = _ => module.OnChange();
+            tables.OnSwitch = _ => context.Request();
 
             content.Child = tables;
 
             buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 380f);
-        }
-
-        public override void Refresh()
-        {
-            tables.Current.Refresh();
-        }
-
-        public override void Reset()
-        {
-            tables.Tabs.ForEach(tab => tab.Reset());
         }
 
         public override void PushRequests()
@@ -1772,16 +1727,16 @@ namespace Velo
             }
         }
 
-        public LbTopPlayersScoreTable(MenuModule module) :
-            base(module)
+        public LbTopPlayersScoreTable(LbContext context) :
+            base(context)
         {
-            table.AddColumn("#", 50f, (player) => new PlaceEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("Player", FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("Score", 120f, (player) => new ScoreEntry(module.Fonts.FontMedium, player));
+            table.AddColumn("#", 50f, (player) => new PlaceEntry(context.Fonts.FontMedium, player));
+            table.AddColumn("Player", FILL, (player) => new PlayerEntry(context.Fonts.FontMedium, player));
+            table.AddColumn("Score", 120f, (player) => new ScoreEntry(context.Fonts.FontMedium, player));
 
             table.OnLeftClickRow = (row, player, i) =>
             {
-                module.ChangePage(new LbPlayerMenuPage(module, player.PlayerId));
+                context.Page.TransitionTo(new LbPlayerMenuPage(context, player.PlayerId), 8f, Vector2.Zero);
             };
         }
 
@@ -1793,11 +1748,6 @@ namespace Velo
         public override float Height(PlayerInfoScore elem, int i)
         {
             return 40f;
-        }
-
-        public override void Refresh()
-        {
-            
         }
 
         public override void PushRequests()
@@ -1870,16 +1820,16 @@ namespace Velo
             }
         }
 
-        public LbTopPlayersWRsTable(MenuModule module) :
-            base(module)
+        public LbTopPlayersWRsTable(LbContext context) :
+            base(context)
         {
-            table.AddColumn("#", 50f, (player) => new PlaceEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("Player", FILL, (player) => new PlayerEntry(module.Fonts.FontMedium, player));
-            table.AddColumn("WRs", 80f, (player) => new WrCountEntry(module.Fonts.FontMedium, player));
+            table.AddColumn("#", 50f, (player) => new PlaceEntry(context.Fonts.FontMedium, player));
+            table.AddColumn("Player", FILL, (player) => new PlayerEntry(context.Fonts.FontMedium, player));
+            table.AddColumn("WRs", 80f, (player) => new WrCountEntry(context.Fonts.FontMedium, player));
 
             table.OnLeftClickRow = (row, player, i) =>
             {
-                module.ChangePage(new LbPlayerMenuPage(module, player.PlayerId));
+                context.Page.TransitionTo(new LbPlayerMenuPage(context, player.PlayerId), 8f, Vector2.Zero);
             };
         }
 
@@ -1897,11 +1847,6 @@ namespace Velo
         {
             RunsDatabase.Instance.PushRequestRuns(new GetWRsRequest(0), Refresh);
         }
-
-        public override void Refresh()
-        {
-
-        }
     }
 
     public class LbTopPlayersMenuPage : LbMenuPage
@@ -1913,20 +1858,20 @@ namespace Velo
         }
 
         private readonly SelectorButtonW typeSelector;
-        private readonly TabbedW<Menu> tables;
+        private readonly TabbedW<ILbWidget> tables;
 
-        public LbTopPlayersMenuPage(MenuModule module) :
-            base(module, "Top players", buttonRowLower: true, showStatus: false)
+        public LbTopPlayersMenuPage(LbContext context) :
+            base(context, "Top players", buttonRowLower: true, showStatus: false)
         {
             string[] types = new[] { "Score", "WR count" };
 
-            typeSelector = new SelectorButtonW(types, 0, module.Fonts.FontMedium);
+            typeSelector = new SelectorButtonW(types, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(typeSelector);
 
-            tables = new TabbedW<Menu>(typeSelector);
-            tables.SetTab((int)EType.SCORE, new LbTopPlayersScoreTable(module));
-            tables.SetTab((int)EType.WR_COUNT, new LbTopPlayersWRsTable(module));
-            tables.OnSwitch = _ => module.OnChange();
+            tables = new TabbedW<ILbWidget>(typeSelector);
+            tables.SetTab((int)EType.SCORE, new LbTopPlayersScoreTable(context));
+            tables.SetTab((int)EType.WR_COUNT, new LbTopPlayersWRsTable(context));
+            tables.OnSwitch = _ => context.Request();
 
             content.Child = tables;
 
@@ -1934,19 +1879,9 @@ namespace Velo
             buttonRowLower.AddChild(typeSelector, 380f);
         }
 
-        public override void Refresh()
-        {
-            tables.Current.Refresh();
-        }
-
-        public override void Reset()
-        {
-            tables.Tabs.ForEach(tab => tab.Reset());
-        }
-
         public override void PushRequests()
         {
-            (tables.Current as IRequestable).PushRequests();
+            tables.Current.PushRequests();
         }
     }
 
@@ -1955,10 +1890,10 @@ namespace Velo
         protected LabelW rules;
         protected ScrollW scroll;
 
-        public LbRulesMenuPage(MenuModule module) :
-            base(module, "Rules", showStatus: false)
+        public LbRulesMenuPage(LbContext context) :
+            base(context, "Rules", showStatus: false)
         {
-            rules = new LabelW("", module.Fonts.FontMedium)
+            rules = new LabelW("", context.Fonts.FontMedium)
             {
                 Align = Vector2.Zero,
                 Padding = 10f * Vector2.One
@@ -2055,16 +1990,6 @@ up by it, while still allowing you to land on it from above. Playing with or wit
 you can see whether it was applied for a run under ""Fix BG"".";
         }
 
-        public override void Refresh()
-        {
-            
-        }
-
-        public override void Reset()
-        {
-
-        }
-
         public override void PushRequests()
         {
 
@@ -2081,35 +2006,25 @@ you can see whether it was applied for a run under ""Fix BG"".";
         private readonly SelectorButtonW pageSelector;
         private readonly TabbedW<LbMenuPage> pages;
 
-        public LbMainMenuPage(MenuModule module) :
-            base(module, "", buttonRowLower: true, buttonRowSpace: false)
+        public LbMainMenuPage(LbContext context) :
+            base(context, "", buttonRowLower: true, buttonRowSpace: false)
         {
             string[] pages = new[] { "Top runs", "Top players", "Recent runs", "Rules" };
 
-            pageSelector = new SelectorButtonW(pages, 0, module.Fonts.FontMedium);
+            pageSelector = new SelectorButtonW(pages, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(pageSelector);
 
             this.pages = new TabbedW<LbMenuPage>(pageSelector);
-            this.pages.SetTab((int)EPages.TOP_RUNS, new LbTopRunsMenuPage(module));
-            this.pages.SetTab((int)EPages.RECENT_RUNS, new LbRecentMenuPage(module));
-            this.pages.SetTab((int)EPages.TOP_PLAYERS, new LbTopPlayersMenuPage(module));
-            this.pages.SetTab((int)EPages.RULES, new LbRulesMenuPage(module));
-            this.pages.OnSwitch = _ => module.OnChange();
+            this.pages.SetTab((int)EPages.TOP_RUNS, new LbTopRunsMenuPage(context));
+            this.pages.SetTab((int)EPages.RECENT_RUNS, new LbRecentMenuPage(context));
+            this.pages.SetTab((int)EPages.TOP_PLAYERS, new LbTopPlayersMenuPage(context));
+            this.pages.SetTab((int)EPages.RULES, new LbRulesMenuPage(context));
+            this.pages.OnSwitch = _ => context.Request();
 
             content.Child = this.pages;
 
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(pageSelector, 760f);
-        }
-
-        public override void Refresh()
-        {
-            pages.Current.Refresh();
-        }
-
-        public override void Reset()
-        {
-            pages.Tabs.ForEach(page => page.Reset());
         }
 
         public override void PushRequests()
@@ -2118,7 +2033,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
         }
     }
 
-    public class PopularWindow : Menu, IListEntryFactory<ulong>
+    public class PopularWindow : LayoutW, ILbWidget, IListEntryFactory<ulong>
     {
         public class PopularMapEntry : LayoutW
         {
@@ -2153,6 +2068,8 @@ you can see whether it was applied for a run under ""Fix BG"".";
             }
         }
 
+        protected readonly LbContext context;
+
         private readonly LayoutW headerLayout;
         private readonly LabelW title;
         private readonly LabelW compactButton;
@@ -2161,15 +2078,16 @@ you can see whether it was applied for a run under ""Fix BG"".";
         private readonly LayoutW layout;
         private readonly MoveW move;
 
-        public PopularWindow(MenuModule module) :
-            base(module, EOrientation.VERTICAL)
+        public PopularWindow(LbContext context) :
+            base(EOrientation.VERTICAL)
         {
-            title = new LabelW("Popular this week", module.Fonts.FontMedium);
+            this.context = context;
+            title = new LabelW("Popular this week", context.Fonts.FontMedium);
             Style.ApplyText(title);
             title.Color = SettingsUI.Instance.HeaderTextColor.Value.Get;
             title.Align = new Vector2(0f, 0f);
             title.Offset = new Vector2(0f, -3f);
-            compactButton = new LabelW("", module.Fonts.FontSmall);
+            compactButton = new LabelW("", context.Fonts.FontSmall);
             Style.ApplyButton(compactButton);
             compactButton.OnLeftClick = () =>
             {
@@ -2215,11 +2133,14 @@ you can see whether it was applied for a run under ""Fix BG"".";
             RunInfo info = RunsDatabase.Instance.GetWR(new Category { MapId = elem, TypeId = (ulong)ECategoryType.NEW_LAP });
             if (info.Id == -1)
                 info = RunsDatabase.Instance.GetWR(new Category { MapId = elem, TypeId = (ulong)ECategoryType.ONE_LAP });
-            return new PopularMapEntry(module.Fonts.FontSmall, info)
+            return new PopularMapEntry(context.Fonts.FontSmall, info)
             {
                 OnLeftClick = () =>
                 {
-                    module.ChangePage(new LbMapMenuPage(module, elem), pushBackStack: !(module.Page is LbMapMenuPage));
+                    bool wasMapMenuPage = context.Page.Child is LbMapMenuPage;
+                    context.Page.TransitionTo(new LbMapMenuPage(context, elem), 8f, Vector2.Zero);
+                    if (wasMapMenuPage)
+                        context.Page.PopLast();
                 }
             };
         }
@@ -2232,16 +2153,6 @@ you can see whether it was applied for a run under ""Fix BG"".";
         public float Height(ulong elem, int i)
         {
             return 25f;
-        }
-
-        public override void Refresh()
-        {
-
-        }
-
-        public override void Reset()
-        {
-            
         }
 
         public void PushRequests()

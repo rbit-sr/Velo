@@ -7,11 +7,18 @@ using System.Collections.Generic;
 
 namespace Velo
 {
+    public interface IMpWidget : IWidget
+    {
+        void PushRequests();
+    }
+
     // just a base class for a menu page that provides a title bar, content and a button row at the bottom
     // it also handles the loading symbol / error message
     // this class may be rewritten or removed
-    public abstract class MpMenuPage : Menu, IRequestable
+    public abstract class MpMenuPage : LayoutW, IMpWidget
     {
+        protected MpContext context;
+
         protected LabelW title;
         protected LayoutW titleBar;
         protected HolderW<Widget> content; // Child classes will put their content in here
@@ -21,15 +28,15 @@ namespace Velo
 
         private float loadingRotation = -(float)Math.PI / 2f;
 
-        public MpMenuPage(MenuModule module, string title, bool showStatus = true) :
-            base(module, EOrientation.VERTICAL)
+        public MpMenuPage(MpContext context, string title, bool showStatus = true) :
+            base(EOrientation.VERTICAL)
         {
-            this.module = module;
+            this.context = context;
             this.showStatus = showStatus;
 
             content = new HolderW<Widget>();
 
-            this.title = new LabelW(title, module.Fonts.FontTitle)
+            this.title = new LabelW(title, context.Fonts.FontTitle)
             {
                 Align = new Vector2(0f, 0.5f),
                 Color = SettingsUI.Instance.HeaderTextColor.Value.Get
@@ -61,7 +68,7 @@ namespace Velo
             // loading
             if (/*ModsDatabase.Instance.Pending()*/ false)
             {
-                module.Error = null;
+                context.Error = null;
 
                 float dt = (float)Velo.RealDelta.TotalSeconds;
                 if (dt > 1f)
@@ -84,7 +91,7 @@ namespace Velo
             }
 
             // error
-            if (module.Error != "" && module.Error != null)
+            if (context.Error != "" && context.Error != null)
             {
                 Velo.SpriteBatch.End();
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
@@ -92,14 +99,14 @@ namespace Velo
                 TextDraw errorDraw = new TextDraw()
                 {
                     IsVisible = true,
-                    Text = Util.LineBreaks("Error: " + module.Error, 30),
+                    Text = Util.LineBreaks("Error: " + context.Error, 30),
                     Color = Color.Red,
                     HasDropShadow = true,
                     DropShadowColor = Color.Black,
                     DropShadowOffset = Vector2.One,
                     Opacity = opacity
                 };
-                errorDraw.SetFont(module.Fonts.FontMedium);
+                errorDraw.SetFont(context.Fonts.FontMedium);
                 errorDraw.UpdateBounds();
 
                 errorDraw.Position =
@@ -121,8 +128,10 @@ namespace Velo
     }
 
     // every category gets its own tab widget object
-    public class MpBrowseCategoryTab : Menu, IListEntryFactory<TestEntity>, IRequestable
+    public class MpBrowseCategoryTab : LayoutW, IMpWidget, IListEntryFactory<TestEntity>
     {
+        private readonly MpContext context;
+
         public enum ECategory
         {
             CHARACTERS, SOUNDS, BACKGROUNDS,
@@ -134,10 +143,10 @@ namespace Velo
 
         private readonly ECategory category;
 
-        public MpBrowseCategoryTab(MenuModule module, ECategory category) :
-            base(module, EOrientation.VERTICAL)
+        public MpBrowseCategoryTab(MpContext context, ECategory category) :
+            base(EOrientation.VERTICAL)
         {
-            this.module = module;
+            this.context = context;
             this.category = category;
 
             list = new ListW<TestEntity>(this);
@@ -148,20 +157,7 @@ namespace Velo
 
             AddChild(scroll, FILL);
         }
-
-        // called when newly created, page changed, or refresh hotkey was pressed,
-        // or MenuModule.Refresh could be passed to a request callback
-        public override void Refresh()
-        {
-            
-        }
-
-        // called when newly created or refresh hotkey was pressed
-        public override void Reset()
-        {
-            // maybe reset the scroll state
-        }
-
+        
         public void PushRequests()
         {
 
@@ -180,7 +176,7 @@ namespace Velo
 
         public Widget Create(TestEntity elem, int i)
         {
-            LabelW label = new LabelW(elem.Test, module.Fonts.FontMedium);
+            LabelW label = new LabelW(elem.Test, context.Fonts.FontMedium);
             Style.ApplyText(label);
             return label;
         }
@@ -192,40 +188,30 @@ namespace Velo
         private readonly TabbedW<MpBrowseCategoryTab> tabs;
         private readonly LabelW backButton;
 
-        public MpBrowsePage(MenuModule module) :
-            base(module, "Browse")
+        public MpBrowsePage(MpContext context) :
+            base(context, "Browse")
         {
-            categorySelect = new SelectorButtonW(new[] { "Characters", "Sounds", "Backgrounds" }, 0, module.Fonts.FontMedium);
+            categorySelect = new SelectorButtonW(new[] { "Characters", "Sounds", "Backgrounds" }, 0, context.Fonts.FontMedium);
             Style.ApplySelectorButton(categorySelect);
 
             tabs = new TabbedW<MpBrowseCategoryTab>(categorySelect);
             for (int i = 0; i < (int)MpBrowseCategoryTab.ECategory.COUNT; i++)
             {
-                tabs.SetTab(i, new MpBrowseCategoryTab(module, (MpBrowseCategoryTab.ECategory)i));
+                tabs.SetTab(i, new MpBrowseCategoryTab(context, (MpBrowseCategoryTab.ECategory)i));
             }
-            tabs.OnSwitch = _ => module.Refresh(); // to update and rerequest and stuff
+            tabs.OnSwitch = _ => context.Request();
 
             content.Child = tabs; // never forget
 
-            backButton = new LabelW("Back", module.Fonts.FontMedium);
+            backButton = new LabelW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
-            backButton.OnLeftClick = module.PopPage;
+            backButton.OnLeftClick = () => context.Page.TransitionBack(8f, Vector2.Zero);
 
             buttonRow.AddChild(backButton, 190f);
             buttonRow.AddSpace(FILL);
             buttonRow.AddChild(categorySelect, 3 * 190f);
         }
-
-        public override void Refresh()
-        {
-            tabs.Current.Refresh();
-        }
-
-        public override void Reset()
-        {
-            tabs.Tabs.ForEach(tab => tab.Reset());
-        }
-
+        
         public override void PushRequests()
         {
             tabs.Current.PushRequests();
