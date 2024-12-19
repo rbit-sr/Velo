@@ -59,6 +59,19 @@ namespace Velo
             Request();
         }
 
+        public void ChangePage(ILbWidget page)
+        {
+            page.Reset();
+            Page.TransitionTo(page, 8f, Vector2.Zero);
+            Request();
+        }
+
+        public void ChangeBack()
+        {
+            Page.TransitionBack(8f, Vector2.Zero);
+            Request();
+        }
+
         public void Request()
         {
             RunsDatabase.Instance.CancelAll();

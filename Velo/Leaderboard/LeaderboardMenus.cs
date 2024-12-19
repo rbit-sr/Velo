@@ -487,14 +487,14 @@ namespace Velo
                 viewProfile.Hoverable = false;
                 viewProfile.OnLeftClick = () =>
                 {
-                    context.Page.TransitionTo(new LbPlayerMenuPage(context, run.PlayerId), 8f, Vector2.Zero);
+                    context.ChangePage(new LbPlayerMenuPage(context, run.PlayerId));
                 };
                 mapPage = new LabelW("Map page", context.Fonts.FontMedium);
                 Style.ApplyButton(mapPage);
                 mapPage.Hoverable = false;
                 mapPage.OnLeftClick = () =>
                 {
-                    context.Page.TransitionTo(new LbMapMenuPage(context, run.Category.MapId), 8f, Vector2.Zero);
+                    context.ChangePage(new LbMapMenuPage(context, run.Category.MapId));
                 };
 
                 LayoutW avatarLayout = new LayoutW(EOrientation.VERTICAL);
@@ -913,13 +913,13 @@ namespace Velo
 
             backButton = new LabelW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
-            backButton.OnLeftClick = () => context.Page.TransitionBack(8f, Vector2.Zero);
+            backButton.OnLeftClick = context.ChangeBack;
 
-            buttonRowUpper.AddSpace(LayoutW.FILL);
+            buttonRowUpper.AddSpace(FILL);
             buttonRowUpper.AddChild(filterSelect, 570f);
 
             buttonRowLower.AddChild(backButton, 190f);
-            buttonRowLower.AddSpace(LayoutW.FILL);
+            buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(categorySelect, categorySelect.ShownCount * 190);
 
             eventLabel = new LabelW("", context.Fonts.FontMedium);
@@ -1084,7 +1084,7 @@ namespace Velo
             }
             table.OnLeftClickRow = (row, runs, i) =>
             {
-                context.Page.TransitionTo(new LbMapMenuPage(context, runs.MapId), 8f, Vector2.Zero);
+                context.ChangePage(new LbMapMenuPage(context, runs.MapId));
             };
         }
 
@@ -1162,11 +1162,7 @@ namespace Velo
 
             backButton = new LabelW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
-            backButton.OnLeftClick = () =>
-            {
-                RunsDatabase.Instance.CancelAll();
-                context.Page.TransitionBack(8f, Vector2.Zero);
-            };
+            backButton.OnLeftClick = context.ChangeBack;
 
             string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
 
@@ -1334,7 +1330,7 @@ namespace Velo
             }
             table.OnLeftClickRow = (row, runs, i) =>
                 {
-                    context.Page.TransitionTo(new LbMapMenuPage(context, runs.MapId), 8f, Vector2.Zero);
+                    context.ChangePage(new LbMapMenuPage(context, runs.MapId));
                 };
         }
 
@@ -1736,7 +1732,7 @@ namespace Velo
 
             table.OnLeftClickRow = (row, player, i) =>
             {
-                context.Page.TransitionTo(new LbPlayerMenuPage(context, player.PlayerId), 8f, Vector2.Zero);
+                context.ChangePage(new LbPlayerMenuPage(context, player.PlayerId));
             };
         }
 
@@ -1829,7 +1825,7 @@ namespace Velo
 
             table.OnLeftClickRow = (row, player, i) =>
             {
-                context.Page.TransitionTo(new LbPlayerMenuPage(context, player.PlayerId), 8f, Vector2.Zero);
+                context.ChangePage(new LbPlayerMenuPage(context, player.PlayerId));
             };
         }
 
@@ -2138,7 +2134,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
                 OnLeftClick = () =>
                 {
                     bool wasMapMenuPage = context.Page.Child is LbMapMenuPage;
-                    context.Page.TransitionTo(new LbMapMenuPage(context, elem), 8f, Vector2.Zero);
+                    context.ChangePage(new LbMapMenuPage(context, elem));
                     if (wasMapMenuPage)
                         context.Page.PopLast();
                 }
