@@ -52,9 +52,9 @@ namespace Velo
             AddChild(buttonRow, 35f);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
 
             if (!showStatus)
                 return;

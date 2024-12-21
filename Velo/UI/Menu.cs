@@ -132,7 +132,6 @@ namespace Velo
         private StackW menuStack;
 
         public MenuFonts Fonts;
-        public string Error;
 
         private readonly bool enableDim;
 
@@ -187,7 +186,7 @@ namespace Velo
             menu.Reset();
         }
 
-        public void Render()
+        public virtual void Draw()
         {
             bool modified = Enabled.Modified();
 

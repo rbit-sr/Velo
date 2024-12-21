@@ -11,6 +11,10 @@ namespace Velo
         public LabelW ProfileButton;
         public LabelW VersionText;
         public PopularWindow PopularWindow;
+        public ImageW LoadingSymbol;
+        public LabelW ErrorMessage;
+
+        public string Error;
 
         public LbContext(ToggleSetting enabled) 
             : base(enabled, enableDim: true)
@@ -35,10 +39,28 @@ namespace Velo
             VersionText.Align = new Vector2(0f, 0.5f);
             VersionText.Color = () => Color.Gray * 0.5f;
             PopularWindow = new PopularWindow(this);
-            AddElem(Page, new Vector2(375f, 100f), new Vector2(1170f, 880f));
+            LoadingSymbol = new ImageW(LoadSymbol.Get())
+            {
+                RotationSpeed = 3f,
+                Rotation = (float)Math.PI / 2f
+            };
+            ErrorMessage = new LabelW("", Fonts.FontMedium)
+            {
+                Color = () => Color.Red,
+                Align = new Vector2(0f, 0.5f)
+            };
+
+            Vector2 PAGE_POS = new Vector2(375f, 100f);
+            Vector2 PAGE_SIZE = new Vector2(1170f, 880f);
+            float BOTTOM_ROW_HEIGHT = 35f;
+            Vector2 ERROR_MESSAGE_SIZE = new Vector2(1920f - PAGE_SIZE.X - 8f, 200f);
+
+            AddElem(Page, PAGE_POS, PAGE_SIZE);
             AddElem(ProfileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
             AddElem(VersionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
             AddElem(PopularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
+            AddElem(LoadingSymbol, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
+            AddElem(ErrorMessage, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
         }
 
         public override void EnterMenu()
@@ -57,6 +79,13 @@ namespace Velo
             base.EnterMenu();
 
             Request();
+        }
+
+        public override void ExitMenu(bool animation = true)
+        {
+            base.ExitMenu(animation);
+
+            Page.Clear();
         }
 
         public void ChangePage(ILbWidget page)
@@ -78,6 +107,24 @@ namespace Velo
             Page.Child.PushRequests();
             PopularWindow.PushRequests();
             RunsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
+        }
+
+        public override void Draw()
+        {
+            base.Draw();
+
+            if (RunsDatabase.Instance.Pending())
+            {
+                LoadingSymbol.Visible = true;
+                ErrorMessage.Text = "";
+            }
+            else
+            {
+                LoadingSymbol.Visible = false;
+                LoadingSymbol.Rotation = (float)Math.PI / 2f;
+            }
+            if (Error != "" && Error != null)
+                ErrorMessage.Text = Util.LineBreaks("Error: " + Error, 30);
         }
     }
 
@@ -219,7 +266,7 @@ namespace Velo
                 runStatus.Draw();
             }
 
-            context.Render();
+            context.Draw();
         }
 
         public void OnRunFinished(Recording run)

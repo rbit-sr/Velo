@@ -25,15 +25,10 @@ namespace Velo
         protected readonly LayoutW buttonRowUpper;
         protected readonly LayoutW buttonRowLower;
 
-        private readonly bool showStatus;
-
-        private float loadingRotation = -(float)Math.PI / 2f;
-
-        public LbMenuPage(LbContext context, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true, bool showStatus = true)
+        public LbMenuPage(LbContext context, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true)
             : base(EOrientation.VERTICAL)
         {
             this.context = context;
-            this.showStatus = showStatus;
 
             content = new HolderW<Widget>();
 
@@ -44,8 +39,8 @@ namespace Velo
                     Align = new Vector2(0f, 0.5f),
                     Color = SettingsUI.Instance.HeaderTextColor.Value.Get
                 };
-                titleBar = new LayoutW(LayoutW.EOrientation.HORIZONTAL);
-                titleBar.AddChild(this.title, LayoutW.FILL);
+                titleBar = new LayoutW(EOrientation.HORIZONTAL);
+                titleBar.AddChild(this.title, FILL);
                 AddChild(titleBar, 80f);
                 AddSpace(10f);
             }
@@ -61,65 +56,6 @@ namespace Velo
             {
                 this.buttonRowLower = new LayoutW(EOrientation.HORIZONTAL);
                 AddChild(this.buttonRowLower, 35f);
-            }
-        }
-
-        public override void Draw(IWidget hovered, float scale, float opacity)
-        {
-            base.Draw(hovered, scale, opacity);
-
-            if (!showStatus)
-                return;
-
-            IWidget lowest = Children.Last();
-            if (lowest == null)
-                return;
-
-            if (RunsDatabase.Instance.Pending())
-            {
-                context.Error = null;
-
-                float dt = (float)Velo.RealDelta.TotalSeconds;
-                if (dt > 1f)
-                    dt = 1f;
-
-                loadingRotation += 3f * dt;
-
-                Velo.SpriteBatch.End();
-                Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-
-                Vector2 pos =
-                    lowest.Position +
-                    new Vector2(lowest.Size.X + 8f, (lowest.Size.Y - LoadSymbol.SIZE) / 2f) +
-                    Vector2.One * LoadSymbol.SIZE / 2f;
-                Velo.SpriteBatch.Draw(LoadSymbol.Get(), pos * scale, new Rectangle?(), Color.White * opacity, loadingRotation, Vector2.One * LoadSymbol.SIZE / 2f, scale, SpriteEffects.None, 0f);
-            }
-            else
-            {
-                loadingRotation = -(float)Math.PI / 2f;
-            }
-            if (context.Error != "" && context.Error != null)
-            {
-                Velo.SpriteBatch.End();
-                Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-
-                CTextDrawComponent errorDraw = new CTextDrawComponent("", context.Fonts.FontMedium.Font, Vector2.Zero)
-                {
-                    IsVisible = true,
-                    StringText = Util.LineBreaks("Error: " + context.Error, 30),
-                    Color = Color.Red,
-                    HasDropShadow = true,
-                    DropShadowColor = Color.Black,
-                    DropShadowOffset = Vector2.One,
-                    Opacity = opacity
-                };
-                errorDraw.UpdateBounds();
-
-                errorDraw.Position =
-                    (lowest.Position +
-                    new Vector2(lowest.Size.X + 8f, (lowest.Size.Y - errorDraw.Size.Y) / 2f)) * scale;
-                errorDraw.Scale = Vector2.One * scale;
-                errorDraw.Draw(null);
             }
         }
 
@@ -199,7 +135,7 @@ namespace Velo
             label.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (run.Id == -1)
                 return;
@@ -207,7 +143,7 @@ namespace Velo
             image.Image = SteamCache.GetAvatar(run.PlayerId);
             label.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -254,7 +190,7 @@ namespace Velo
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (run.Id == -1)
             {
@@ -267,7 +203,7 @@ namespace Velo
                 Text = Util.ApproxTime(diff);
             }
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -286,7 +222,7 @@ namespace Velo
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (run.Id == -1)
             {
@@ -297,7 +233,7 @@ namespace Velo
                 Text = Map.MapIdToName(run.Category.MapId);
             }
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -335,11 +271,11 @@ namespace Velo
             Style.ApplyText(this);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             Text = Map.MapIdToName(mapId);
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -771,9 +707,9 @@ namespace Velo
                 return 40f;
         }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
             
             if (NeedRequestMore())
             {
@@ -1015,7 +951,7 @@ namespace Velo
             tables.Current.PushRequests();
         }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
             MapEvent mapEvent = RunsDatabase.Instance.GetEvent(mapId);
             if (mapEvent.From == 0)
@@ -1042,7 +978,7 @@ namespace Velo
                 titleBar.SetSize(eventLabelLayout, eventLabel.MeasureTextSize.X + 10f);
             }
 
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
         }
     }
 
@@ -1465,7 +1401,7 @@ namespace Velo
         private int place = 0;
 
         public LbTopRunsMenuPage(LbContext context) :
-            base(context, "Top runs", buttonRowLower: true, showStatus: false)
+            base(context, "Top runs", buttonRowLower: true)
         {
 
             string[] filters = new string[] { "Official", "RWS", "Old RWS", "Origins", "Other" };
@@ -1633,7 +1569,7 @@ namespace Velo
         private readonly TabbedW<LbRecentRunsTable> tables;
 
         public LbRecentMenuPage(LbContext context) :
-            base(context, "Recent runs", buttonRowLower: true, showStatus: false)
+            base(context, "Recent runs", buttonRowLower: true)
         {
             string[] filters = new string[] { "All", "WRs only" };
 
@@ -1700,12 +1636,12 @@ namespace Velo
                     label.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
             }
 
-            public override void Draw(IWidget hovered, float scale, float opacity)
+            public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
             {
                 image.Image = SteamCache.GetAvatar(player.PlayerId);
                 label.Text = RunsDatabase.Instance.GetPlayerName(player.PlayerId);
 
-                base.Draw(hovered, scale, opacity);
+                base.Draw(hovered, parentCropRec, scale, opacity);
             }
         }
 
@@ -1793,12 +1729,12 @@ namespace Velo
                     label.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
             }
 
-            public override void Draw(IWidget hovered, float scale, float opacity)
+            public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
             {
                 image.Image = SteamCache.GetAvatar(player.PlayerId);
                 label.Text = RunsDatabase.Instance.GetPlayerName(player.PlayerId);
 
-                base.Draw(hovered, scale, opacity);
+                base.Draw(hovered, parentCropRec, scale, opacity);
             }
         }
 
@@ -1857,7 +1793,7 @@ namespace Velo
         private readonly TabbedW<ILbWidget> tables;
 
         public LbTopPlayersMenuPage(LbContext context) :
-            base(context, "Top players", buttonRowLower: true, showStatus: false)
+            base(context, "Top players", buttonRowLower: true)
         {
             string[] types = new[] { "Score", "WR count" };
 
@@ -1887,7 +1823,7 @@ namespace Velo
         protected ScrollW scroll;
 
         public LbRulesMenuPage(LbContext context) :
-            base(context, "Rules", showStatus: false)
+            base(context, "Rules")
         {
             rules = new LabelW("", context.Fonts.FontMedium)
             {
@@ -2056,11 +1992,11 @@ you can see whether it was applied for a run under ""Fix BG"".";
                 AddChild(time, 100f);
             }
 
-            public override void Draw(IWidget hovered, float scale, float opacity)
+            public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
             {
                 image.Image = SteamCache.GetAvatar(wr.PlayerId);
 
-                base.Draw(hovered, scale, opacity);
+                base.Draw(hovered, parentCropRec, scale, opacity);
             }
         }
 

@@ -6,6 +6,8 @@ using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using System.Linq;
 using Microsoft.Xna.Framework.Input;
+using static System.Windows.Forms.AxHost;
+using System.IO.Ports;
 
 namespace Velo
 {
@@ -71,6 +73,7 @@ namespace Velo
         public void Draw()
         {
             GraphicsDevice graphicsDevice = Velo.GraphicsDevice;
+            int vWidth = graphicsDevice.Viewport.Width;
             int vHeight = graphicsDevice.Viewport.Height;
             float scale = vHeight / 1080f;
 
@@ -108,12 +111,12 @@ namespace Velo
             root.Position = new Vector2(rec.X, rec.Y) + Offset;
             root.Size = new Vector2(rec.Width, rec.Height);
 
-            root.UpdateBounds(new Rectangle(rec.X + (int)Offset.X, rec.Y + (int)Offset.Y, rec.Width, rec.Height));
+            root.UpdateBounds(new Bounds { Position = root.Position, Size = root.Size });
 
             IWidget hovered = root.GetHovered(mousePos, true);
 
             Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
-            root.Draw(hovered, scale, Opacity);
+            root.Draw(hovered, new Rectangle(0, 0, vWidth, vHeight), scale, Opacity);
             Velo.SpriteBatch.End();
         }
     }
@@ -127,15 +130,31 @@ namespace Velo
         public Action<WECharInput> OnChar;
     }
 
+    public struct Bounds
+    {
+        public Vector2 Position;
+        public Vector2 Size;
+
+        public Rectangle ToRec(float scale)
+        {
+            return new Rectangle(
+                (int)(Position.X * scale), 
+                (int)(Position.Y * scale), 
+                (int)(Size.X * scale), 
+                (int)(Size.Y * scale)
+                );
+        }
+    }
+
     public interface IWidget
     {
-        bool MouseInside { get; set; }
         bool Visible { get; set; }
         Vector2 Position { get; set; }
         Vector2 Size { get; set; }
+        Bounds Bounds { get; }
         Vector2 Offset { get; set; }
         float Opacity { get; set; }
-        Vector2 RequestedSize { get; }
+        Vector2 RequestedSize { get; set; }
         bool BackgroundVisible { get; set; }
         Func<Color> BackgroundColor { get; set; }
         bool DisableInput { get; set; }
@@ -143,13 +162,12 @@ namespace Velo
         bool BackgroundVisibleHovered { get; set; }
         Func<Color> BackgroundColorHovered { get; set; }
         Action<WEMouseClick> OnClick { get; set; }
-
         bool Crop { get; set; }
         IEnumerable<IWidget> Children { get; }
         void UpdateInput(bool mouseInsideParent, Events events);
-        void UpdateBounds(Rectangle crop);
+        void UpdateBounds(Bounds parentBounds);
         IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent);
-        void Draw(IWidget hovered, float scale, float opacity);
+        void Draw(IWidget hovered, Rectangle parentCrop, float scale, float opacity);
         void Refresh();
         void Reset();
     }
@@ -157,13 +175,24 @@ namespace Velo
     public abstract class Widget : IWidget
     {
         public CRectangleDrawComponent recDraw;
-        protected Rectangle crop;
+        protected Rectangle cropRec;
 
         public bool CheckMouseInside(Vector2 mousePos)
         {
             return
-                new Rectangle((int)Position.X, (int)Position.Y, (int)Size.X, (int)Size.Y).
+                Bounds.ToRec(1f).
                 Contains((int)mousePos.X, (int)mousePos.Y);
+        }
+
+        public Rectangle GetCropRec(Rectangle parentCropRec, float scale)
+        {
+            return 
+                Crop ?
+                Rectangle.Intersect(
+                    Bounds.ToRec(scale),
+                    parentCropRec
+                ) :
+                parentCropRec;
         }
 
         public Widget()
@@ -176,14 +205,13 @@ namespace Velo
             Opacity = 1f;
         }
 
-        public bool MouseInside { get; set; }
         public bool Visible { get; set; }
         public Vector2 Position { get; set; }
         public Vector2 Size { get; set; }
         public Vector2 Offset { get; set; }
+        public Bounds Bounds => new Bounds { Position = Position + Offset, Size = Size };
         public float Opacity { get; set; }
-        protected Vector2 requestedSize = new Vector2(0f, 0f);
-        public Vector2 RequestedSize => requestedSize;
+        public Vector2 RequestedSize { get; set; }
         public bool BackgroundVisible { get; set; }
         public Func<Color> BackgroundColor { get; set; }
         public bool DisableInput { get; set; }
@@ -206,67 +234,52 @@ namespace Velo
         }
         public bool Crop { get; set; }
 
-        public virtual IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
+        public abstract IEnumerable<IWidget> Children { get; }
 
         public virtual void UpdateInput(bool mouseInsideParent, Events events)
         {
+            bool mouseInside = CheckMouseInside(events.MousePos);
+            
             if (!DisableInput)
             {
-                MouseInside = CheckMouseInside(events.MousePos);
-
-                if (MouseInside && mouseInsideParent && OnClick != null)
+                if (mouseInside && mouseInsideParent && OnClick != null)
                 {
                     events.OnClick = OnClick;
                 }
             }
 
-            Children.ForEach(child => child.UpdateInput(MouseInside && mouseInsideParent, events));
+            Children.ForEach(child => child.UpdateInput(mouseInside && mouseInsideParent, events));
         }
 
-        public virtual void UpdateBounds(Rectangle crop)
+        public virtual void UpdateBounds(Bounds parentBounds)
         {
-            if (!Crop)
-                this.crop = crop;
-            else
-                this.crop = Rectangle.Intersect(crop, new Rectangle((int)Position.X, (int)Position.Y, (int)Size.X, (int)Size.Y));
+            
         }
 
         public virtual IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
         {
-            if (!DisableInput)
-            {
-                MouseInside = CheckMouseInside(mousePos);
-            }
+            bool mouseInside = CheckMouseInside(mousePos);
 
             foreach (IWidget child in Children)
             {
-                IWidget hovered = child.GetHovered(mousePos, MouseInside && mouseInsideParent);
+                IWidget hovered = child.GetHovered(mousePos, mouseInside && mouseInsideParent);
                 if (hovered != null)
                     return hovered;
             }
 
-            if (MouseInside && mouseInsideParent && Hoverable)
+            if (mouseInside && mouseInsideParent && Hoverable)
                 return this;
 
             return null;
         }
 
-        public virtual void Draw(IWidget hovered, float scale, float opacity)
+        protected void UpdateScissorRec(Rectangle parentCropRec, float scale)
         {
-            if (!Visible)
-                return;
-
             GraphicsDevice graphicsDevice = CEngine.CEngine.Instance.GraphicsDevice;
-            int vWidth = graphicsDevice.Viewport.Width;
-            int vHeight = graphicsDevice.Viewport.Height;
-            Rectangle scaledCrop = new Rectangle(
-                (int)(crop.X * scale), 
-                (int)(crop.Y * scale), 
-                (int)(crop.Width * scale), 
-                (int)(crop.Height * scale)
-            );
-            scaledCrop = Rectangle.Intersect(scaledCrop, new Rectangle(0, 0, vWidth, vHeight));
-            if (graphicsDevice.ScissorRectangle != scaledCrop)
+            
+            Rectangle cropRec = GetCropRec(parentCropRec, scale);
+
+            if (graphicsDevice.ScissorRectangle != cropRec)
             {
                 Velo.SpriteBatch.End();
 
@@ -280,10 +293,18 @@ namespace Velo
                     SlopeScaleDepthBias = RasterizerState.CullCounterClockwise.SlopeScaleDepthBias
                 };
 
-                graphicsDevice.ScissorRectangle = scaledCrop;
+                graphicsDevice.ScissorRectangle = cropRec;
 
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, state, CEffect.None.Effect);
             }
+        }
+
+        public virtual void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            if (!Visible)
+                return;
+
+            UpdateScissorRec(parentCropRec, scale);
 
             recDraw.SetPositionSize((Position + Offset) * scale, Size * scale);
 
@@ -306,6 +327,16 @@ namespace Velo
 
             recDraw.IsVisible = Visible;
             recDraw.Draw(null);
+        }
+
+        public void DrawChildren(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            foreach (var child in Children)
+            {
+                child.Draw(hovered, GetCropRec(parentCropRec, scale), scale, opacity * Opacity);
+            }
+
+            UpdateScissorRec(parentCropRec, scale);
         }
 
         public virtual void Refresh()
@@ -338,7 +369,9 @@ namespace Velo
             HORIZONTAL, VERTICAL
         }
 
-        public static readonly float FILL = -1;
+        public static readonly float FILL = -1f;
+        public static readonly float WEIGHT = -1f;
+        public static readonly float REQUESTED_SIZE = float.NegativeInfinity;
 
         private readonly EOrientation orientation;
         private readonly List<LayoutChild> children;
@@ -377,9 +410,9 @@ namespace Velo
 
         public override IEnumerable<IWidget> Children => children.Select(child => child.Widget).Where(child => child != null);
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             float weightedSize =
                 orientation == EOrientation.HORIZONTAL ?
@@ -391,7 +424,14 @@ namespace Velo
             int i = 0;
             foreach (var child in children)
             {
-                if (child.Size < 0)
+                if (child.Size == REQUESTED_SIZE)
+                {
+                    weightedSize -= 
+                        orientation == EOrientation.HORIZONTAL ? 
+                        child.Widget.RequestedSize.X : 
+                        child.Widget.RequestedSize.Y;
+                }
+                else if (child.Size < 0)
                 {
                     weightSum += -child.Size;
                     lastWeighted = i;
@@ -410,7 +450,14 @@ namespace Velo
             foreach (var child in children)
             {
                 float size = child.Size;
-                if (size < 0)
+                if (size == REQUESTED_SIZE)
+                {
+                    size =
+                        orientation == EOrientation.HORIZONTAL ?
+                        child.Widget.RequestedSize.X :
+                        child.Widget.RequestedSize.Y;
+                }
+                else if (size < 0)
                 {
                     if (i == lastWeighted)
                         size = remainingWeightedSize;
@@ -422,7 +469,6 @@ namespace Velo
                 }
                 if (child.Widget != null)
                 {
-                    
                     if (orientation == EOrientation.HORIZONTAL)
                     {
                         child.Widget.Position = new Vector2(p, Position.Y) + Offset;
@@ -434,7 +480,7 @@ namespace Velo
                         child.Widget.Size = new Vector2(Size.X, size);
                     }
 
-                    child.Widget.UpdateBounds(this.crop);
+                    child.Widget.UpdateBounds(Bounds);
                 }
 
                 p += size;
@@ -442,21 +488,80 @@ namespace Velo
             }
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
+        }
+    }
 
-             if (!Visible)
-                return;
+    public class GridW : Widget
+    {
+        public int Columns;
+        public float RowHeight;
 
-            foreach (var child in children)
+        private float columnWidth;
+        private int rows;
+
+        public float Padding = 5f;
+        public float Gap = 5f;
+
+        private Vector2 CurrentPos;
+        private Vector2 CurrentSize;
+
+        private readonly List<Widget> Cells = new List<Widget>();
+
+        public GridW(int columns, float rowHeight)
+        {
+            Columns = columns;
+            RowHeight = rowHeight;
+
+            CurrentPos = new Vector2();
+            CurrentSize = new Vector2();
+        }
+
+        public void AddCell(Widget cell)
+        {
+            Cells.Add(cell);
+        }
+
+        public override void UpdateBounds(Bounds parentBounds)
+        {
+            base.UpdateBounds(parentBounds);
+
+            if (Columns <= 0)
             {
-                if (child.Widget == null)
-                    continue;
+                Columns = 1;
+            }
 
-                child.Widget.Draw(hovered, scale, opacity * Opacity);
+            columnWidth = (Size.X - 2f * Padding - (Columns - 1) * Gap) / Columns;
+            CurrentPos = new Vector2(Padding, Padding) + Position;
+            CurrentSize = new Vector2(columnWidth, RowHeight);
+
+            rows = (int)Math.Ceiling((float)Cells.Count / Columns);
+            RequestedSize = new Vector2(0, rows * RowHeight + (rows - 1) * Gap + 2 * Padding);
+
+            foreach (var cell in Cells)
+            {
+                cell.Size = CurrentSize;
+                cell.Position = CurrentPos;
+
+                CurrentPos.X += columnWidth + Gap;
+                if (CurrentPos.X + columnWidth > Size.X - Padding + Position.X)
+                {
+                    CurrentPos.X = Padding + Position.X;
+                    CurrentPos.Y += RowHeight + Gap;
+                }
             }
         }
+
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
+        }
+
+        public override IEnumerable<IWidget> Children => Cells;
     }
 
     public class StackChild
@@ -494,30 +599,23 @@ namespace Velo
 
         public override IEnumerable<IWidget> Children => children.Select(child => child.Widget);
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             foreach (var child in children)
             {
                 child.Widget.Position = child.Position + Position + Offset;
                 child.Widget.Size = new Vector2(child.Size.X != -1 ? child.Size.X : Size.X, child.Size.Y != -1 ? child.Size.Y : Size.Y);
                    
-                child.Widget.UpdateBounds(this.crop);
+                child.Widget.UpdateBounds(Bounds);
             }
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
-            if (!Visible)
-                return;
-
-            foreach (var child in children)
-            {
-                child.Widget.Draw(hovered, scale, opacity * Opacity);
-            }
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -532,26 +630,22 @@ namespace Velo
 
         public override IEnumerable<IWidget> Children => Child != null ? new[] { (IWidget)Child } : Enumerable.Empty<IWidget>();
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             if (Child != null)
             {
                 Child.Position = Position + Offset;
                 Child.Size = Size;
-                Child.UpdateBounds(this.crop);
+                Child.UpdateBounds(Bounds);
             }
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
-            if (!Visible)
-                return;
-
-            Child?.Draw(hovered, scale, opacity * Opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -587,7 +681,7 @@ namespace Velo
             return 1f - (1f - r) * (1f - r);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
             lastTime = Velo.RealTime;
@@ -613,7 +707,7 @@ namespace Velo
             if (R == 1f)
                 childFadeout.Child = null;
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
         public void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
@@ -670,7 +764,7 @@ namespace Velo
             return 1f - (1f - r) * (1f - r);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
             lastTime = Velo.RealTime;
@@ -691,7 +785,7 @@ namespace Velo
             if (Child != null)
                 Child.Offset = offset * (1f - Ease(R)) + offsetTarget * Ease(R);
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
         public void MoveTo(float speed, Vector2 offset, Action onFinish = null)
@@ -739,9 +833,11 @@ namespace Velo
             if (DisableInput || events.MouseState.LeftButton == ButtonState.Released)
                 scrollBarPicked = false;
 
-            root?.UpdateInput(MouseInside && mouseInsideParent, events);
+            bool mouseInside = CheckMouseInside(events.MousePos);
+
+            root?.UpdateInput(mouseInside && mouseInsideParent, events);
             
-            if (!DisableInput && MouseInside && mouseInsideParent && root.Size.Y > Size.Y)
+            if (!DisableInput && mouseInside && mouseInsideParent && root.Size.Y > Size.Y)
             {
                 events.OnScroll = wevent =>
                 {
@@ -761,9 +857,9 @@ namespace Velo
             mouseY = events.MousePos.Y;
         }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             if (!scrollBarPicked)
             {
@@ -821,29 +917,33 @@ namespace Velo
 
             root.Position = new Vector2(Position.X, Position.Y - scroll) + Offset;
             root.Size = new Vector2(Size.X, root.RequestedSize.Y);
-            root.UpdateBounds(this.crop);
+            root.UpdateBounds(Bounds);
         }
 
         public override IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
         {
             IWidget hovered = base.GetHovered(mousePos, mouseInsideParent);
 
-            if (!DisableInput && MouseInside && mouseInsideParent && root.Size.Y > Size.Y &&scrollBar.Contains((int)mousePos.X, (int)mousePos.Y))
+            bool mouseInside = CheckMouseInside(mousePos);
+
+            if (!DisableInput)
             {
-                return this;
+                if (mouseInside && mouseInsideParent && root.Size.Y > Size.Y && scrollBar.Contains((int)mousePos.X, (int)mousePos.Y))
+                {
+                    return this;
+                }
             }
 
             return hovered;
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
             if (!Visible)
-                return;
-
-            root.Draw(hovered, scale, opacity * Opacity);
+                return; 
+            
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
 
             CRectangleDrawComponent scrollBarRec = new CRectangleDrawComponent(scrollBar.X * scale, scrollBar.Y * scale, scrollBar.Width * scale, scrollBar.Height * scale)
             {
@@ -855,7 +955,6 @@ namespace Velo
             if (ScrollBarColor != null)
                 scrollBarRec.FillColor = ScrollBarColor() * opacity * Opacity;
 
-            //base.Draw(hovered, scale, 0f); // restore scissor rectangle
             scrollBarRec.Draw(null);
         }
 
@@ -909,9 +1008,9 @@ namespace Velo
 
         public override IEnumerable<IWidget> Children => entries.Select(entry => entry.Widget);
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             firstEntry = 0;
             reachedEnd = false;
@@ -925,11 +1024,11 @@ namespace Velo
             foreach (T elem in elems)
             {
                 float height = Factory.Height(elem, i);
-                if (y + height <= crop.Top)
+                if (y + height <= parentBounds.Position.Y)
                 {
                     firstEntry++;
                 }
-                else if (y <= crop.Bottom)
+                else if (y <= parentBounds.Position.Y + parentBounds.Size.Y)
                 {
                     while (entries.Count > j && entries[j].Index < i)
                         entries.RemoveAt(j);
@@ -948,7 +1047,7 @@ namespace Velo
                     widget.Position = new Vector2(Position.X, y) + Offset;
                     widget.Size = new Vector2(Size.X, height);
                     widget.Hoverable = EntryHoverable;
-                    widget.UpdateBounds(this.crop);
+                    widget.UpdateBounds(Bounds);
                     if (i == elemsCount - 1)
                         reachedEnd = true;
 
@@ -963,16 +1062,13 @@ namespace Velo
             }
             while (entries.Count > j)
                 entries.RemoveAt(entries.Count - 1);
-            requestedSize = new Vector2(-1f, y - Position.Y);
+            RequestedSize = new Vector2(-1f, y - Position.Y);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
-            if (!Visible)
-                return;
-
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            
             int i = firstEntry;
             foreach (Entry entry in entries)
             {
@@ -986,9 +1082,10 @@ namespace Velo
                 }
                 entry.Widget.BackgroundVisibleHovered = true;
                 entry.Widget.BackgroundColorHovered = EntryBackgroundColorHovered;
-                entry.Widget.Draw(hovered, scale, opacity * Opacity);
                 i++;
             }
+
+            DrawChildren(hovered, parentCropRec, scale, opacity);
         }
 
         public void RefreshEntry(int index)
@@ -1049,16 +1146,18 @@ namespace Velo
             }
         }
 
+        public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
+
         public Vector2 MeasureTextSize => textDraw.Font.MeasureString(Text);
 
         public Vector2 Padding { get; set; }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
-            requestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
-            //Size = new Vector2(Math.Max(Size.X, requestedSize.X), Math.Max(Size.Y, requestedSize.Y));
+            RequestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
+
             if (Size != sizePrev)
             {
                 sizePrev = Size;
@@ -1066,12 +1165,12 @@ namespace Velo
             }
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
             if (!Visible)
                 return;
+
+            base.Draw(hovered, parentCropRec, scale, opacity);
 
             if (Text == null)
                 Text = "";
@@ -1105,36 +1204,47 @@ namespace Velo
 
     public class ImageW : Widget
     {
-        private readonly CImageDrawComponent imageDraw;
+        public Texture2D Image;
+
+        public float Rotation = 0f;
+        public float RotationSpeed = 0f;
 
         public ImageW(Texture2D image)
         {
-            imageDraw = new CImageDrawComponent(image != null ? new CImage(image) : null, Vector2.Zero, Vector2.Zero)
-            {
-                IsVisible = true
-            };
+            Image = image;
         }
 
-        public Texture2D Image
-        {
-            get { return imageDraw.Sprite?.Image; }
-            set { imageDraw.Sprite = new CImage(value); }
-        }
+        public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            base.Draw(hovered, scale, opacity);
-
             if (!Visible)
-                return;
+                return; 
+            
+            base.Draw(hovered, parentCropRec, scale, opacity);
 
-            imageDraw.color_replace = false;
-            float min = Math.Min(Size.X, Size.Y);
-            imageDraw.Size = new Vector2(min, min);
-            imageDraw.Position = (Position + (Size - imageDraw.Size) / 2 + Offset) * scale;
-            imageDraw.Scale = Vector2.One * scale;
-            imageDraw.Opacity = opacity * Opacity;
-            imageDraw.Draw(null);
+            float dt = (float)Velo.RealDelta.TotalSeconds;
+            if (dt > 1f)
+                dt = 1f;
+
+            Rotation += RotationSpeed * dt;
+
+            Vector2 size = Vector2.Zero;
+            if (Size.X / Size.Y > Image.Bounds.Width / (float)Image.Bounds.Height)
+            {
+                size.X = Image.Bounds.Width * Size.Y / Image.Bounds.Height;
+                size.Y = Size.Y;
+            }
+            else
+            {
+                size.X = Size.X;
+                size.Y = Image.Bounds.Height * Size.X / Image.Bounds.Width;
+            }
+
+            Vector2 position = (Position + (Size - size) / 2 + Offset) * scale;
+            float drawScale = size.X / Image.Bounds.Width * scale;
+            Vector2 drawOrigin = Size / 2 * scale;
+            Velo.SpriteBatch.Draw(Image, position + drawOrigin * drawScale, Image.Bounds, Color.White * opacity * Opacity, Rotation, drawOrigin, drawScale, SpriteEffects.None, 0f);
         }
     }
 
@@ -1190,12 +1300,12 @@ namespace Velo
         public int Selected { get; set; }
         public int Count => buttons.Count;
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
             for (int i = 0; i < ShownCount; i++)
                 SetSize(i, Size.X / ShownCount); 
             
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             selectedRecR += 8f * (float)(Velo.RealTime - lastTime).TotalSeconds;
             lastTime = Velo.RealTime;
@@ -1208,8 +1318,13 @@ namespace Velo
             return 1f - (1f - r) * (1f - r);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
+            if (!Visible)
+                return;
+
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            
             CRectangleDrawComponent recDraw = new CRectangleDrawComponent(0f, 0f, 0f, 0f)
             {
                 IsVisible = true,
@@ -1251,7 +1366,7 @@ namespace Velo
                 recDraw.Draw(null);
             }
 
-            base.Draw(hovered, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -1282,9 +1397,9 @@ namespace Velo
         public IEnumerable<W> Tabs => tabs;
         public Action<W> OnSwitch { get; set; }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             if (selected != selector.Selected)
             {
@@ -1333,9 +1448,9 @@ namespace Velo
         public IEnumerable<W> Tabs => tabs;
         public Action<W> OnSwitch { get; set; }
 
-        public override void UpdateBounds(Rectangle crop)
+        public override void UpdateBounds(Bounds parentBounds)
         {
-            base.UpdateBounds(crop);
+            base.UpdateBounds(parentBounds);
 
             if (selected != selector1.Selected * selector2.Count + selector2.Selected)
             {

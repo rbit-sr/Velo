@@ -2201,10 +2201,15 @@ namespace Velo
                 if (oldChunkIndex != newChunkIndex)
                 {
                     chunks[oldChunkIndex].Compress();
+                    Console.WriteLine("Compress " + oldChunkIndex);
                     if (chunks.Count > newChunkIndex)
+                    {
                         chunks[newChunkIndex].Decompress();
+                        Console.WriteLine("Decompress " + newChunkIndex);
+                    }
                 }
                 position = value;
+                Console.WriteLine("Position " + position);
             }
         }
         public int Length => chunks.Count == 0 ? 0 : CHUNK_SIZE * (chunks.Count - 1) + chunks.Last().Count;
@@ -2239,7 +2244,7 @@ namespace Velo
             Savestate savestate = chunk.Savestates[savestateIndex];
 
             Position++;
-            return savestate;
+            return savestate.Clone();
         }
 
         public void Clear()

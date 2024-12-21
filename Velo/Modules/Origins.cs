@@ -67,7 +67,7 @@ namespace Velo
         {
             base.PostRender();
 
-            context.Render();
+            context.Draw();
         }
 
         public void SelectOrigins(ulong mapId)
@@ -189,14 +189,14 @@ namespace Velo
             };
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (mapId == Origins.Instance.Selected)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
             else
                 Color = SettingsUI.Instance.TextColor.Value.Get;
 
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
@@ -238,13 +238,13 @@ namespace Velo
             AddChild(scroll, FILL);
         }
 
-        public override void Draw(IWidget hovered, float scale, float opacity)
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             info.Text = "";
             if (Origins.Instance.Selected != ulong.MaxValue)
                 info.Text = "Now please enter any official map!";
             
-            base.Draw(hovered, scale, opacity);
+            base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
         public Widget Create(OriginMap elem, int i)
