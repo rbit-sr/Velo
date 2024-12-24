@@ -103,6 +103,7 @@
     <Compile Include="Modules\Ghosts.cs" />
     <Compile Include="Modules\Origins.cs" />
     <Compile Include="Modules\Savestates.cs" />
+    <Compile Include="Modules\Test.cs" />
     <Compile Include="Notification.cs" />
     <Compile Include="Recording.cs" />
     <Compile Include="Leaderboard\RecordingSubmitter.cs" />

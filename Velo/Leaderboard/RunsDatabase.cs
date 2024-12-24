@@ -256,6 +256,7 @@ namespace Velo
             {
                 allRuns[info.Id] = info;
             }
+            getWRsCache.Clear();
         }
 
         public void Add(IEnumerable<RunInfo> infos, bool updatePlace)
@@ -295,6 +296,7 @@ namespace Velo
             }
 
             allRuns.Remove(id);
+            getWRsCache.Clear();
         }
 
         public void Remove(IEnumerable<int> ids, bool updatePlace)
@@ -326,6 +328,7 @@ namespace Velo
             scores.Clear();
             comments.Clear();
             popularThisWeek.Clear();
+            getWRsCache.Clear();
             foreach (var info in pending)
             {
                 Add(new List<RunInfo> { info }, false);
@@ -383,9 +386,39 @@ namespace Velo
             return runsForCategory.Select(i => allRuns[i]).Where(run => run.WasWR == 1);
         }
 
+        private struct GetWRsCacheKey
+        {
+            public int Place;
+            public bool Curated;
+            public bool Popularity;
+
+            public override bool Equals(object obj)
+            {
+                return obj is GetWRsCacheKey key &&
+                       Place == key.Place &&
+                       Curated == key.Curated &&
+                       Popularity == key.Popularity;
+            }
+
+            public override int GetHashCode()
+            {
+                int hashCode = -757865701;
+                hashCode = hashCode * -1521134295 + Place.GetHashCode();
+                hashCode = hashCode * -1521134295 + Curated.GetHashCode();
+                hashCode = hashCode * -1521134295 + Popularity.GetHashCode();
+                return hashCode;
+            }
+        }
+
+        private Dictionary<GetWRsCacheKey, List<MapRunInfos>> getWRsCache = new Dictionary<GetWRsCacheKey, List<MapRunInfos>>();
+
         public IEnumerable<MapRunInfos> GetWRs(int place, bool curated, bool popularity)
         {
-            List<MapRunInfos> runs = new List<MapRunInfos>();
+            GetWRsCacheKey key = new GetWRsCacheKey { Place = place, Curated = curated, Popularity = popularity };
+            if (getWRsCache.TryGetValue(key, out List<MapRunInfos> runs))
+                return runs;
+
+            runs = new List<MapRunInfos>();
 
             IEnumerable<ulong> maps = curated ? (popularity ? curatedMapPopularityOrder : curatedMapChronologicOrder) : nonCuratedMapPopularityOrder;
             foreach (ulong m in maps)
@@ -410,6 +443,7 @@ namespace Velo
                 }
                 runs.Add(mapRuns);
             }
+            getWRsCache.Add(key, runs);
             return runs;
         }
 

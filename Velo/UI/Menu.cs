@@ -128,7 +128,7 @@ namespace Velo
         public ToggleSetting Enabled;
 
         private WidgetContainer container;
-        private TransitionW<Widget> menu;
+        private TransitionW menu;
         private StackW menuStack;
 
         public MenuFonts Fonts;
@@ -141,7 +141,7 @@ namespace Velo
             this.enableDim = enableDim;
             
             menuStack = new StackW();
-            menu = new TransitionW<Widget>();
+            menu = new TransitionW();
             container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
 
             Fonts = new MenuFonts();
@@ -171,9 +171,9 @@ namespace Velo
                 menu.GoTo(null);
         }
 
-        public void AddElem(IWidget elem, Vector2 position, Vector2 size)
+        public void AddElem(IWidget elem, Vector2 align, Vector2 offset, Vector2 size)
         {
-            menuStack.AddChild(elem, position, size);
+            menuStack.AddChild(elem, align, offset, size);
         }
 
         public void Refresh()

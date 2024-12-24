@@ -13,11 +13,14 @@ namespace Velo
 
         public string Error;
 
-        public MpContext(ToggleSetting enabled)
-            : base(enabled, enableDim: true)
+        public MpContext(ToggleSetting enabled) : 
+            base(enabled, enableDim: true)
         {
             Page = new BackstackW<IMpWidget>();
             VersionText = new LabelW(Version.VERSION_NAME + " - " + Version.AUTHOR, Fonts.FontSmall);
+            Style.ApplyText(VersionText);
+            VersionText.Align = new Vector2(0f, 0.5f);
+            VersionText.Color = () => Color.Gray * 0.5f; 
             LoadingSymbol = new ImageW(LoadSymbol.Get())
             {
                 RotationSpeed = 3f,
@@ -34,14 +37,16 @@ namespace Velo
             float BOTTOM_ROW_HEIGHT = 35f;
             Vector2 ERROR_MESSAGE_SIZE = new Vector2(1920f - PAGE_SIZE.X - 8f, 200f);
 
-            AddElem(Page, PAGE_POS, PAGE_SIZE);
-            AddElem(VersionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            AddElem(LoadingSymbol, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
-            AddElem(ErrorMessage, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
+            AddElem(Page, StackW.TOP_LEFT, PAGE_POS, PAGE_SIZE);
+            AddElem(VersionText, StackW.BOTTOM_LEFT, new Vector2(20f, -20f), new Vector2(180f, 25f));
+            AddElem(LoadingSymbol, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
+            AddElem(ErrorMessage, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
         }
 
         public override void EnterMenu()
         {
+            Page.Clear(); // clear the backstack
+            
             Page.TransitionTo(new MpBrowsePage(this), 8f, Vector2.Zero);
 
             base.EnterMenu();
@@ -70,6 +75,7 @@ namespace Velo
             if (/*ModsDatabase.Instance.Pending()*/ false)
             {
                 LoadingSymbol.Visible = true;
+                Error = "";
                 ErrorMessage.Text = "";
             }
             else

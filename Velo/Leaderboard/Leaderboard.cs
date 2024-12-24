@@ -8,7 +8,7 @@ namespace Velo
     public class LbContext : MenuContext
     {
         public BackstackW<ILbWidget> Page;
-        public LabelW ProfileButton;
+        public ButtonW ProfileButton;
         public LabelW VersionText;
         public PopularWindow PopularWindow;
         public ImageW LoadingSymbol;
@@ -16,11 +16,11 @@ namespace Velo
 
         public string Error;
 
-        public LbContext(ToggleSetting enabled) 
-            : base(enabled, enableDim: true)
+        public LbContext(ToggleSetting enabled) : 
+            base(enabled, enableDim: true)
         {
             Page = new BackstackW<ILbWidget>();
-            ProfileButton = new LabelW("My profile", Fonts.FontMedium);
+            ProfileButton = new ButtonW("My profile", Fonts.FontMedium);
             Style.ApplyButton(ProfileButton);
             ProfileButton.OnClick = wevent =>
             {
@@ -55,16 +55,18 @@ namespace Velo
             float BOTTOM_ROW_HEIGHT = 35f;
             Vector2 ERROR_MESSAGE_SIZE = new Vector2(1920f - PAGE_SIZE.X - 8f, 200f);
 
-            AddElem(Page, PAGE_POS, PAGE_SIZE);
-            AddElem(ProfileButton, new Vector2(20f, 20f), new Vector2(180f, 35f));
-            AddElem(VersionText, new Vector2(20f, 1035f), new Vector2(180f, 25f));
-            AddElem(PopularWindow, new Vector2(1620f, 672f), new Vector2(300f, 408f));
-            AddElem(LoadingSymbol, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
-            AddElem(ErrorMessage, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
+            AddElem(Page, StackW.TOP_LEFT, PAGE_POS, PAGE_SIZE);
+            AddElem(ProfileButton, StackW.TOP_LEFT, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            AddElem(VersionText, StackW.BOTTOM_LEFT, new Vector2(20f, -20f), new Vector2(180f, 25f));
+            AddElem(PopularWindow, StackW.BOTTOM_RIGHT, Vector2.Zero, new Vector2(300f, 408f));
+            AddElem(LoadingSymbol, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
+            AddElem(ErrorMessage, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
         }
 
         public override void EnterMenu()
         {
+            Page.Clear();
+            
             ulong mapId = Map.GetCurrentMapId();
             if (Velo.Ingame && Velo.ModuleSolo != null && mapId != ulong.MaxValue)
             {
@@ -116,6 +118,7 @@ namespace Velo
             if (RunsDatabase.Instance.Pending())
             {
                 LoadingSymbol.Visible = true;
+                Error = "";
                 ErrorMessage.Text = "";
             }
             else

@@ -6,8 +6,6 @@ using CEngine.Graphics.Library;
 using CEngine.Graphics.Component;
 using System.Linq;
 using Microsoft.Xna.Framework.Input;
-using static System.Windows.Forms.AxHost;
-using System.IO.Ports;
 
 namespace Velo
 {
@@ -51,6 +49,16 @@ namespace Velo
         }
     }
 
+    public class WEKeyPress : WEvent
+    {
+        public ushort Key;
+
+        public WEKeyPress(ushort key)
+        {
+            Key = key;
+        }
+    }
+
     public class WidgetContainer
     {
         private readonly IWidget root;
@@ -58,9 +66,17 @@ namespace Velo
         private readonly Events events;
         private MouseState mousePrev;
         private MouseState mouseCurr;
+        private KeyboardState keyboardPrev;
+        private KeyboardState keyboardCurr;
+        private readonly Queue<char> charInputQueue = new Queue<char>();
 
         public float Opacity { get; set; }
         public Vector2 Offset { get; set; }
+
+        private void InputChar(char c)
+        {
+            charInputQueue.Enqueue(c);
+        }
 
         public WidgetContainer(Widget root, Rectangle rec)
         {
@@ -68,6 +84,39 @@ namespace Velo
             this.rec = rec;
             events = new Events();
             Opacity = 1f;
+            TextInputEXT.TextInput += InputChar;
+        }
+
+        ~WidgetContainer()
+        {
+            TextInputEXT.TextInput -= InputChar;
+        }
+
+        private struct UnfocusAllVisitor : IWidgetVisitor
+        {
+            public bool Visit(IWidget widget)
+            {
+                widget.Focused = false;
+                return true;
+            }
+        }
+
+        private struct GetHoveredVisitor : IWidgetVisitor
+        {
+            public Vector2 MousePos;
+            public bool MouseInsideParent;
+            public Action<IWidget> SetHovered;
+
+            public bool Visit(IWidget widget)
+            {
+                bool mouseInside = MouseInsideParent && widget.CheckMouseInside(MousePos);
+                MouseInsideParent = mouseInside;
+
+                if (mouseInside && widget.Hoverable)
+                    SetHovered(widget);
+
+                return mouseInside;
+            }
         }
 
         public void Draw()
@@ -81,8 +130,12 @@ namespace Velo
             mouseCurr = Mouse.GetState();
             Vector2 mousePos = new Vector2(mouseCurr.X, mouseCurr.Y) / scale;
 
+            keyboardPrev = keyboardCurr;
+            keyboardCurr = Keyboard.GetState();
+
             events.MousePos = mousePos;
             events.MouseState = mouseCurr;
+            events.KeyboardState = keyboardCurr;
             events.OnClick = null;
             events.OnScroll = null;
             events.OnChar = null;
@@ -92,7 +145,10 @@ namespace Velo
             if (events.OnClick != null)
             {
                 if (mousePrev.LeftButton == ButtonState.Released && mouseCurr.LeftButton == ButtonState.Pressed)
+                {
+                    root.Visit(new UnfocusAllVisitor(), true);
                     events.OnClick(new WEMouseClick(WEMouseClick.EButton.LEFT));
+                }
                 if (mousePrev.MiddleButton == ButtonState.Released && mouseCurr.MiddleButton == ButtonState.Pressed)
                     events.OnClick(new WEMouseClick(WEMouseClick.EButton.MIDDLE));
                 if (mousePrev.RightButton == ButtonState.Released && mouseCurr.RightButton == ButtonState.Pressed)
@@ -105,7 +161,18 @@ namespace Velo
             }
             if (events.OnChar != null)
             {
-
+                while (charInputQueue.Count > 0)
+                    events.OnChar(new WECharInput(charInputQueue.Dequeue()));
+            }
+            else
+                charInputQueue.Clear();
+            if (events.OnKey != null)
+            {
+                foreach (Keys key in keyboardCurr.GetPressedKeys())
+                {
+                    if (!keyboardPrev.IsKeyDown(key))
+                        events.OnKey(new WEKeyPress((ushort)key));
+                }
             }
 
             root.Position = new Vector2(rec.X, rec.Y) + Offset;
@@ -113,7 +180,9 @@ namespace Velo
 
             root.UpdateBounds(new Bounds { Position = root.Position, Size = root.Size });
 
-            IWidget hovered = root.GetHovered(mousePos, true);
+            IWidget hovered = null;
+            GetHoveredVisitor getHoveredVisitor = new GetHoveredVisitor { MousePos = events.MousePos, MouseInsideParent = true, SetHovered = h => hovered = h };
+            root.Visit(getHoveredVisitor, true);
 
             Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
             root.Draw(hovered, new Rectangle(0, 0, vWidth, vHeight), scale, Opacity);
@@ -125,9 +194,12 @@ namespace Velo
     {
         public Vector2 MousePos;
         public MouseState MouseState;
+        public KeyboardState KeyboardState;
+
         public Action<WEMouseClick> OnClick;
         public Action<WEMouseScroll> OnScroll;
         public Action<WECharInput> OnChar;
+        public Action<WEKeyPress> OnKey;
     }
 
     public struct Bounds
@@ -146,6 +218,11 @@ namespace Velo
         }
     }
 
+    public interface IWidgetVisitor
+    {
+        bool Visit(IWidget widget);
+    }
+
     public interface IWidget
     {
         bool Visible { get; set; }
@@ -154,19 +231,20 @@ namespace Velo
         Bounds Bounds { get; }
         Vector2 Offset { get; set; }
         float Opacity { get; set; }
-        Vector2 RequestedSize { get; set; }
         bool BackgroundVisible { get; set; }
         Func<Color> BackgroundColor { get; set; }
         bool DisableInput { get; set; }
         bool Hoverable { get; set; }
         bool BackgroundVisibleHovered { get; set; }
         Func<Color> BackgroundColorHovered { get; set; }
-        Action<WEMouseClick> OnClick { get; set; }
         bool Crop { get; set; }
+        bool Focused { get; set; }
+        Vector2 RequestedSize { get; }
         IEnumerable<IWidget> Children { get; }
+        bool CheckMouseInside(Vector2 mousePos);
+        void Visit<V>(V visitor, bool visitDecorators) where V : IWidgetVisitor;
         void UpdateInput(bool mouseInsideParent, Events events);
         void UpdateBounds(Bounds parentBounds);
-        IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent);
         void Draw(IWidget hovered, Rectangle parentCrop, float scale, float opacity);
         void Refresh();
         void Reset();
@@ -211,66 +289,39 @@ namespace Velo
         public Vector2 Offset { get; set; }
         public Bounds Bounds => new Bounds { Position = Position + Offset, Size = Size };
         public float Opacity { get; set; }
-        public Vector2 RequestedSize { get; set; }
         public bool BackgroundVisible { get; set; }
         public Func<Color> BackgroundColor { get; set; }
         public bool DisableInput { get; set; }
         public bool Hoverable { get; set; }
         public bool BackgroundVisibleHovered { get; set; }
         public Func<Color> BackgroundColorHovered { get; set; }
-        public Action<WEMouseClick> OnClick { get; set; }
-        public Action OnLeftClick 
-        { 
-            set
-            {
-                OnClick = wevent =>
-                {
-                    if (wevent.Button == WEMouseClick.EButton.LEFT)
-                    {
-                        value();
-                    }
-                };
-            }
-        }
         public bool Crop { get; set; }
+        public bool Focused { get; set; }
 
+        public abstract Vector2 RequestedSize { get; }
         public abstract IEnumerable<IWidget> Children { get; }
+
+        public virtual void Visit<V>(V visitor, bool visitDecorators) where V : IWidgetVisitor
+        {
+            if (visitor.Visit(this))
+                Children.ForEach(child => child.Visit(visitor, visitDecorators));
+        }
 
         public virtual void UpdateInput(bool mouseInsideParent, Events events)
         {
+            
+        }
+
+        public void UpdateInputChildren(bool mouseInsideParent, Events events)
+        {
             bool mouseInside = CheckMouseInside(events.MousePos);
             
-            if (!DisableInput)
-            {
-                if (mouseInside && mouseInsideParent && OnClick != null)
-                {
-                    events.OnClick = OnClick;
-                }
-            }
-
             Children.ForEach(child => child.UpdateInput(mouseInside && mouseInsideParent, events));
         }
 
         public virtual void UpdateBounds(Bounds parentBounds)
         {
             
-        }
-
-        public virtual IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
-        {
-            bool mouseInside = CheckMouseInside(mousePos);
-
-            foreach (IWidget child in Children)
-            {
-                IWidget hovered = child.GetHovered(mousePos, mouseInside && mouseInsideParent);
-                if (hovered != null)
-                    return hovered;
-            }
-
-            if (mouseInside && mouseInsideParent && Hoverable)
-                return this;
-
-            return null;
         }
 
         protected void UpdateScissorRec(Rectangle parentCropRec, float scale)
@@ -341,12 +392,168 @@ namespace Velo
 
         public virtual void Refresh()
         {
+            
+        }
+
+        public void RefreshChildren()
+        {
             Children.ForEach(child => child.Refresh());
         }
 
         public virtual void Reset()
         {
+            
+        }
+
+        public void ResetChildren()
+        {
             Children.ForEach(child => child.Reset());
+        }
+    }
+
+    public interface IDecoratorW<W> : IWidget where W : class, IWidget
+    {
+        W Child { get; set; }
+    }
+
+    public interface IDecoratorW : IDecoratorW<IWidget>
+    {
+        
+    }
+
+    public class DecoratedW<W> : HolderW where W : class, IWidget
+    {
+        private readonly List<IDecoratorW> decorators = new List<IDecoratorW>();
+        public IEnumerable<IDecoratorW> Decorators => decorators;
+
+        private W childWidget;
+
+        public W ChildWidget
+        {
+            get => childWidget;
+            set
+            {
+                childWidget = value;
+                RefreshChain();
+            }
+        }
+        
+        public DecoratedW(W childWidget = null)
+        {
+            this.childWidget = childWidget;
+        }
+
+        private void RefreshChain()
+        {
+            if (decorators.Count == 0)
+            {
+                Child = childWidget;
+                return;
+            }
+
+            Child = decorators.First();
+            for (int i = 0; i < decorators.Count - 1; i++)
+            {
+                decorators[i].Child = decorators[i + 1];
+            }
+            decorators.Last().Child = childWidget;
+        }
+
+        public D GetDecorator<D>(int index = 0) where D : class, IDecoratorW
+        {
+            return decorators.OfType<D>().ElementAtOrDefault(index);
+        }
+
+        public int GetDecoratorCount<D>() where D : class, IDecoratorW
+        {
+            return decorators.OfType<D>().Count();
+        }
+
+        public D AddDecorator<D>(D decorator, int index = 0) where D : class, IDecoratorW
+        {
+            decorators.Insert(index, decorator);
+            RefreshChain();
+            return decorator;
+        }
+
+        public void RemoveDecorator(IDecoratorW decorator)
+        {
+            decorators.Remove(decorator);
+            RefreshChain();
+        }
+
+        public D ExtractDecorator<D>(int index = 0) where D : class, IDecoratorW
+        {
+            D decorator = decorators.OfType<D>().ElementAtOrDefault(index);
+            if (decorator != null)
+            {
+                decorators.Remove(decorator);
+                RefreshChain();
+            }
+            return decorator;
+        }
+
+        public void ClearDecorators()
+        {
+            decorators.Clear();
+            RefreshChain();
+        }
+    }
+
+    public class DecoratedW : DecoratedW<IWidget>
+    {
+        public DecoratedW(IWidget childWidget = null) : base(childWidget)
+        {
+        }
+    }
+
+    public class EmptyW : Widget
+    {
+        public override Vector2 RequestedSize => Vector2.Zero;
+        public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
+    }
+
+    public class HolderW<W> : Widget where W : class, IWidget
+    {
+        public W Child { get; set; }
+
+        public HolderW(W child = null)
+        {
+            Child = child;
+        }
+
+        public override Vector2 RequestedSize => Child != null ? Child.RequestedSize : Vector2.Zero;
+        public override IEnumerable<IWidget> Children => Child != null ? new[] { Child } : Enumerable.Empty<IWidget>();
+
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
+        }
+
+        public override void UpdateBounds(Bounds parentBounds)
+        {
+            base.UpdateBounds(parentBounds);
+
+            if (Child != null)
+            {
+                Child.Position = Position + Offset;
+                Child.Size = Size;
+                Child.UpdateBounds(Bounds);
+            }
+        }
+
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
+        }
+    }
+
+    public class HolderW : HolderW<IWidget>
+    {
+        public HolderW(IWidget child = null) : base(child)
+        {
         }
     }
 
@@ -369,9 +576,9 @@ namespace Velo
             HORIZONTAL, VERTICAL
         }
 
-        public static readonly float FILL = -1f;
-        public static readonly float WEIGHT = -1f;
-        public static readonly float REQUESTED_SIZE = float.NegativeInfinity;
+        public const float FILL = -1f;
+        public const float WEIGHT = -1f;
+        public const float REQUESTED_SIZE = float.NegativeInfinity;
 
         private readonly EOrientation orientation;
         private readonly List<LayoutChild> children;
@@ -382,7 +589,7 @@ namespace Velo
             children = new List<LayoutChild>();
         }
 
-        public int AddChild(Widget child, float size)
+        public int AddChild(Widget child, float size = REQUESTED_SIZE)
         {
             children.Add(new LayoutChild(child, size));
             return children.Count - 1;
@@ -408,7 +615,51 @@ namespace Velo
             children.Clear();
         }
 
+        public override Vector2 RequestedSize
+        {
+            get
+            {
+                float fixedSizeSum = 0f;
+                float maxSize = 0f;
+                foreach (LayoutChild child in children)
+                {
+                    Vector2 requestedSize =
+                        child.Widget != null ?
+                        child.Widget.RequestedSize :
+                        Vector2.Zero;
+
+                    if (child.Size == REQUESTED_SIZE)
+                    {
+                        fixedSizeSum += 
+                            orientation == EOrientation.HORIZONTAL ?
+                            requestedSize.X :
+                            requestedSize.Y;
+                    }
+                    else if (child.Size >= 0f)
+                    {
+                        fixedSizeSum += child.Size;
+                    }
+                    if (child.Widget != null)
+                    {
+                        maxSize = Math.Max(maxSize,
+                            orientation == EOrientation.HORIZONTAL ?
+                            requestedSize.Y :
+                            requestedSize.X);
+                    }
+                }
+                return
+                    orientation == EOrientation.HORIZONTAL ?
+                    new Vector2(fixedSizeSum, maxSize) :
+                    new Vector2(maxSize, fixedSizeSum);
+            }
+        }
         public override IEnumerable<IWidget> Children => children.Select(child => child.Widget).Where(child => child != null);
+
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
+        }
 
         public override void UpdateBounds(Bounds parentBounds)
         {
@@ -431,7 +682,7 @@ namespace Velo
                         child.Widget.RequestedSize.X : 
                         child.Widget.RequestedSize.Y;
                 }
-                else if (child.Size < 0)
+                else if (child.Size < 0f)
                 {
                     weightSum += -child.Size;
                     lastWeighted = i;
@@ -495,6 +746,20 @@ namespace Velo
         }
     }
 
+    public class HLayoutW : LayoutW
+    {
+        public HLayoutW() : base(EOrientation.HORIZONTAL)
+        {
+        }
+    }
+
+    public class VLayoutW : LayoutW
+    {
+        public VLayoutW() : base(EOrientation.VERTICAL)
+        {
+        }
+    }
+
     public class GridW : Widget
     {
         public int Columns;
@@ -525,6 +790,12 @@ namespace Velo
             Cells.Add(cell);
         }
 
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
+        }
+
         public override void UpdateBounds(Bounds parentBounds)
         {
             base.UpdateBounds(parentBounds);
@@ -539,7 +810,6 @@ namespace Velo
             CurrentSize = new Vector2(columnWidth, RowHeight);
 
             rows = (int)Math.Ceiling((float)Cells.Count / Columns);
-            RequestedSize = new Vector2(0, rows * RowHeight + (rows - 1) * Gap + 2 * Padding);
 
             foreach (var cell in Cells)
             {
@@ -561,20 +831,52 @@ namespace Velo
             DrawChildren(hovered, parentCropRec, scale, opacity);
         }
 
+        public override Vector2 RequestedSize => new Vector2(0, rows * RowHeight + (rows - 1) * Gap + 2 * Padding);
         public override IEnumerable<IWidget> Children => Cells;
     }
 
     public class StackChild
     {
         public IWidget Widget;
-        public Vector2 Position;
+        public Vector2 Align;
+        public Vector2 Offset;
         public Vector2 Size;
 
-        public StackChild(IWidget widget, Vector2 position, Vector2 size)
+        public StackChild(IWidget widget, Vector2 align, Vector2 offset, Vector2 size)
         {
             Widget = widget;
-            Position = position;
+            Align = align;
+            Offset = offset;
             Size = size;
+        }
+
+        public Vector2 GetSize(Vector2 rootSize)
+        {
+            Vector2 size = Vector2.Zero;
+
+            if (Size.X == float.NegativeInfinity)
+                size.X = Widget.RequestedSize.X;
+            else if (Size.X < 0f)
+                size.X = rootSize.X * (-Size.X);
+            else
+                size.X = Size.X;
+
+            if (Size.Y == float.NegativeInfinity)
+                size.Y = Widget.RequestedSize.Y;
+            else if (Size.Y < 0f)
+                size.Y = rootSize.Y * (-Size.Y);
+            else
+                size.Y = Size.Y;
+
+            return size;
+        }
+
+        public Vector2 GetPosition(Vector2 rootSize)
+        {
+            if (Align == Vector2.Zero)
+                return Offset;
+            Vector2 size = GetSize(rootSize);
+            return (rootSize - size) * Align + Offset;
         }
     }
 
@@ -582,14 +884,32 @@ namespace Velo
     {
         private readonly List<StackChild> children;
 
+        public const float FILL_X = -1f;
+        public const float FILL_Y = -1f;
+        public static readonly Vector2 FILL = Vector2.One * -1f;
+
+        public const float REQUESTED_SIZE_X = float.NegativeInfinity;
+        public const float REQUESTED_SIZE_Y = float.NegativeInfinity;
+        public static readonly Vector2 REQUESTED_SIZE = Vector2.One * float.NegativeInfinity;
+
+        public static readonly Vector2 TOP_LEFT = Vector2.Zero;
+        public static readonly Vector2 TOP_RIGHT = new Vector2(1f, 0f);
+        public static readonly Vector2 BOTTOM_LEFT = new Vector2(0f, 1f);
+        public static readonly Vector2 BOTTOM_RIGHT = Vector2.One;
+
         public StackW()
         {
             children = new List<StackChild>();
         }
 
-        public void AddChild(IWidget child, Vector2 position, Vector2 size)
+        public void AddChild(IWidget child, Vector2 align, Vector2 offset, Vector2 size)
         {
-            children.Add(new StackChild(child, position, size));
+            children.Add(new StackChild(child, align, offset, size));
+        }
+
+        public void AddChild(IWidget child, Vector2 align, Vector2 offset)
+        {
+            AddChild(child, align, offset, REQUESTED_SIZE);
         }
 
         public void ClearChildren()
@@ -597,48 +917,36 @@ namespace Velo
             children.Clear();
         }
 
-        public override IEnumerable<IWidget> Children => children.Select(child => child.Widget);
-
-        public override void UpdateBounds(Bounds parentBounds)
+        public override Vector2 RequestedSize
         {
-            base.UpdateBounds(parentBounds);
-
-            foreach (var child in children)
+            get
             {
-                child.Widget.Position = child.Position + Position + Offset;
-                child.Widget.Size = new Vector2(child.Size.X != -1 ? child.Size.X : Size.X, child.Size.Y != -1 ? child.Size.Y : Size.Y);
-                   
-                child.Widget.UpdateBounds(Bounds);
+                Vector2 max = Vector2.Zero;
+                foreach (StackChild child in children)
+                {
+                    max = Vector2.Max(max, child.GetPosition(Size) + child.GetSize(Size));
+                }
+                return max;
             }
         }
+        public override IEnumerable<IWidget> Children => children.Select(child => child.Widget);
 
-        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        public override void UpdateInput(bool mouseInsideParent, Events events)
         {
-            base.Draw(hovered, parentCropRec, scale, opacity);
-            DrawChildren(hovered, parentCropRec, scale, opacity);
+            base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
         }
-    }
-
-    public class HolderW<W> : Widget where W : class, IWidget
-    {
-        public W Child;
-
-        public HolderW()
-        {
-
-        }
-
-        public override IEnumerable<IWidget> Children => Child != null ? new[] { (IWidget)Child } : Enumerable.Empty<IWidget>();
 
         public override void UpdateBounds(Bounds parentBounds)
         {
             base.UpdateBounds(parentBounds);
 
-            if (Child != null)
+            foreach (StackChild child in children)
             {
-                Child.Position = Position + Offset;
-                Child.Size = Size;
-                Child.UpdateBounds(Bounds);
+                child.Widget.Position = child.GetPosition(Size) + Position + Offset;
+                child.Widget.Size = child.GetSize(Size);
+                   
+                child.Widget.UpdateBounds(Bounds);
             }
         }
 
@@ -662,19 +970,19 @@ namespace Velo
 
         public W Child => child.Child;
 
-        public TransitionW()
+        public TransitionW(W child = null)
         {
-            child = new HolderW<W>();
-            childFadeout = new HolderW<W>
+            this.child = new HolderW<W>(child);
+            childFadeout = new HolderW<W>()
             {
                 DisableInput = true
             };
-            AddChild(child, Vector2.Zero, -1f * Vector2.One);
-            AddChild(childFadeout, Vector2.Zero, -1f * Vector2.One);
+            AddChild(this.child, Vector2.Zero, Vector2.Zero, FILL);
+            AddChild(childFadeout, Vector2.Zero, Vector2.Zero, FILL);
             R = 1f;
         }
 
-        public override IEnumerable<IWidget> Children => (R < 1f ? new[] { (IWidget)child, childFadeout } : new[] { child }).Where(child => child != null);
+        public override IEnumerable<IWidget> Children => base.Children.Where(child => ((HolderW<W>)child).Child != null);
 
         private static float Ease(float r)
         {
@@ -714,7 +1022,7 @@ namespace Velo
         {
             this.speed = speed;
             this.offset = offset;
-            offsetFadeout = (opposite ? -1f : 1f) * offset; 
+            offsetFadeout = (opposite ? -1f : 1f) * offset;
             bool transitionBack = childFadeout.Child == widget;
             childFadeout.Child = child.Child;
             child.Child = widget;
@@ -744,18 +1052,27 @@ namespace Velo
         }
     }
 
-    public class MoveW : HolderW<IWidget>
+    public class TransitionW : TransitionW<IWidget>
+    {
+        public TransitionW(IWidget child = null) : base(child)
+        {
+        }
+    }
+
+    public class FadeW<W> : HolderW<W>, IDecoratorW<W> where W : class, IWidget
     {
         private TimeSpan lastTime;
         public float R;
         private float speed;
-        private Vector2 offset;
+        private float opacityStart;
+        private float opacityTarget;
+        private Vector2 offsetStart;
         private Vector2 offsetTarget;
         private Action onFinish;
 
-        public MoveW(IWidget child)
+        public FadeW(W child = null) :
+            base(child)
         {
-            Child = child;
             R = 1f;
         }
 
@@ -783,19 +1100,37 @@ namespace Velo
             }
 
             if (Child != null)
-                Child.Offset = offset * (1f - Ease(R)) + offsetTarget * Ease(R);
+            {
+                Child.Opacity = opacityStart * (1f - Ease(R)) + opacityTarget * Ease(R);
+                Child.Offset = offsetStart * (1f - Ease(R)) + offsetTarget * Ease(R);
+            }
 
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
-        public void MoveTo(float speed, Vector2 offset, Action onFinish = null)
+        public void FadeTo(float speed, float opacity, Vector2 offset, Action onFinish = null)
         {
             this.speed = speed;
-            this.offset = this.offset * (1f - Ease(R)) + offsetTarget * Ease(R);
+            opacityStart = opacityStart * (1f - Ease(R)) + opacityTarget * Ease(R);
+            opacityTarget = opacity;
+            offsetStart = offsetStart * (1f - Ease(R)) + offsetTarget * Ease(R);
             offsetTarget = offset;
             lastTime = Velo.RealTime;
             R = 0f;
             this.onFinish = onFinish;
+            Child.Refresh();
+        }
+
+        public void GoTo(float opacity, Vector2 offset)
+        {
+            R = 1f;
+            opacityStart = opacity;
+            opacityTarget = opacity;
+            offsetStart = offset;
+            offsetTarget = offset;
+            Child.Opacity = opacity;
+            Child.Offset = offset;
+            Child.Refresh();
         }
 
         public bool Moving()
@@ -804,46 +1139,118 @@ namespace Velo
         }
     }
 
-    public class ScrollW : Widget
+    public class FadeW : FadeW<IWidget>, IDecoratorW
     {
-        private readonly Widget root;
+        public FadeW(IWidget child = null) : base(child)
+        {
+        }
+    }
+
+    public class ClickableW<W> : HolderW<W>, IDecoratorW<W> where W : class, IWidget
+    {
+        public Action<WEMouseClick> OnClick { get; set; }
+        public Action OnLeftClick
+        {
+            set
+            {
+                OnClick = wevent =>
+                {
+                    if (wevent.Button == WEMouseClick.EButton.LEFT)
+                    {
+                        value();
+                    }
+                };
+            }
+        }
+
+        public ClickableW(W child = null) :
+            base(child)
+        {
+
+        }
+
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            
+            bool mouseInside = CheckMouseInside(events.MousePos);
+
+            if (!DisableInput)
+            {
+                if (mouseInside && mouseInsideParent && OnClick != null)
+                {
+                    events.OnClick = OnClick;
+                }
+            }
+
+            UpdateInputChildren(mouseInsideParent, events);
+        }
+    }
+
+    public class ClickableW : ClickableW<IWidget>, IDecoratorW
+    {
+        public ClickableW(IWidget child = null) : base(child)
+        {
+        }
+    }
+
+    public class ScrollW<W> : Widget, IDecoratorW<W> where W : class, IWidget
+    {
+        public W Child { get; set; }
+        private readonly EmptyW scrollBar;
         private float scroll = 0f;
         private float targetScroll = 0f;
-        private Rectangle scrollBar;
         private bool scrollBarPicked = false;
         private float scrollBarPickY;
         private float scrollBarPickScroll;
         private float mouseY;
 
-        public ScrollW(Widget root)
+        public ScrollW(W child = null)
         {
-            this.root = root;
+            Child = child;
+            scrollBar = new EmptyW
+            {
+                BackgroundVisible = true,
+                BackgroundVisibleHovered = true
+            };
             Crop = true;
         }
 
-        public Func<Color> ScrollBarColor { get; set; }
+        public Func<Color> ScrollBarColor 
+        { 
+            get => scrollBar.BackgroundColor; 
+            set => scrollBar.BackgroundColor = value; 
+        }
         public int ScrollBarWidth { get; set; }
 
-        public override IEnumerable<IWidget> Children => root != null ? new[] { root } : Enumerable.Empty<IWidget>();
+        private Vector2 childRequestedSize = Vector2.One * float.NegativeInfinity;
+        public override Vector2 RequestedSize
+        {
+            get
+            {
+                childRequestedSize = Child.RequestedSize;
+                return childRequestedSize;
+            }
+        }
+        public override IEnumerable<IWidget> Children => Child != null ? new[] { (IWidget)Child, scrollBar } : new[] { scrollBar };
 
         public override void UpdateInput(bool mouseInsideParent, Events events)
         {
             base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
 
             if (DisableInput || events.MouseState.LeftButton == ButtonState.Released)
                 scrollBarPicked = false;
 
             bool mouseInside = CheckMouseInside(events.MousePos);
-
-            root?.UpdateInput(mouseInside && mouseInsideParent, events);
             
-            if (!DisableInput && mouseInside && mouseInsideParent && root.Size.Y > Size.Y)
+            if (!DisableInput && mouseInside && mouseInsideParent && Child.Size.Y > Size.Y)
             {
                 events.OnScroll = wevent =>
                 {
                     targetScroll += wevent.Amount;
                 };
-                if (scrollBar.Contains((int)events.MousePos.X, (int)events.MousePos.Y))
+                if (scrollBar.Bounds.ToRec(1f).Contains((int)events.MousePos.X, (int)events.MousePos.Y))
                 {
                     events.OnClick = wevent =>
                     {
@@ -861,19 +1268,24 @@ namespace Velo
         {
             base.UpdateBounds(parentBounds);
 
+            if (childRequestedSize == Vector2.One * float.NegativeInfinity)
+                childRequestedSize = Child.RequestedSize;
+            Vector2 requestedSize = childRequestedSize;
+            childRequestedSize = Vector2.One * float.NegativeInfinity;
+
             if (!scrollBarPicked)
             {
-                if (targetScroll > root.RequestedSize.Y - Size.Y)
+                if (targetScroll > requestedSize.Y - Size.Y)
                 {
-                    targetScroll = root.RequestedSize.Y - Size.Y;
+                    targetScroll = requestedSize.Y - Size.Y;
                 }
                 if (targetScroll < 0)
                 {
                     targetScroll = 0;
                 }
-                if (scroll > root.RequestedSize.Y - Size.Y)
+                if (scroll > requestedSize.Y - Size.Y)
                 {
-                    scroll = root.RequestedSize.Y - Size.Y;
+                    scroll = requestedSize.Y - Size.Y;
                 }
                 if (scroll < 0)
                 {
@@ -894,10 +1306,10 @@ namespace Velo
             }
             else
             {
-                scroll = scrollBarPickScroll + (mouseY - scrollBarPickY) * root.RequestedSize.Y / Size.Y;
-                if (scroll > root.RequestedSize.Y - Size.Y)
+                scroll = scrollBarPickScroll + (mouseY - scrollBarPickY) * requestedSize.Y / Size.Y;
+                if (scroll > requestedSize.Y - Size.Y)
                 {
-                    scroll = root.RequestedSize.Y - Size.Y;
+                    scroll = requestedSize.Y - Size.Y;
                 }
                 if (scroll < 0)
                 {
@@ -906,35 +1318,23 @@ namespace Velo
                 targetScroll = scroll;
             }
 
-            if (root.RequestedSize.Y > Size.Y)
+            if (requestedSize.Y > Size.Y)
             {
-                scrollBar = new Rectangle((int)(Position.X + Size.X - ScrollBarWidth), (int)(Position.Y + Size.Y * scroll / root.Size.Y), ScrollBarWidth, (int)(Size.Y * Size.Y / root.Size.Y));
+                scrollBar.Visible = true;
+                scrollBar.Hoverable = true;
+                scrollBar.Position = Position + new Vector2(Size.X - ScrollBarWidth, Size.Y * scroll / requestedSize.Y);
+                scrollBar.Size = new Vector2(ScrollBarWidth, Size.Y * Size.Y / requestedSize.Y);
+                scrollBar.UpdateBounds(Bounds);
             }
             else
             {
-                scrollBar = new Rectangle();
+                scrollBar.Visible = false;
+                scrollBar.Hoverable = false;
             }
 
-            root.Position = new Vector2(Position.X, Position.Y - scroll) + Offset;
-            root.Size = new Vector2(Size.X, root.RequestedSize.Y);
-            root.UpdateBounds(Bounds);
-        }
-
-        public override IWidget GetHovered(Vector2 mousePos, bool mouseInsideParent)
-        {
-            IWidget hovered = base.GetHovered(mousePos, mouseInsideParent);
-
-            bool mouseInside = CheckMouseInside(mousePos);
-
-            if (!DisableInput)
-            {
-                if (mouseInside && mouseInsideParent && root.Size.Y > Size.Y && scrollBar.Contains((int)mousePos.X, (int)mousePos.Y))
-                {
-                    return this;
-                }
-            }
-
-            return hovered;
+            Child.Position = new Vector2(Position.X, Position.Y - scroll) + Offset;
+            Child.Size = new Vector2(Size.X, requestedSize.Y);
+            Child.UpdateBounds(Bounds);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -943,19 +1343,10 @@ namespace Velo
                 return; 
             
             base.Draw(hovered, parentCropRec, scale, opacity);
+
+            scrollBar.BackgroundColorHovered = ScrollBarColor;
+
             DrawChildren(hovered, parentCropRec, scale, opacity);
-
-            CRectangleDrawComponent scrollBarRec = new CRectangleDrawComponent(scrollBar.X * scale, scrollBar.Y * scale, scrollBar.Width * scale, scrollBar.Height * scale)
-            {
-                IsVisible = true,
-                FillEnabled = true,
-                OutlineEnabled = false,
-                OutlineThickness = 0
-            };
-            if (ScrollBarColor != null)
-                scrollBarRec.FillColor = ScrollBarColor() * opacity * Opacity;
-
-            scrollBarRec.Draw(null);
         }
 
         public void ResetScrollState()
@@ -971,18 +1362,25 @@ namespace Velo
         }
     }
 
+    public class ScrollW : ScrollW<IWidget>, IDecoratorW
+    {
+        public ScrollW(IWidget child) : base(child)
+        {
+        }
+    }
+
     public interface IListEntryFactory<T>
     {
         IEnumerable<T> GetElems();
         float Height(T elem, int i);
-        Widget Create(T elem, int i);
+        IWidget Create(T elem, int i);
     }
 
     public class ListW<T> : Widget where T : struct
     {
         private struct Entry
         {
-            public Widget Widget;
+            public IWidget Widget;
             public T Elem;
             public int Index;
             public bool Refresh;
@@ -1006,7 +1404,34 @@ namespace Velo
         public bool EntryHoverable { get; set; }
         public Func<Color> EntryBackgroundColorHovered { get; set; }
 
+        public override Vector2 RequestedSize
+        {
+            get
+            {
+                IEnumerable<T> elems = Factory.GetElems();
+
+                float sum = 0f;
+                int i = 0;
+                foreach (T elem in elems)
+                {
+                    sum += Factory.Height(elem, i);
+                    i++;
+                }
+                float max = 0f;
+                foreach (Entry entry in entries)
+                {
+                    max = Math.Max(max, entry.Widget.RequestedSize.X);
+                }
+                return new Vector2(max, sum);
+            }
+        }
         public override IEnumerable<IWidget> Children => entries.Select(entry => entry.Widget);
+
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            UpdateInputChildren(mouseInsideParent, events);
+        }
 
         public override void UpdateBounds(Bounds parentBounds)
         {
@@ -1043,7 +1468,7 @@ namespace Velo
                     else
                         entries.Add(new Entry { Widget = Factory.Create(elem, i), Elem = elem, Index = i });
 
-                    Widget widget = entries[j].Widget;
+                    IWidget widget = entries[j].Widget;
                     widget.Position = new Vector2(Position.X, y) + Offset;
                     widget.Size = new Vector2(Size.X, height);
                     widget.Hoverable = EntryHoverable;
@@ -1056,13 +1481,9 @@ namespace Velo
                 }
                 y += height;
                 i++;
-
-                if (i == elemsCount)
-                    break;
             }
             while (entries.Count > j)
                 entries.RemoveAt(entries.Count - 1);
-            RequestedSize = new Vector2(-1f, y - Position.Y);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -1146,6 +1567,7 @@ namespace Velo
             }
         }
 
+        public override Vector2 RequestedSize => textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
         public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
 
         public Vector2 MeasureTextSize => textDraw.Font.MeasureString(Text);
@@ -1155,8 +1577,6 @@ namespace Velo
         public override void UpdateBounds(Bounds parentBounds)
         {
             base.UpdateBounds(parentBounds);
-
-            RequestedSize = textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
 
             if (Size != sizePrev)
             {
@@ -1202,6 +1622,45 @@ namespace Velo
         }
     }
 
+    public class ButtonW : LabelW
+    {
+        public Action<WEMouseClick> OnClick { get; set; }
+        public Action OnLeftClick
+        {
+            set
+            {
+                OnClick = wevent =>
+                {
+                    if (wevent.Button == WEMouseClick.EButton.LEFT)
+                    {
+                        value();
+                    }
+                };
+            }
+        }
+
+        public ButtonW(string text, CachedFont font) :
+            base(text, font)
+        {
+
+        }
+
+        public override void UpdateInput(bool mouseInsideParent, Events events)
+        {
+            base.UpdateInput(mouseInsideParent, events);
+            
+            bool mouseInside = CheckMouseInside(events.MousePos);
+
+            if (!DisableInput)
+            {
+                if (mouseInside && mouseInsideParent && OnClick != null)
+                {
+                    events.OnClick = OnClick;
+                }
+            }
+        }
+    }
+
     public class ImageW : Widget
     {
         public Texture2D Image;
@@ -1214,6 +1673,7 @@ namespace Velo
             Image = image;
         }
 
+        public override Vector2 RequestedSize => Image != null ? new Vector2(Image.Width, Image.Height) : Vector2.Zero;
         public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -1243,14 +1703,14 @@ namespace Velo
 
             Vector2 position = (Position + (Size - size) / 2 + Offset) * scale;
             float drawScale = size.X / Image.Bounds.Width * scale;
-            Vector2 drawOrigin = Size / 2 * scale;
+            Vector2 drawOrigin = Size / 2;
             Velo.SpriteBatch.Draw(Image, position + drawOrigin * drawScale, Image.Bounds, Color.White * opacity * Opacity, Rotation, drawOrigin, drawScale, SpriteEffects.None, 0f);
         }
     }
 
-    public class SelectorButtonW : LayoutW
+    public class SelectorButtonW : HLayoutW
     {
-        private readonly List<LabelW> buttons;
+        private readonly List<ButtonW> buttons;
 
         private TimeSpan lastTime;
         private float selectedRecR = 1f;
@@ -1258,16 +1718,15 @@ namespace Velo
         private float selectedRecInitX = 0f;
         public int ShownCount;
 
-        public SelectorButtonW(IEnumerable<string> labels, int selected, CachedFont font) :
-            base(EOrientation.HORIZONTAL)
+        public SelectorButtonW(IEnumerable<string> labels, int selected, CachedFont font)
         {
-            buttons = new List<LabelW>();
+            buttons = new List<ButtonW>();
             Selected = selected;
 
             int i = 0;
             foreach (string text in labels)
             {
-                LabelW button = new LabelW(text, font);
+                ButtonW button = new ButtonW(text, font);
                 int j = i;
                 button.OnLeftClick = () =>
                     {
@@ -1343,7 +1802,7 @@ namespace Velo
 
             for (int i = 0; i < ShownCount; i++)
             {
-                LabelW button = buttons[i];
+                ButtonW button = buttons[i];
                 button.Color = Color;
                 float recLeft = button.Position.X + button.Offset.X;
                 float recRight = recLeft + button.Size.X;
@@ -1504,22 +1963,21 @@ namespace Velo
         }
     }
 
-    public class TableW<T> : LayoutW, IListEntryFactory<T> where T : struct
+    public class TableW<T> : VLayoutW, IListEntryFactory<T> where T : struct
     {
         public ITableEntryFactory<T> Factory;
         private readonly CachedFont font;
-        private readonly LayoutW headers;
+        private readonly HLayoutW headers;
         private readonly ListW<T> list;
         private readonly ScrollW scroll;
         private readonly List<TableColumn<T>> columns;
 
-        public TableW(CachedFont font, float headerHeight, ITableEntryFactory<T> factory) :
-            base(EOrientation.VERTICAL)
+        public TableW(CachedFont font, float headerHeight, ITableEntryFactory<T> factory)
         {
             Factory = factory;
             this.font = font;
 
-            headers = new LayoutW(EOrientation.HORIZONTAL);
+            headers = new HLayoutW();
             columns = new List<TableColumn<T>>();
             list = new ListW<T>(this);
             scroll = new ScrollW(list);
@@ -1583,13 +2041,14 @@ namespace Velo
             columns.Add(new TableColumn<T>("", space, null));
         }
 
-        public Action<Widget, T, int> OnLeftClickRow { get; set; }
+        public Action<DecoratedW<HLayoutW>, T, int> OnLeftClickRow { get; set; }
 
-        public Func<T, int, LayoutW, Widget> Hook { get; set; }
+        public Func<T, int, DecoratedW<HLayoutW>, IWidget> Hook { get; set; }
 
-        public Widget Create(T elem, int i)
+        public IWidget Create(T elem, int i)
         {
-            LayoutW layout = new LayoutW(EOrientation.HORIZONTAL);
+            HLayoutW layout = new HLayoutW();
+            DecoratedW<HLayoutW> decorated = new DecoratedW<HLayoutW>(layout);
             foreach (var column in columns)
             {
                 if (column.Factory != null)
@@ -1598,12 +2057,14 @@ namespace Velo
                     layout.AddSpace(column.Size);
             }
             if (OnLeftClickRow != null)
-                layout.OnLeftClick = () => OnLeftClickRow(layout, elem, i);
+            {
+                decorated.AddDecorator(new ClickableW { OnLeftClick = () => OnLeftClickRow(decorated, elem, i) });
+            }
 
             if (Hook != null)
-                return Hook(elem, i, layout);
+                return Hook(elem, i, decorated);
 
-            return layout;
+            return decorated;
         }
 
         public bool ReachedEnd => list.ReachedEnd;
@@ -1629,11 +2090,11 @@ namespace Velo
         }
     }
 
-    public class BackstackW<T> : TransitionW<T> where T : class, IWidget
+    public class BackstackW<W> : TransitionW<W> where W : class, IWidget
     {
-        private readonly Stack<T> backStack = new Stack<T>();
+        private readonly Stack<W> backStack = new Stack<W>();
 
-        public new void TransitionTo(T widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
+        public new void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
         {
             if (Child != null)
                 backStack.Push(Child);
@@ -1645,7 +2106,7 @@ namespace Velo
             base.TransitionTo(backStack.Pop(), speed, offset, opposite, onFinish);
         }
 
-        public new void GoTo(T widget)
+        public new void GoTo(W widget)
         {
             if (Child != null)
                 backStack.Push(Child);
@@ -1657,7 +2118,7 @@ namespace Velo
             base.GoTo(backStack.Pop());
         }
 
-        public void Push(T widget)
+        public void Push(W widget)
         {
             backStack.Push(widget);
         }
@@ -1671,5 +2132,9 @@ namespace Velo
         {
             backStack.Clear();
         }
+    }
+
+    public class BackstackW : BackstackW<IWidget>
+    {
     }
 }

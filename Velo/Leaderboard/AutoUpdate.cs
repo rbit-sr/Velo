@@ -8,18 +8,18 @@ namespace Velo
 {
     public class AuContext : MenuContext
     {
-        public HolderW<AutoUpdateWindow> Window;
+        AutoUpdateWindow Window;
 
-        public AuContext(ToggleSetting enabled) 
-            : base(enabled, enableDim: true)
+        public AuContext(ToggleSetting enabled) : 
+            base(enabled, enableDim: true)
         {
-            Window = new HolderW<AutoUpdateWindow>();
-            AddElem(Window, new Vector2(610f, 415f), new Vector2(700f, 250f));
+
         }
 
         public void Show(VeloUpdate update)
         {
-            Window.Child = new AutoUpdateWindow(this, update);
+            Window = new AutoUpdateWindow(this, update);
+            AddElem(Window, StackW.TOP_LEFT, new Vector2(610f, 415f), new Vector2(700f, 250f));
             Enabled.Enable();
         }
     }
@@ -95,17 +95,17 @@ namespace Velo
     public class AutoUpdateWindow : LayoutW
     {
         private readonly LabelW popupText;
-        private readonly LabelW yesButton;
-        private readonly LabelW noButton;
+        private readonly ButtonW yesButton;
+        private readonly ButtonW noButton;
         private readonly LayoutW buttonRow;
 
         public AutoUpdateWindow(AuContext context, VeloUpdate update) :
             base(EOrientation.VERTICAL)
         {
-            popupText = new LabelW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", context.Fonts.FontLarge);
+            popupText = new ButtonW("A new version of Velo is available! (" + update.VersionName + ")\nDo you want to install now?\n(This will automatically restart your game.)", context.Fonts.FontLarge);
             Style.ApplyText(popupText);
 
-            yesButton = new LabelW("Yes", context.Fonts.FontLarge);
+            yesButton = new ButtonW("Yes", context.Fonts.FontLarge);
             Style.ApplyButton(yesButton);
             yesButton.OnClick = wevent =>
             {
@@ -119,7 +119,7 @@ namespace Velo
                 }
             };
 
-            noButton = new LabelW("No", context.Fonts.FontLarge);
+            noButton = new ButtonW("No", context.Fonts.FontLarge);
             Style.ApplyButton(noButton);
             noButton.OnClick = wevent =>
             {

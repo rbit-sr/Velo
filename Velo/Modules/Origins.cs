@@ -15,7 +15,7 @@ namespace Velo
             base(enabled, enableDim: true)
         {
             Menu = new OriginsMenu(this);
-            AddElem(Menu, new Vector2(375f, 100f), new Vector2(1170f, 880f));
+            AddElem(Menu, StackW.TOP_LEFT, new Vector2(375f, 100f), new Vector2(1170f, 880f));
         }
     }
 
@@ -164,7 +164,7 @@ namespace Velo
         }
     }
 
-    public class OriginMapEntry : LabelW
+    public class OriginMapEntry : ButtonW
     {
         private readonly ulong mapId;
 
@@ -247,7 +247,7 @@ namespace Velo
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
-        public Widget Create(OriginMap elem, int i)
+        public IWidget Create(OriginMap elem, int i)
         {
             return new OriginMapEntry(context.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
         }

@@ -15,22 +15,21 @@ namespace Velo
         void PushRequests();
     }
 
-    public abstract class LbMenuPage : LayoutW, ILbWidget
+    public abstract class LbMenuPage : VLayoutW, ILbWidget
     {
         protected readonly LbContext context;
 
         protected LabelW title;
-        protected LayoutW titleBar;
-        protected HolderW<Widget> content;
-        protected readonly LayoutW buttonRowUpper;
-        protected readonly LayoutW buttonRowLower;
+        protected HLayoutW titleBar;
+        protected HolderW content;
+        protected readonly HLayoutW buttonRowUpper;
+        protected readonly HLayoutW buttonRowLower;
 
         public LbMenuPage(LbContext context, string title, bool buttonRowUpper = false, bool buttonRowLower = false, bool buttonRowSpace = true)
-            : base(EOrientation.VERTICAL)
         {
             this.context = context;
 
-            content = new HolderW<Widget>();
+            content = new HolderW(null);
 
             if (title != "")
             {
@@ -39,7 +38,7 @@ namespace Velo
                     Align = new Vector2(0f, 0.5f),
                     Color = SettingsUI.Instance.HeaderTextColor.Value.Get
                 };
-                titleBar = new LayoutW(EOrientation.HORIZONTAL);
+                titleBar = new HLayoutW();
                 titleBar.AddChild(this.title, FILL);
                 AddChild(titleBar, 80f);
                 AddSpace(10f);
@@ -49,12 +48,12 @@ namespace Velo
                 AddSpace(10f);
             if (buttonRowUpper)
             {
-                this.buttonRowUpper = new LayoutW(EOrientation.HORIZONTAL);
+                this.buttonRowUpper = new HLayoutW();
                 AddChild(this.buttonRowUpper, 35f);
             }
             if (buttonRowLower)
             {
-                this.buttonRowLower = new LayoutW(EOrientation.HORIZONTAL);
+                this.buttonRowLower = new HLayoutW();
                 AddChild(this.buttonRowLower, 35f);
             }
         }
@@ -62,14 +61,13 @@ namespace Velo
         public abstract void PushRequests();
     }
 
-    public abstract class LbTable<T> : LayoutW, ILbWidget, ITableEntryFactory<T> where T : struct
+    public abstract class LbTable<T> : VLayoutW, ILbWidget, ITableEntryFactory<T> where T : struct
     {
         protected readonly LbContext context;
 
         protected TableW<T> table;
         
-        public LbTable(LbContext context) :
-            base(EOrientation.VERTICAL)
+        public LbTable(LbContext context)
         {
             this.context = context;
             table = new TableW<T>(context.Fonts.FontMedium, 40, this);
@@ -103,15 +101,14 @@ namespace Velo
         }
     }
 
-    public class PlayerEntry : LayoutW
+    public class PlayerEntry : HLayoutW
     {
         private readonly ImageW image;
         private readonly LabelW label;
 
         private readonly RunInfo run;
 
-        public PlayerEntry(CachedFont font, RunInfo run) :
-            base(EOrientation.HORIZONTAL)
+        public PlayerEntry(CachedFont font, RunInfo run)
         {
             this.run = run;
             
@@ -347,23 +344,24 @@ namespace Velo
 
     public abstract class LbRunsTable : LbTable<RunInfo>
     {
-        private class ExpandedRow : TransitionW<Widget>
+        private class ExpandedRow : DecoratedW<TransitionW>
         {
             private readonly RunInfo run;
 
-            private readonly Widget original;
-            private readonly LabelW viewProfile;
-            private readonly LabelW mapPage;
-            private readonly LabelW setGhost;
-            private readonly LabelW viewReplay;
-            private readonly LabelW verify;
+            private readonly IWidget original;
+            private readonly ButtonW viewProfile;
+            private readonly ButtonW mapPage;
+            private readonly ButtonW setGhost;
+            private readonly ButtonW viewReplay;
+            private readonly ButtonW verify;
             private readonly LabelW comments;
-            private readonly LayoutW layout;
+            private readonly VLayoutW layout;
 
-            public Widget Original => original;
-            public Widget Expanded => layout;
+            public IWidget Original => original;
+            public IWidget Expanded => layout;
 
-            public ExpandedRow(Widget original, LbContext context, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording)
+            public ExpandedRow(IWidget original, LbContext context, RunInfo run, bool mapPageButton, Action<int, Playback.EPlaybackType> requestRecording) :
+                base(new TransitionW())
             {
                 this.run = run;
                 this.original = original;
@@ -418,14 +416,14 @@ namespace Velo
 
                 ImageW avatar = new ImageW(SteamCache.GetAvatar(run.PlayerId));
 
-                viewProfile = new LabelW("View profile", context.Fonts.FontMedium);
+                viewProfile = new ButtonW("Profile page", context.Fonts.FontMedium);
                 Style.ApplyButton(viewProfile);
                 viewProfile.Hoverable = false;
                 viewProfile.OnLeftClick = () =>
                 {
                     context.ChangePage(new LbPlayerMenuPage(context, run.PlayerId));
                 };
-                mapPage = new LabelW("Map page", context.Fonts.FontMedium);
+                mapPage = new ButtonW("Map page", context.Fonts.FontMedium);
                 Style.ApplyButton(mapPage);
                 mapPage.Hoverable = false;
                 mapPage.OnLeftClick = () =>
@@ -452,29 +450,29 @@ namespace Velo
                 infos.AddSpace(40f);
 
                 MapEvent mapEvent = RunsDatabase.Instance.GetEvent(run.Category.MapId);
-                
-                setGhost = new LabelW("Set ghost", context.Fonts.FontMedium);
+
+                setGhost = new ButtonW("Set ghost", context.Fonts.FontMedium);
                 Style.ApplyButton(setGhost);
                 setGhost.Hoverable = false;
                 setGhost.OnLeftClick = () =>
                 {
                     requestRecording(run.Id, Playback.EPlaybackType.SET_GHOST);
                 };
-                viewReplay = new LabelW("Watch replay", context.Fonts.FontMedium);
+                viewReplay = new ButtonW("Watch replay", context.Fonts.FontMedium);
                 Style.ApplyButton(viewReplay);
                 viewReplay.Hoverable = false;
                 viewReplay.OnLeftClick = () =>
                 {
                     requestRecording(run.Id, Playback.EPlaybackType.VIEW_REPLAY);
                 };
-                verify = new LabelW("Verify", context.Fonts.FontMedium);
+                verify = new ButtonW("Verify", context.Fonts.FontMedium);
                 Style.ApplyButton(verify);
                 verify.Hoverable = false;
                 verify.OnLeftClick = () =>
                 {
                     requestRecording(run.Id, Playback.EPlaybackType.VERIFY);
                 };
-                
+
                 LayoutW buttons = new LayoutW(EOrientation.HORIZONTAL);
                 //if (mapEvent.CurrentlyNotRunning() || run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 {
@@ -492,7 +490,7 @@ namespace Velo
                     buttons.AddSpace(40f);
                 }
 
-                layout = new LayoutW(EOrientation.VERTICAL);
+                layout = new VLayoutW();
                 layout.AddSpace(10f);
                 layout.AddChild(infos, 280f);
                 layout.AddSpace(10f);
@@ -509,7 +507,7 @@ namespace Velo
                         ScrollBarColor = () => SettingsUI.Instance.ButtonColor.Value.Get()
                     };
 
-                    LayoutW commentsLayout = new LayoutW(EOrientation.HORIZONTAL);
+                    HLayoutW commentsLayout = new HLayoutW();
                     commentsLayout.AddSpace(20f);
                     commentsLayout.AddChild(scroll, FILL);
                     commentsLayout.AddSpace(20f);
@@ -521,15 +519,16 @@ namespace Velo
                 layout.AddSpace(10f);
 
                 Crop = true;
-                
+
                 original.BackgroundVisible = false;
                 original.Hoverable = false;
-                GoTo(original);
+
+                ChildWidget.GoTo(original);
 
                 Hoverable = true;
             }
 
-            public void TransitionTo(Widget widget, Action onFinish = null)
+            public void TransitionTo(IWidget widget, Action onFinish = null)
             {
                 if (widget == Original)
                 {
@@ -543,7 +542,7 @@ namespace Velo
                 {
                     Crop = true;
                 }
-                TransitionTo(widget, 8f, Vector2.Zero, onFinish: () =>
+                ChildWidget.TransitionTo(widget, 8f, Vector2.Zero, onFinish: () =>
                 {
                     if (widget == Expanded)
                     {
@@ -590,7 +589,7 @@ namespace Velo
                     int id = expandedId;
                     expanded[expandedId].TransitionTo(expanded[expandedId].Original, onFinish: () => expanded.Remove(id));
                 }
-                    
+
                 if (expandedId == elem.Id)
                 {
                     expandedId = -1;
@@ -600,10 +599,8 @@ namespace Velo
                     expandedId = elem.Id;
                     if (!expanded.TryGetValue(expandedId, out ExpandedRow expandedRow) || expandedRow == null)
                     {
-                        expandedRow = new ExpandedRow(row, context, elem, mapPageButton, InitiatePlayback)
-                        {
-                            OnClick = row.OnClick
-                        };
+                        expandedRow = new ExpandedRow(row, context, elem, mapPageButton, InitiatePlayback);
+                        expandedRow.AddDecorator(new ClickableW { OnClick = row.GetDecorator<ClickableW>().OnClick });
                         expanded.Add(expandedId, expandedRow);
                     }
 
@@ -644,20 +641,20 @@ namespace Velo
             int ghostIndex = !OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.GhostPlaybackCount();
             if (type == Playback.EPlaybackType.SET_GHOST)
                 Ghosts.Instance.GetOrSpawn(!OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.GhostPlaybackCount(), OfflineGameMods.Instance.GhostDifferentColors.Value);
-           
+
             RunsDatabase.Instance.RequestRecordingCached(id, (recording) =>
+            {
+                Task.Run(() =>
                 {
-                    Task.Run(() =>
+                    if (type == Playback.EPlaybackType.SET_GHOST)
+                        Ghosts.Instance.WaitForGhost(ghostIndex);
+                    Velo.AddOnPreUpdate(() =>
                     {
-                        if (type == Playback.EPlaybackType.SET_GHOST)
-                            Ghosts.Instance.WaitForGhost(ghostIndex);
-                        Velo.AddOnPreUpdate(() =>
-                        {
-                            context.ExitMenu(false);
-                            OfflineGameMods.Instance.StartPlayback(recording, type, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
-                        });
+                        context.ExitMenu(false);
+                        OfflineGameMods.Instance.StartPlayback(recording, type, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
                     });
-                },
+                });
+            },
                 (error) => context.Error = error.Message
             );
         }
@@ -698,7 +695,7 @@ namespace Velo
         {
             if (expanded.TryGetValue(elem.Id, out ExpandedRow expandedRow) && expandedRow != null)
             {
-                float R = expandedRow.R;
+                float R = expandedRow.ChildWidget.R;
                 if (elem.Id != expandedId)
                     R = 1f - R;
                 return (1f - R) * 40f + R * (350f + (elem.PlayerId == 0 || elem.HasComments != 0 ? 210f : 0f));
@@ -710,7 +707,7 @@ namespace Velo
         public override void UpdateBounds(Bounds parentBounds)
         {
             base.UpdateBounds(parentBounds);
-            
+
             if (NeedRequestMore())
             {
                 context.Request();
@@ -781,15 +778,15 @@ namespace Velo
         private readonly SelectorButtonW categorySelect;
         private readonly SelectorButtonW filterSelect;
         private readonly DualTabbedW<LbMapRunsTable> tables;
-        private readonly LabelW backButton;
+        private readonly ButtonW backButton;
         private readonly LabelW eventLabel;
-        private readonly LayoutW eventLabelLayout;
-        private readonly LabelW showEventButton;
-        private readonly LayoutW showEventButtonLayout;
-        private readonly LabelW workshopPageButton;
-        private readonly LayoutW workshopPageButtonLayout;
-        private readonly LabelW enterMapButton;
-        private readonly LayoutW enterMapButtonLayout;
+        private readonly VLayoutW eventLabelLayout;
+        private readonly ButtonW showEventButton;
+        private readonly VLayoutW showEventButtonLayout;
+        private readonly ButtonW workshopPageButton;
+        private readonly VLayoutW workshopPageButtonLayout;
+        private readonly ButtonW enterMapButton;
+        private readonly VLayoutW enterMapButtonLayout;
 
         private bool eventsTabShown = true;
         private int showEventButtonId = 0;
@@ -847,7 +844,7 @@ namespace Velo
 
             content.Child = tables;
 
-            backButton = new LabelW("Back", context.Fonts.FontMedium);
+            backButton = new ButtonW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
             backButton.OnLeftClick = context.ChangeBack;
 
@@ -862,7 +859,7 @@ namespace Velo
             Style.ApplyText(eventLabel);
             eventLabel.Align = new Vector2(1f, 0.5f);
 
-            showEventButton = new LabelW("View event", context.Fonts.FontMedium);
+            showEventButton = new ButtonW("View event", context.Fonts.FontMedium);
             Style.ApplyButton(showEventButton);
             showEventButton.OnLeftClick = () =>
             {
@@ -871,12 +868,12 @@ namespace Velo
                 filterSelect.Selected = 0;
             };
 
-            eventLabelLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-            eventLabelLayout.AddSpace(LayoutW.FILL);
+            eventLabelLayout = new VLayoutW();
+            eventLabelLayout.AddSpace(FILL);
             eventLabelLayout.AddChild(eventLabel, 50f);
 
-            showEventButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-            showEventButtonLayout.AddSpace(LayoutW.FILL);
+            showEventButtonLayout = new VLayoutW();
+            showEventButtonLayout.AddSpace(FILL);
             showEventButtonLayout.AddChild(showEventButton, 35f);
 
             titleBar.AddChild(eventLabelLayout, 0f);
@@ -895,29 +892,29 @@ namespace Velo
             ulong fileId = mapId;
             if (Map.IsOther(mapId) || Map.MapIdToFileId.TryGetValue(mapId, out fileId))
             {
-                workshopPageButton = new LabelW("Workshop page", context.Fonts.FontMedium);
+                workshopPageButton = new ButtonW("Workshop page", context.Fonts.FontMedium);
                 Style.ApplyButton(workshopPageButton);
                 workshopPageButton.OnLeftClick = () =>
                 {
                     SteamFriends.ActivateGameOverlayToWebPage("https://steamcommunity.com/sharedfiles/filedetails/?id=" + fileId);
                 };
-                workshopPageButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-                workshopPageButtonLayout.AddSpace(LayoutW.FILL);
+                workshopPageButtonLayout = new VLayoutW();
+                workshopPageButtonLayout.AddSpace(FILL);
                 workshopPageButtonLayout.AddChild(workshopPageButton, 35f);
 
                 titleBar.AddChild(workshopPageButtonLayout, 220f);
             }
             if (Map.IsOrigins(mapId))
             {
-                enterMapButton = new LabelW("Enter map", context.Fonts.FontMedium);
+                enterMapButton = new ButtonW("Enter map", context.Fonts.FontMedium);
                 Style.ApplyButton(enterMapButton);
                 enterMapButton.OnLeftClick = () =>
                 {
                     Origins.Instance.SelectOrigins(mapId);
                     context.ExitMenu(animation: false);
                 };
-                enterMapButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
-                enterMapButtonLayout.AddSpace(LayoutW.FILL);
+                enterMapButtonLayout = new VLayoutW();
+                enterMapButtonLayout.AddSpace(FILL);
                 enterMapButtonLayout.AddChild(enterMapButton, 35);
 
                 titleBar.AddChild(enterMapButtonLayout, 190f);
@@ -1063,11 +1060,11 @@ namespace Velo
         private readonly LabelW statsValues1;
         private readonly LabelW statsTitles2;
         private readonly LabelW statsValues2;
-        private readonly LabelW backButton;
+        private readonly ButtonW backButton;
         private readonly SelectorButtonW filterSelect;
         private readonly TabbedW<LbPlayerRunsTable> tables;
-        private readonly LabelW steamPageButton;
-        private readonly LayoutW steamPageButtonLayout;
+        private readonly ButtonW steamPageButton;
+        private readonly VLayoutW steamPageButtonLayout;
 
         private readonly ulong playerId;
 
@@ -1094,9 +1091,9 @@ namespace Velo
             statsValues2.Align = new Vector2(0f, 0.5f);
             titleBar.AddChild(avatar, 60f);
             titleBar.AddSpace(10f);
-            titleBar.AddChild(title, LayoutW.FILL);
+            titleBar.AddChild(title, FILL);
 
-            backButton = new LabelW("Back", context.Fonts.FontMedium);
+            backButton = new ButtonW("Back", context.Fonts.FontMedium);
             Style.ApplyButton(backButton);
             backButton.OnLeftClick = context.ChangeBack;
 
@@ -1118,14 +1115,14 @@ namespace Velo
             buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 950f);
 
-            steamPageButton = new LabelW("Steam page", context.Fonts.FontMedium);
+            steamPageButton = new ButtonW("Steam page", context.Fonts.FontMedium);
             Style.ApplyButton(steamPageButton);
             steamPageButton.OnLeftClick = () =>
             {
                 SteamFriends.ActivateGameOverlayToUser("steamid", new CSteamID(playerId));
             };
 
-            steamPageButtonLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+            steamPageButtonLayout = new VLayoutW();
             steamPageButtonLayout.AddChild(steamPageButton, 35f);
             steamPageButtonLayout.Offset = new Vector2(0f, 7f);
 
@@ -1390,13 +1387,13 @@ namespace Velo
         private readonly TabbedW<LbTopRunsTable> tables;
         private readonly LabelW placeLabel;
         private readonly LabelW placeSelectLabel;
-        private readonly LabelW placeDecrButton;
-        private readonly LabelW placeIncrButton;
-        private readonly LayoutW placeSelectLayoutV;
-        private readonly LayoutW placeSelectLayoutH;
+        private readonly ButtonW placeDecrButton;
+        private readonly ButtonW placeIncrButton;
+        private readonly VLayoutW placeSelectLayoutV;
+        private readonly HLayoutW placeSelectLayoutH;
         private readonly LabelW orderByLabel;
-        private readonly LabelW sortingButton;
-        private readonly LayoutW sortingLayout;
+        private readonly ButtonW sortingButton;
+        private readonly VLayoutW sortingLayout;
 
         private int place = 0;
 
@@ -1431,7 +1428,7 @@ namespace Velo
 
             orderByLabel = new LabelW("Order by:", context.Fonts.FontMedium);
             Style.ApplyText(orderByLabel);
-            sortingButton = new LabelW(tables.Current.Sorting.Label(), context.Fonts.FontMedium);
+            sortingButton = new ButtonW(tables.Current.Sorting.Label(), context.Fonts.FontMedium);
             Style.ApplyButton(sortingButton);
             sortingButton.OnLeftClick = () =>
             {
@@ -1448,7 +1445,7 @@ namespace Velo
                 tables.Current.Sorting = newSorting;
                 sortingButton.Text = newSorting.Label();
             };
-            sortingLayout = new LayoutW(LayoutW.EOrientation.VERTICAL);
+            sortingLayout = new VLayoutW();
             sortingLayout.AddChild(orderByLabel, 25f);
             sortingLayout.AddSpace(10f);
             sortingLayout.AddChild(sortingButton, 35f);
@@ -1458,7 +1455,7 @@ namespace Velo
             Style.ApplyText(placeLabel);
             placeSelectLabel = new LabelW("1st", context.Fonts.FontMedium);
             Style.ApplyText(placeSelectLabel);
-            placeDecrButton = new LabelW("-", context.Fonts.FontMedium);
+            placeDecrButton = new ButtonW("-", context.Fonts.FontMedium);
             Style.ApplyButton(placeDecrButton);
             placeDecrButton.OnLeftClick = () =>
             {
@@ -1471,7 +1468,7 @@ namespace Velo
                     context.Request();
                 }
             };
-            placeIncrButton = new LabelW("+", context.Fonts.FontMedium);
+            placeIncrButton = new ButtonW("+", context.Fonts.FontMedium);
             Style.ApplyButton(placeIncrButton);
             placeIncrButton.OnLeftClick = () =>
             {
@@ -1479,11 +1476,11 @@ namespace Velo
                 UpdatePlaceLabel();
                 context.Request();
             };
-            placeSelectLayoutH = new LayoutW(EOrientation.HORIZONTAL);
+            placeSelectLayoutH = new HLayoutW();
             placeSelectLayoutH.AddChild(placeDecrButton, 50f);
             placeSelectLayoutH.AddChild(placeSelectLabel, 90f);
             placeSelectLayoutH.AddChild(placeIncrButton, 50f);
-            placeSelectLayoutV = new LayoutW(EOrientation.VERTICAL);
+            placeSelectLayoutV = new VLayoutW();
             placeSelectLayoutV.AddChild(placeLabel, 25f);
             placeSelectLayoutV.AddSpace(10f);
             placeSelectLayoutV.AddChild(placeSelectLayoutH, 35f);
@@ -1610,7 +1607,7 @@ namespace Velo
             }
         }
 
-        public class PlayerEntry : LayoutW
+        public class PlayerEntry : HLayoutW
         {
             private readonly ImageW image;
             private readonly LabelW label;
@@ -1618,7 +1615,7 @@ namespace Velo
             private readonly PlayerInfoScore player;
 
             public PlayerEntry(CachedFont font, PlayerInfoScore player) :
-                base(EOrientation.HORIZONTAL)
+                base()
             {
                 this.player = player;
 
@@ -1703,15 +1700,14 @@ namespace Velo
             }
         }
 
-        public class PlayerEntry : LayoutW
+        public class PlayerEntry : HLayoutW
         {
             private readonly ImageW image;
             private readonly LabelW label;
 
             private readonly PlayerInfoWRs player;
 
-            public PlayerEntry(CachedFont font, PlayerInfoWRs player) :
-                base(EOrientation.HORIZONTAL)
+            public PlayerEntry(CachedFont font, PlayerInfoWRs player)
             {
                 this.player = player;
 
@@ -1965,9 +1961,9 @@ you can see whether it was applied for a run under ""Fix BG"".";
         }
     }
 
-    public class PopularWindow : LayoutW, ILbWidget, IListEntryFactory<ulong>
+    public class PopularWindow : VLayoutW, ILbWidget, IListEntryFactory<ulong>
     {
-        public class PopularMapEntry : LayoutW
+        public class PopularMapEntry : HLayoutW
         {
             private readonly MapEntry mapName;
             private readonly ImageW image;
@@ -1975,8 +1971,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
 
             private readonly RunInfo wr;
 
-            public PopularMapEntry(CachedFont font, RunInfo wr) :
-                base(EOrientation.HORIZONTAL)
+            public PopularMapEntry(CachedFont font, RunInfo wr)
             {
                 this.wr = wr;
 
@@ -2002,16 +1997,15 @@ you can see whether it was applied for a run under ""Fix BG"".";
 
         protected readonly LbContext context;
 
-        private readonly LayoutW headerLayout;
+        private readonly HLayoutW headerLayout;
         private readonly LabelW title;
-        private readonly LabelW compactButton;
+        private readonly ButtonW compactButton;
         private readonly ListW<ulong> maps;
         private readonly ScrollW scroll;
-        private readonly LayoutW layout;
-        private readonly MoveW move;
+        private readonly VLayoutW layout;
+        private readonly FadeW move;
 
-        public PopularWindow(LbContext context) :
-            base(EOrientation.VERTICAL)
+        public PopularWindow(LbContext context)
         {
             this.context = context;
             title = new LabelW("Popular this week", context.Fonts.FontMedium);
@@ -2019,14 +2013,14 @@ you can see whether it was applied for a run under ""Fix BG"".";
             title.Color = SettingsUI.Instance.HeaderTextColor.Value.Get;
             title.Align = new Vector2(0f, 0f);
             title.Offset = new Vector2(0f, -3f);
-            compactButton = new LabelW("", context.Fonts.FontSmall);
+            compactButton = new ButtonW("", context.Fonts.FontSmall);
             Style.ApplyButton(compactButton);
             compactButton.OnLeftClick = () =>
             {
                 SettingsUI.Instance.PopularThisWeekCompacted.Value = !SettingsUI.Instance.PopularThisWeekCompacted.Value;
                 Compact(SettingsUI.Instance.PopularThisWeekCompacted.Value, 2f);
             };
-            headerLayout = new LayoutW(EOrientation.HORIZONTAL);
+            headerLayout = new HLayoutW();
             headerLayout.AddChild(title, FILL);
             headerLayout.AddChild(compactButton, 40f);
 
@@ -2035,12 +2029,12 @@ you can see whether it was applied for a run under ""Fix BG"".";
             
             scroll = new ScrollW(maps);
 
-            layout = new LayoutW(EOrientation.VERTICAL);
+            layout = new VLayoutW();
             layout.AddChild(headerLayout, 25f);
             layout.AddSpace(8f);
             layout.AddChild(scroll, FILL);
 
-            move = new MoveW(layout);
+            move = new FadeW(layout);
             AddChild(move, FILL);
 
             Compact(SettingsUI.Instance.PopularThisWeekCompacted.Value, 10000f);
@@ -2050,22 +2044,24 @@ you can see whether it was applied for a run under ""Fix BG"".";
         {
             if (!compact)
             {
-                move.MoveTo(speed, new Vector2(0f, 383f));
+                move.FadeTo(speed, 1f, new Vector2(0f, 383f));
                 compactButton.Text = "∧";
             }
             else
             {
-                move.MoveTo(speed, Vector2.Zero);
+                move.FadeTo(speed, 1f, Vector2.Zero);
                 compactButton.Text = "∨";
             }
         }
 
-        public Widget Create(ulong elem, int i)
+        public IWidget Create(ulong elem, int i)
         {
             RunInfo info = RunsDatabase.Instance.GetWR(new Category { MapId = elem, TypeId = (ulong)ECategoryType.NEW_LAP });
             if (info.Id == -1)
                 info = RunsDatabase.Instance.GetWR(new Category { MapId = elem, TypeId = (ulong)ECategoryType.ONE_LAP });
-            return new PopularMapEntry(context.Fonts.FontSmall, info)
+            PopularMapEntry popularMapEntry = new PopularMapEntry(context.Fonts.FontSmall, info);
+            DecoratedW decorated = new DecoratedW(popularMapEntry);
+            decorated.AddDecorator(new ClickableW(null)
             {
                 OnLeftClick = () =>
                 {
@@ -2074,7 +2070,8 @@ you can see whether it was applied for a run under ""Fix BG"".";
                     if (wasMapMenuPage)
                         context.Page.PopLast();
                 }
-            };
+            });
+            return decorated;
         }
         
         public IEnumerable<ulong> GetElems()
