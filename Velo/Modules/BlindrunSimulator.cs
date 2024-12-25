@@ -49,7 +49,7 @@ namespace Velo
         {
             base.Init();
 
-            Velo.OnMainPlayerReset.Add(() =>
+            Velo.AddOnMainPlayerReset(() =>
             {
                 if (Velo.Ingame)
                 {

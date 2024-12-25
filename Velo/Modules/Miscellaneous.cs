@@ -96,6 +96,24 @@ namespace Velo
 
     public class Miscellaneous : Module
     {
+        public struct SkinConstants
+        {
+            public VectorSetting Origin;
+            public VectorSetting Position;
+            public VectorSetting RopeOffset;
+            public VectorSetting SwingOrigin;
+            public VectorSetting SwingPosition;
+            public VectorSetting SwingOffset;
+            public VectorSetting TauntOrigin;
+            public VectorSetting TauntPosition;
+            public VectorSetting ClimbOrigin;
+            public VectorSetting ClimbPosition;
+            public VectorSetting Scale;
+            public ColorTransitionSetting CharacterSelectBackgroundColor;
+        }
+
+        public Dictionary<ICharacter, SkinConstants> SkinConstantsLookup = new Dictionary<ICharacter, SkinConstants>();
+
         public EnumSetting<EEvent> Event;
         public BoolSetting BypassPumpkinCosmo;
         public BoolSetting BypassXl;
@@ -137,6 +155,30 @@ namespace Velo
 
         private Miscellaneous() : base("Miscellaneous")
         {
+            NewCategory("skin constants");
+            foreach (var character in Characters.Instance.characters)
+            {
+                SettingCategory category = Add(new SettingCategory(this, character.Name));
+                SkinConstants constants = new SkinConstants
+                {
+                    Origin = category.Add(new VectorSetting(this, "origin", character.Origin, Vector2.Zero, Vector2.One * 500f)),
+                    Position = category.Add(new VectorSetting(this, "position", character.Position, Vector2.One * -100f, Vector2.One * 100f)),
+                    RopeOffset = category.Add(new VectorSetting(this, "rope offset", character.RopeOffset, Vector2.One * -500f, Vector2.One * 500f)),
+                    SwingOrigin = category.Add(new VectorSetting(this, "swing origin", character.SwingOrigin, Vector2.Zero, Vector2.One * 500f)),
+                    SwingPosition = category.Add(new VectorSetting(this, "swing position", character.SwingPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                    SwingOffset = category.Add(new VectorSetting(this, "swing target offset", character.SwingOffset, Vector2.One * -100f, Vector2.One * 100f)),
+                    TauntOrigin = category.Add(new VectorSetting(this, "taunt origin", character.TauntOrigin, Vector2.Zero, Vector2.One * 500f)),
+                    TauntPosition = category.Add(new VectorSetting(this, "taunt position", character.TauntPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                    ClimbOrigin = category.Add(new VectorSetting(this, "climb origin", character.ClimbOrigin, Vector2.Zero, Vector2.One * 500f)),
+                    ClimbPosition = category.Add(new VectorSetting(this, "climb position", character.ClimbPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                    Scale = category.Add(new VectorSetting(this, "scale", character.Scale, Vector2.One * 0.2f, Vector2.One * 5f)),
+                    CharacterSelectBackgroundColor = category.Add(new ColorTransitionSetting(this, "background color", new ColorTransition(character.CharacterSelectBackgroundColor)))
+                };
+                constants.SwingOffset.Tooltip = "Offset increases based on angle. Gets mirrored depending on direction.";
+                constants.CharacterSelectBackgroundColor.Tooltip = "character select menu background color";
+                SkinConstantsLookup.Add(character, constants);
+            }
+
             NewCategory("event bypass");
             Event = AddEnum("event", EEvent.DEFAULT,
                 Enum.GetValues(typeof(EEvent)).Cast<EEvent>().Select(_event => _event.Label()).ToArray());

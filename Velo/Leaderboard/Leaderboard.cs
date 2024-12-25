@@ -86,8 +86,6 @@ namespace Velo
         public override void ExitMenu(bool animation = true)
         {
             base.ExitMenu(animation);
-
-            Page.Clear();
         }
 
         public void ChangePage(ILbWidget page)
@@ -111,9 +109,13 @@ namespace Velo
             RunsDatabase.Instance.RunRequestRuns(Refresh, error => Error = error.Message);
         }
 
-        public override void Draw()
+        public override bool Draw()
         {
-            base.Draw();
+            if (!base.Draw())
+            {
+                Page.Clear();
+                return false;
+            }
 
             if (RunsDatabase.Instance.Pending())
             {
@@ -128,6 +130,8 @@ namespace Velo
             }
             if (Error != "" && Error != null)
                 ErrorMessage.Text = Util.LineBreaks("Error: " + Error, 30);
+
+            return true;
         }
     }
 

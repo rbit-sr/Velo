@@ -350,7 +350,7 @@ namespace Velo
             }
         }
 
-        public virtual void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        public void BaseDraw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (!Visible)
                 return;
@@ -378,6 +378,11 @@ namespace Velo
 
             recDraw.IsVisible = Visible;
             recDraw.Draw(null);
+        }
+
+        public virtual void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            BaseDraw(hovered, parentCropRec, scale, opacity);
         }
 
         public void DrawChildren(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -589,25 +594,25 @@ namespace Velo
             children = new List<LayoutChild>();
         }
 
-        public int AddChild(Widget child, float size = REQUESTED_SIZE)
+        public LayoutChild AddChild(Widget child, float size = REQUESTED_SIZE)
         {
             children.Add(new LayoutChild(child, size));
-            return children.Count - 1;
+            return children.Last();
         }
 
-        public int AddSpace(float space)
+        public LayoutChild AddSpace(float space)
         {
             return AddChild(null, space);
         }
 
-        public void SetSize(int index, float size)
+        public void RemoveChild(LayoutChild child)
         {
-            children[index].Size = size;
+            children.Remove(child);
         }
 
-        public void SetSize(Widget child, float size)
+        public LayoutChild GetChild(int index)
         {
-            children.Find(test => test.Widget == child).Size = size;
+            return children[index];
         }
 
         public void ClearChildren()
@@ -902,14 +907,15 @@ namespace Velo
             children = new List<StackChild>();
         }
 
-        public void AddChild(IWidget child, Vector2 align, Vector2 offset, Vector2 size)
+        public StackChild AddChild(IWidget child, Vector2 align, Vector2 offset, Vector2 size)
         {
             children.Add(new StackChild(child, align, offset, size));
+            return children.Last();
         }
 
-        public void AddChild(IWidget child, Vector2 align, Vector2 offset)
+        public StackChild AddChild(IWidget child, Vector2 align, Vector2 offset)
         {
-            AddChild(child, align, offset, REQUESTED_SIZE);
+            return AddChild(child, align, offset, REQUESTED_SIZE);
         }
 
         public void ClearChildren()
@@ -957,16 +963,82 @@ namespace Velo
         }
     }
 
+    public struct Ease
+    {
+        public float R;
+        public float Speed;
+        public Action OnFinish;
+
+        public Ease(float r, float speed)
+        {
+            R = r;
+            Speed = speed;
+            OnFinish = null;
+        }
+
+        public void Start(float speed, Action onFinish = null)
+        {
+            R = 0f;
+            Speed = speed;
+            OnFinish = onFinish;
+        }
+
+        public void Reverse(float speed, Action onFinish = null)
+        {
+            R = 1f - R;
+            Speed = speed;
+            OnFinish = onFinish;
+        }
+
+        public void Finish()
+        {
+            R = 1f;
+        }
+
+        public float Get()
+        {
+            return 1f - (1f - R) * (1f - R);
+        }
+
+        public float Lerp(float start, float target)
+        {
+            return (1f - Get()) * start + Get() * target;
+        }
+
+        public Vector2 Lerp(Vector2 start, Vector2 target)
+        {
+            return (1f - Get()) * start + Get() * target;
+        }
+
+        public bool Finished()
+        {
+            return R == 1f;
+        }
+
+        public void Update()
+        {
+            float dt = (float)Velo.RealDelta.TotalSeconds;
+            if (dt > 1f)
+                dt = 1f;
+
+            R += Speed * dt;
+
+            if (R > 1f)
+            {
+                R = 1f;
+                OnFinish?.Invoke();
+                OnFinish = null;
+            }
+        }
+    }
+
     public class TransitionW<W> : StackW where W : class, IWidget
     {
-        private readonly HolderW<W> child;
-        private readonly HolderW<W> childFadeout;
-        private TimeSpan lastTime;
-        public float R;
-        private float speed;
-        private Vector2 offset;
-        private Vector2 offsetFadeout;
-        private Action onFinish;
+        public Ease Ease;
+        private HolderW<W> child;
+        private HolderW<W> childFadeout;
+        private Vector2 childOffsetStart;
+        private Vector2 childFadeoutOffsetTarget;
 
         public W Child => child.Child;
 
@@ -979,60 +1051,44 @@ namespace Velo
             };
             AddChild(this.child, Vector2.Zero, Vector2.Zero, FILL);
             AddChild(childFadeout, Vector2.Zero, Vector2.Zero, FILL);
-            R = 1f;
         }
 
-        public override IEnumerable<IWidget> Children => base.Children.Where(child => ((HolderW<W>)child).Child != null);
+        public override IEnumerable<IWidget> Children => base.Children;
 
-        private static float Ease(float r)
+        private void Update()
         {
-            return 1f - (1f - r) * (1f - r);
+            child.Opacity = Ease.Lerp(0f, 1f);
+            child.Offset = Ease.Lerp(childOffsetStart, Vector2.Zero);
+            childFadeout.Opacity = Ease.Lerp(1f, 0f);
+            childFadeout.Offset = Ease.Lerp(Vector2.Zero, childFadeoutOffsetTarget);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
-            lastTime = Velo.RealTime;
-            if (dt > 1f)
-                dt = 1f;
+            BaseDraw(hovered, parentCropRec, scale, opacity);
 
-            R += speed * dt;
-            if (R > 1f)
-            {
-                R = 1f;
-                if (onFinish != null)
-                {
-                    onFinish();
-                    onFinish = null;
-                }
-            }
+            Ease.Update();
 
-            child.Opacity = Ease(R);
-            childFadeout.Opacity = 1f - Ease(R);
-            child.Offset = offset * (1f - Ease(R));
-            childFadeout.Offset = offsetFadeout * Ease(R);
+            Update();
 
-            if (R == 1f)
+            if (Ease.Finished())
                 childFadeout.Child = null;
 
-            base.Draw(hovered, parentCropRec, scale, opacity);
+            DrawChildren(hovered, parentCropRec, scale, opacity);
         }
 
         public void TransitionTo(W widget, float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
         {
-            this.speed = speed;
-            this.offset = offset;
-            offsetFadeout = (opposite ? -1f : 1f) * offset;
-            bool transitionBack = childFadeout.Child == widget;
-            childFadeout.Child = child.Child;
+            (child, childFadeout) = (childFadeout, child);
             child.Child = widget;
-            lastTime = Velo.RealTime;
-            R = transitionBack ? 1f - R : 0f;
-            child.Opacity = R;
-            childFadeout.Opacity = 1f - R;
-            child.Offset = offset * (1 - R);
-            childFadeout.Offset = offsetFadeout * R;
-            this.onFinish = onFinish;
+
+            float oppositeS = opposite ? -1f : 1f;
+            childOffsetStart = offset;
+            childFadeoutOffsetTarget = offset * oppositeS;
+
+            Ease.Reverse(speed, onFinish);
+            Update();
+
             widget?.Refresh();
         }
 
@@ -1040,15 +1096,16 @@ namespace Velo
         {
             childFadeout.Child = null;
             child.Child = widget;
-            R = 1f;
-            child.Opacity = 1f;
-            childFadeout.Opacity = 0f;
+
+            Ease.Finish();
+            Update();
+
             widget?.Refresh();
         }
 
         public bool Transitioning()
         {
-            return R < 1f;
+            return !Ease.Finished();
         }
     }
 
@@ -1061,81 +1118,65 @@ namespace Velo
 
     public class FadeW<W> : HolderW<W>, IDecoratorW<W> where W : class, IWidget
     {
-        private TimeSpan lastTime;
-        public float R;
-        private float speed;
-        private float opacityStart;
-        private float opacityTarget;
-        private Vector2 offsetStart;
-        private Vector2 offsetTarget;
-        private Action onFinish;
+        public Ease Ease;
+        public float OpacityStart;
+        public float OpacityTarget;
+        public Vector2 OffsetStart;
+        public Vector2 OffsetTarget;
 
         public FadeW(W child = null) :
             base(child)
         {
-            R = 1f;
+            Ease = new Ease(1f, 0f);
         }
 
-        private static float Ease(float r)
+        private void Update()
         {
-            return 1f - (1f - r) * (1f - r);
+            if (Child != null)
+            {
+                Child.Opacity = Ease.Lerp(OpacityStart, OpacityTarget);
+                Child.Offset = Ease.Lerp(OffsetStart, OffsetTarget);
+            }
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            float dt = (float)(Velo.RealTime - lastTime).TotalSeconds;
-            lastTime = Velo.RealTime;
-            if (dt > 1f)
-                dt = 1f;
+            Ease.Update();
 
-            R += speed * dt;
-            if (R > 1f)
-            {
-                R = 1f;
-                if (onFinish != null)
-                {
-                    onFinish();
-                    onFinish = null;
-                }
-            }
-
-            if (Child != null)
-            {
-                Child.Opacity = opacityStart * (1f - Ease(R)) + opacityTarget * Ease(R);
-                Child.Offset = offsetStart * (1f - Ease(R)) + offsetTarget * Ease(R);
-            }
+            Update();
 
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
 
         public void FadeTo(float speed, float opacity, Vector2 offset, Action onFinish = null)
         {
-            this.speed = speed;
-            opacityStart = opacityStart * (1f - Ease(R)) + opacityTarget * Ease(R);
-            opacityTarget = opacity;
-            offsetStart = offsetStart * (1f - Ease(R)) + offsetTarget * Ease(R);
-            offsetTarget = offset;
-            lastTime = Velo.RealTime;
-            R = 0f;
-            this.onFinish = onFinish;
-            Child.Refresh();
+            OpacityStart = Ease.Lerp(OpacityStart, OpacityTarget);
+            OpacityTarget = opacity;
+            OffsetStart = Ease.Lerp(OffsetStart, OffsetTarget);
+            OffsetTarget = offset;
+
+            Ease.Start(speed, onFinish);
+            Update();
+
+            Child?.Refresh();
         }
 
         public void GoTo(float opacity, Vector2 offset)
         {
-            R = 1f;
-            opacityStart = opacity;
-            opacityTarget = opacity;
-            offsetStart = offset;
-            offsetTarget = offset;
-            Child.Opacity = opacity;
-            Child.Offset = offset;
-            Child.Refresh();
+            OpacityStart = opacity;
+            OpacityTarget = opacity;
+            OffsetStart = offset;
+            OffsetTarget = offset;
+
+            Ease.Finish();
+            Update();
+
+            Child?.Refresh();
         }
 
-        public bool Moving()
+        public bool Fading()
         {
-            return R < 1f;
+            return !Ease.Finished();
         }
     }
 
@@ -1712,14 +1753,15 @@ namespace Velo
     {
         private readonly List<ButtonW> buttons;
 
-        private TimeSpan lastTime;
-        private float selectedRecR = 1f;
+        private Ease Ease;
         private float selectedRecLeft = 0f;
         private float selectedRecInitX = 0f;
         public int ShownCount;
 
         public SelectorButtonW(IEnumerable<string> labels, int selected, CachedFont font)
         {
+            Ease = new Ease(1f, 0f);
+
             buttons = new List<ButtonW>();
             Selected = selected;
 
@@ -1734,7 +1776,7 @@ namespace Velo
                             return;
                         Selected = j;
                         selectedRecInitX = selectedRecLeft;
-                        selectedRecR = 0f;
+                        Ease.Start(8f);
                         OnSelect?.Invoke(Selected);
                     };
                 button.Hoverable = true;
@@ -1762,19 +1804,9 @@ namespace Velo
         public override void UpdateBounds(Bounds parentBounds)
         {
             for (int i = 0; i < ShownCount; i++)
-                SetSize(i, Size.X / ShownCount); 
+                GetChild(i).Size = Size.X / ShownCount; 
             
             base.UpdateBounds(parentBounds);
-
-            selectedRecR += 8f * (float)(Velo.RealTime - lastTime).TotalSeconds;
-            lastTime = Velo.RealTime;
-            if (selectedRecR > 1f)
-                selectedRecR = 1f;
-        }
-
-        private static float Ease(float r)
-        {
-            return 1f - (1f - r) * (1f - r);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -1792,8 +1824,10 @@ namespace Velo
                 OutlineThickness = 0
             };
 
+            Ease.Update();
+
             float selectedRecTargetLeft = buttons[Selected].Position.X + buttons[Selected].Offset.X;
-            selectedRecLeft = (1f - Ease(selectedRecR)) * selectedRecInitX + Ease(selectedRecR) * selectedRecTargetLeft;
+            selectedRecLeft = Ease.Lerp(selectedRecInitX, selectedRecTargetLeft);
             float selectedRecRight = selectedRecLeft + buttons[Selected].Size.X;
 
             recDraw.SetPositionSize(new Vector2(selectedRecLeft, Position.Y + Offset.Y) * scale, new Vector2(buttons[Selected].Size.X, Size.Y) * scale);
@@ -2113,7 +2147,7 @@ namespace Velo
             base.GoTo(widget);
         }
 
-        public void GoBack(float speed)
+        public void GoBack()
         {
             base.GoTo(backStack.Pop());
         }
@@ -2131,6 +2165,7 @@ namespace Velo
         public void Clear()
         {
             backStack.Clear();
+            base.GoTo(null);
         }
     }
 

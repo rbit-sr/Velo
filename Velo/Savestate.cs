@@ -47,7 +47,7 @@ namespace Velo
 
     public class Savestate
     {
-        private readonly int VERSION = 4;
+        private readonly int VERSION = 5;
         public static ushort LoadedVersion = Version.VERSION;
 
         private static unsafe void Write(MemoryStream stream, CAABB obj)
@@ -103,7 +103,7 @@ namespace Velo
             stream.Write(obj, 0x2C, 0x84);
             Write(stream, obj.bounds);
             stream.WriteStr(obj.nextAnimation);
-            stream.WriteStr(obj.animation.id);
+            stream.WriteStr(obj.animation.id, 16);
         }
 
         private static unsafe void Read(MemoryStream stream, CAnimatedSpriteDrawComponent obj, bool player = false)
@@ -127,7 +127,7 @@ namespace Velo
             Read(stream, obj.bounds);
             obj.nextAnimation = stream.ReadStr();
             obj.timeSpan1 = new TimeSpan(obj.timeSpan1.Ticks + dt);
-            string animationId = stream.ReadStr();
+            string animationId = stream.ReadStr(version >= 5 ? 16 : 0);
             obj.animation = obj.animImage.GetAnimation(animationId);
         }
 
@@ -263,10 +263,9 @@ namespace Velo
                 else
                     stream.Write(goldenHook.actor.Id);
             }
-
-            if (obj.target is Grapple grapple)
+            else if (obj.target is Grapple grapple)
                 stream.Write(grapple.actor.Id);
-            if (obj.target is GoldenHook goldenHook1)
+            else if (obj.target is GoldenHook goldenHook1)
                 stream.Write(goldenHook1.actor.Id);
         }
 
@@ -832,7 +831,6 @@ namespace Velo
             Write(stream, obj.random);
             Write(stream, obj.groupDraw);
             stream.Write(obj.player != null ? obj.player.actor.Id : -1);
-            //stream.WriteArrFixed(obj.bools.Select(b => b ? (byte)1 : (byte)0).ToArray(), 4);
             stream.WriteByte(obj.bools[0] ? (byte)1 : (byte)0);
             stream.WriteByte(obj.bools[1] ? (byte)1 : (byte)0);
             stream.WriteByte(obj.bools[2] ? (byte)1 : (byte)0);
@@ -854,7 +852,6 @@ namespace Velo
             Read(stream, obj.groupDraw);
             int playerId = stream.Read<int>();
             applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
-            //obj.bools = stream.ReadArrFixed<byte>(4).Select(b => b != 0).ToArray();
             obj.bools[0] = stream.ReadByte() != 0;
             obj.bools[1] = stream.ReadByte() != 0;
             obj.bools[2] = stream.ReadByte() != 0;
@@ -1559,6 +1556,7 @@ namespace Velo
         private static readonly List<Action> applyPtr = new List<Action>();
         private static readonly HashSet<CActor> fixedIndexActors = new HashSet<CActor>();
         private static readonly HashSet<int> fixedIds = new HashSet<int>();
+        private static int version;
 
         public Savestate()
         {
@@ -1852,7 +1850,7 @@ namespace Velo
 
             stream.Position = 0;
 
-            int version = stream.Read<int>();
+            version = stream.Read<int>();
             if (version == -1 || version > VERSION)
                 return false;
 
@@ -2146,110 +2144,69 @@ namespace Velo
         }
     }
 
-    public class SavestateStream
+    public class SavestateStack
     {
         public static readonly int CHUNK_SIZE = 64;
 
-        public class Chunk
-        {
-            public Savestate[] Savestates = new Savestate[CHUNK_SIZE];
-            public int Count = 0;
-            public bool Compressed = false;
-
-            public void Clean()
-            {
-                for (int i = Count; i < CHUNK_SIZE; i++)
-                {
-                    if (Savestates[i] == null)
-                        break;
-                    Savestates[i] = null;
-                }
-            }
-
-            public void Compress()
-            {
-                if (Compressed)
-                    return;
-                for (int i = Count - 1; i >= 1; i--)
-                {
-                    Savestates[i].Compress(Savestates[i - 1]);
-                }
-                Compressed = true;
-            }
-
-            public void Decompress()
-            {
-                if (!Compressed)
-                    return;
-                for (int i = 1; i < Count; i++)
-                {
-                    Savestates[i].Decompress(Savestates[i - 1]);
-                }
-                Compressed = false;
-            }
-        }
-
-        private readonly List<Chunk> chunks = new List<Chunk>();
+        private readonly List<Savestate> savestates = new List<Savestate>();
         private int position = 0;
         public int Position
         {
             get => position;
             set
             {
-                int oldChunkIndex = position / CHUNK_SIZE;
-                int newChunkIndex = value / CHUNK_SIZE;
-                if (oldChunkIndex != newChunkIndex)
-                {
-                    chunks[oldChunkIndex].Compress();
-                    Console.WriteLine("Compress " + oldChunkIndex);
-                    if (chunks.Count > newChunkIndex)
-                    {
-                        chunks[newChunkIndex].Decompress();
-                        Console.WriteLine("Decompress " + newChunkIndex);
-                    }
-                }
+                if (value == position)
+                    return;
+
+                int oldKeySavestateIndex = position / CHUNK_SIZE * CHUNK_SIZE;
+                int newKeySavestateIndex = value / CHUNK_SIZE * CHUNK_SIZE;
+
+                if (position != oldKeySavestateIndex && position < savestates.Count)
+                    savestates[position].Compress(savestates[oldKeySavestateIndex]);
+                if (value != newKeySavestateIndex && value < savestates.Count)
+                    savestates[value].Decompress(savestates[newKeySavestateIndex]);
+
                 position = value;
-                Console.WriteLine("Position " + position);
             }
         }
-        public int Length => chunks.Count == 0 ? 0 : CHUNK_SIZE * (chunks.Count - 1) + chunks.Last().Count;
+        public int Length => savestates.Count;
 
-        public SavestateStream()
+        public SavestateStack()
         {
 
         }
 
         public void Write(Savestate savestate)
         {
-            int chunkIndex = Position / CHUNK_SIZE;
-            int savestateIndex = Position % CHUNK_SIZE;
-            if (chunks.Count <= chunkIndex)
-            {
-                chunks.Add(new Chunk());
-            }
-            Chunk chunk = chunks[chunkIndex];
-            chunk.Savestates[savestateIndex] = savestate;
-            chunk.Count = savestateIndex + 1;
-            chunk.Clean();
-            chunks.RemoveRange(chunkIndex + 1, chunks.Count - chunkIndex - 1);
+            if (savestates.Count <= Position)
+                savestates.Add(savestate);
+            else
+                savestates[Position] = savestate;
 
             Position++;
+
+            savestates.RemoveRange(Position, savestates.Count - Position);
         }
 
         public Savestate Read()
         {
-            int chunkIndex = Position / CHUNK_SIZE;
-            int savestateIndex = Position % CHUNK_SIZE;
-            Chunk chunk = chunks[chunkIndex];
-            Savestate savestate = chunk.Savestates[savestateIndex];
+            Savestate savestate = savestates[Position];
 
             Position++;
             return savestate.Clone();
         }
 
+        public void PeekAndLoad(bool setGlobalTime)
+        {
+            Savestate savestate = savestates[Position];
+
+            savestate.Load(setGlobalTime);
+        }
+
         public void Clear()
         {
-            chunks.Clear();
+            savestates.Clear();
+            position = 0;
         }
     }
 }

@@ -12,6 +12,7 @@ namespace Velo
     public class ModuleManager
     {
         private readonly List<Module> modules = new List<Module>();
+        private readonly List<Module> modulesPreSDLPoll = new List<Module>();
         private readonly List<Module> modulesPreUpdate = new List<Module>();
         private readonly List<Module> modulesPostUpdate = new List<Module>();
         private readonly List<Module> modulesPreRender = new List<Module>();
@@ -52,6 +53,7 @@ namespace Velo
 
         public void RemoveFromCycle(Module module)
         {
+            modulesPreSDLPoll.Remove(module);
             modulesPreUpdate.Remove(module);
             modulesPostUpdate.Remove(module);
             modulesPreRender.Remove(module);
@@ -62,6 +64,7 @@ namespace Velo
         {
             Type t = module.GetType();
             Type m = typeof(Module);
+            if (t.GetMethod("PreSDLPoll").DeclaringType != m) modulesPreSDLPoll.Add(module);
             if (t.GetMethod("PreUpdate").DeclaringType != m) modulesPreUpdate.Add(module);
             if (t.GetMethod("PostUpdate").DeclaringType != m) modulesPostUpdate.Add(module);
             if (t.GetMethod("PreRender").DeclaringType != m) modulesPreRender.Add(module);
@@ -91,6 +94,13 @@ namespace Velo
             {
                 listener(setting);
             }
+        }
+
+        public void PreSDLPoll()
+        {
+            int count = modulesPreSDLPoll.Count;
+            for (int i = 0; i < count; i++)
+                modulesPreSDLPoll[i].PreSDLPoll();
         }
 
         public void PreUpdate()
@@ -123,15 +133,15 @@ namespace Velo
 
         public static void Swap<T>(IList<T> list, T A, T B)
         {
-            T temp = list[list.IndexOf(A)];
-            list[list.IndexOf(A)] = list[list.IndexOf(B)];
-            list[list.IndexOf(B)] = temp;
+            (list[list.IndexOf(B)], list[list.IndexOf(A)]) = (list[list.IndexOf(A)], list[list.IndexOf(B)]);
         }
 
         public void EnsureOrder(Module first, Module second)
         {
             if (modules.IndexOf(first) > modules.IndexOf(second))
                 Swap(modules, first, second);
+            if (modulesPreSDLPoll.IndexOf(first) > modulesPreSDLPoll.IndexOf(second))
+                Swap(modulesPreSDLPoll, first, second);
             if (modulesPreUpdate.IndexOf(first) > modulesPreUpdate.IndexOf(second))
                 Swap(modulesPreUpdate, first, second);
             if (modulesPostUpdate.IndexOf(first) > modulesPostUpdate.IndexOf(second))
@@ -358,6 +368,7 @@ namespace Velo
         }
 
         public virtual void Init() { }
+        public virtual void PreSDLPoll() { }
         public virtual void PreUpdate() { }
         public virtual void PostUpdate() { }
         public virtual void PreRender() { }

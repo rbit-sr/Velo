@@ -55,19 +55,10 @@ namespace Velo
 
                 if (instance.LoadKeys[i].Pressed() && savestates.ContainsKey(key))
                 {
-                    Savestate savestate = savestates[key].Clone();
-                    Savestate savestate2 = savestate.Clone();
-                    for (int s = 0; s < savestate.Stream.Length; s += 6)
-                    {
-                        savestate.Stream.Position = s;
-                        savestate.Stream.Write(new byte[] { 123, 103, 111, 211, 39, 1 }, 0, 6);
-                    }
-                    savestate = new Savestate();
-                    savestate2.Compress(savestate);
-                    savestate2.Decompress(savestate);
+                    Savestate savestate = savestates[key];
 
-                    if (savestate2.Load(setGlobalTime: false))
-                        onLoad?.Invoke(savestate2);
+                    if (savestate.Load(setGlobalTime: false))
+                        onLoad?.Invoke(savestate);
                 }
             }
 

@@ -375,8 +375,8 @@ namespace Velo
             };
 
             Vector2 cursorOff = font.Font.MeasureString(text.Substring(0, editPos));
-            cursor.Position = Position + new Vector2(cursorOff.X, 5f);
-            cursor.Draw(null);
+            Util.Position = Position + new Vector2(cursorOff.X, 5f);
+            Util.Draw(null);
         }
     }
 }

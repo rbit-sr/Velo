@@ -127,9 +127,9 @@ namespace Velo
     {
         public ToggleSetting Enabled;
 
-        private WidgetContainer container;
-        private TransitionW menu;
-        private StackW menuStack;
+        private readonly WidgetContainer container;
+        private readonly FadeW menu;
+        private readonly StackW menuStack;
 
         public MenuFonts Fonts;
 
@@ -141,7 +141,11 @@ namespace Velo
             this.enableDim = enableDim;
             
             menuStack = new StackW();
-            menu = new TransitionW();
+            menu = new FadeW
+            {
+                OpacityTarget = 0f,
+                OffsetTarget = new Vector2(-500f, 0f)
+            };
             container = new WidgetContainer(menu, new Rectangle(0, 0, 1920, 1080));
 
             Fonts = new MenuFonts();
@@ -151,12 +155,16 @@ namespace Velo
             FontCache.Get(ref Fonts.FontLarge, "UI\\Font\\NotoSans-Regular.ttf:24,UI\\Font\\NotoSansCJKtc-Regular.otf:24,UI\\Font\\NotoSansCJKkr-Regular.otf:24");
             FontCache.Get(ref Fonts.FontTitle, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
             FontCache.Get(ref Fonts.FontConsole, "CEngine\\Debug\\FreeMonoBold.ttf:18");
+
+            Util.EnableCursorOn(() => Enabled.Value.Enabled);
+            Util.DisableMouseInputsOn(() => Enabled.Value.Enabled);
         }
 
         public virtual void EnterMenu()
         {
             menuStack.Reset();
-            menu.TransitionTo(menuStack, 4f, new Vector2(-500f, 0f));
+            menu.Child = menuStack;
+            menu.FadeTo(4f, 1f, new Vector2(0f, 0f));
         }
 
         public virtual void ExitMenu(bool animation = true)
@@ -166,9 +174,9 @@ namespace Velo
             Enabled.Disable();
 
             if (animation)
-                menu.TransitionTo(null, 4f, new Vector2(-500f, 0f));
+                menu.FadeTo(4f, 0f, new Vector2(-500f, 0f));
             else
-                menu.GoTo(null);
+                menu.GoTo(0f, new Vector2(-500f, 0f));
         }
 
         public void AddElem(IWidget elem, Vector2 align, Vector2 offset, Vector2 size)
@@ -186,19 +194,9 @@ namespace Velo
             menu.Reset();
         }
 
-        public virtual void Draw()
+        public virtual bool Draw()
         {
-            bool modified = Enabled.Modified();
-
-            if (modified)
-            {
-                if (Enabled.Value.Enabled)
-                    Cursor.EnableCursor(this);
-                else
-                    Cursor.DisableCursor(this);
-            }
-
-            if (modified)
+            if (Enabled.Modified())
             {
                 if (Enabled.Value.Enabled)
                     EnterMenu();
@@ -206,8 +204,8 @@ namespace Velo
                     ExitMenu(animation: true);
             }
 
-            if (menu.Child == null && !menu.Transitioning())
-                return;
+            if (!Enabled.Value.Enabled && !menu.Fading())
+                return false;
 
             if (enableDim)
             {
@@ -217,7 +215,7 @@ namespace Velo
                     OutlineEnabled = false,
                     OutlineThickness = 0,
                     FillEnabled = true,
-                    FillColor = SettingsUI.Instance.DimColor.Value.Get() * (menu.Child != null ? menu.R : 1f - menu.R)
+                    FillColor = SettingsUI.Instance.DimColor.Value.Get() * (Enabled.Value.Enabled ? menu.Ease.Get() : 1f - menu.Ease.Get())
                 };
                 Velo.SpriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.LinearClamp, DepthStencilState.None, RasterizerState.CullCounterClockwise, CEffect.None.Effect);
                 dimRecDraw.Draw(null);
@@ -225,6 +223,8 @@ namespace Velo
             }
 
             container.Draw();
+
+            return true;
         }
     }
 }

@@ -85,7 +85,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BackwardsCompatibility.cs" />
-    <Compile Include="Cursor.cs" />
     <Compile Include="Debug.cs" />
     <Compile Include="FontCache.cs" />
     <Compile Include="Input.cs" />

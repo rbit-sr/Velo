@@ -173,6 +173,7 @@ namespace Velo
             AppDomain.CurrentDomain.DomainUnload += (_, __) => RemoveHooks();
             System.Windows.Forms.Application.ApplicationExit += (_, __) => RemoveHooks();
             Console.CancelKeyPress += (_, __) => RemoveHooks();
+            Velo.AddOnExit(RemoveHooks);
         }
 
         private static bool first = true;

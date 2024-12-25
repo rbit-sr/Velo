@@ -695,10 +695,10 @@ namespace Velo
         {
             if (expanded.TryGetValue(elem.Id, out ExpandedRow expandedRow) && expandedRow != null)
             {
-                float R = expandedRow.ChildWidget.R;
+                float ease = expandedRow.ChildWidget.Ease.Get();
                 if (elem.Id != expandedId)
-                    R = 1f - R;
-                return (1f - R) * 40f + R * (350f + (elem.PlayerId == 0 || elem.HasComments != 0 ? 210f : 0f));
+                    ease = 1f - ease;
+                return (1f - ease) * 40f + ease * (350f + (elem.PlayerId == 0 || elem.HasComments != 0 ? 210f : 0f));
             }
             else
                 return 40f;
@@ -789,7 +789,10 @@ namespace Velo
         private readonly VLayoutW enterMapButtonLayout;
 
         private bool eventsTabShown = true;
-        private int showEventButtonId = 0;
+        private readonly LayoutChild categorySelectChild;
+        private readonly LayoutChild eventLabelLayoutChild;
+        private readonly LayoutChild showEventButtonChild;
+        private readonly LayoutChild showEventButtonSpaceChild;
 
         public LbMapMenuPage(LbContext context, ulong mapId) :
             base(context, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
@@ -853,7 +856,7 @@ namespace Velo
 
             buttonRowLower.AddChild(backButton, 190f);
             buttonRowLower.AddSpace(FILL);
-            buttonRowLower.AddChild(categorySelect, categorySelect.ShownCount * 190);
+            categorySelectChild = buttonRowLower.AddChild(categorySelect, categorySelect.ShownCount * 190);
 
             eventLabel = new LabelW("", context.Fonts.FontMedium);
             Style.ApplyText(eventLabel);
@@ -876,16 +879,16 @@ namespace Velo
             showEventButtonLayout.AddSpace(FILL);
             showEventButtonLayout.AddChild(showEventButton, 35f);
 
-            titleBar.AddChild(eventLabelLayout, 0f);
+            eventLabelLayoutChild = titleBar.AddChild(eventLabelLayout, 0f);
             titleBar.AddSpace(10f);
 
-            showEventButtonId = titleBar.AddChild(showEventButtonLayout, 170f);
-            titleBar.AddSpace(10f);
+            showEventButtonChild = titleBar.AddChild(showEventButtonLayout, 170f);
+            showEventButtonSpaceChild = titleBar.AddSpace(10f);
 
             if (mapEvent.From == 0)
             {
-                titleBar.SetSize(showEventButtonId, 0);
-                titleBar.SetSize(showEventButtonId + 1, 0);
+                showEventButtonChild.Size = 0f;
+                showEventButtonSpaceChild.Size = 0f;
                 showEventButton.Visible = false;
             }
 
@@ -928,9 +931,9 @@ namespace Velo
 
             categorySelect.ShownCount++;
             eventsTabShown = true;
-            buttonRowLower.SetSize(2, categorySelect.ShownCount * 190f);
-            titleBar.SetSize(showEventButtonId, 170f);
-            titleBar.SetSize(showEventButtonId + 1, 10f);
+            categorySelectChild.Size = categorySelect.ShownCount * 190f;
+            showEventButtonChild.Size = 170f;
+            showEventButtonSpaceChild.Size = 10f;
             showEventButton.Visible = true;
         }
 
@@ -954,7 +957,7 @@ namespace Velo
             if (mapEvent.From == 0)
             {
                 eventLabel.Text = "";
-                titleBar.SetSize(eventLabelLayout, 0f);
+                eventLabelLayoutChild.Size = 0f;
             }
             else
             {
@@ -972,7 +975,7 @@ namespace Velo
                     else
                         eventLabel.Text += "The winner is " + SteamCache.GetPlayerName(mapEvent.Winner) + "!";
                 }
-                titleBar.SetSize(eventLabelLayout, eventLabel.MeasureTextSize.X + 10f);
+                eventLabelLayoutChild.Size = eventLabel.MeasureTextSize.X + 10f;
             }
 
             base.UpdateBounds(parentBounds);

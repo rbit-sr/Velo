@@ -117,6 +117,12 @@ namespace Velo
             Children = new List<Setting>();
         }
 
+        public T Add<T>(T setting) where T : Setting
+        {
+            Children.Add(setting);
+            return setting;
+        }
+
         public override bool IsDefault()
         {
             return true;

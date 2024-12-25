@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using CEngine.Util.UI.Widget;
+using CEngine.Graphics.Layer;
 
 namespace Velo
 {
@@ -422,6 +423,20 @@ namespace Velo
         {
             switchBlock.animSpriteDraw1.Color = GateColor.Value.Get();
             switchBlock.animSpriteDraw2.Color = GateColor.Value.Get();
+        }
+
+        public Color GetBackgroundColor(ICLayer layer, Color color)
+        {
+            if (layer.Id == "BackgroundLayer0")
+                return new Color(color.ToVector4() * Background0Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer1")
+                return new Color(color.ToVector4() * Background1Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer2")
+                return new Color(color.ToVector4() * Background2Color.Value.Get().ToVector4());
+            if (layer.Id == "BackgroundLayer3")
+                return new Color(color.ToVector4() * Background3Color.Value.Get().ToVector4());
+
+            return color;
         }
 
         public void AddChatComp(object obj, string type)

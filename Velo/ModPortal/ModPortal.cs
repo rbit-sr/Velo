@@ -57,8 +57,6 @@ namespace Velo
         public override void ExitMenu(bool animation = true)
         {
             base.ExitMenu(animation);
-
-            Page.Clear(); // clear the backstack
         }
 
         public void Request()
@@ -68,9 +66,13 @@ namespace Velo
             // ModsDatabase.Instance.RunRequestMods(Refresh, error => Error = error.message);
         }
 
-        public override void Draw()
+        public override bool Draw()
         {
-            base.Draw();
+            if (!base.Draw())
+            {
+                Page.Clear();
+                return false;
+            }
 
             if (/*ModsDatabase.Instance.Pending()*/ false)
             {
@@ -85,6 +87,8 @@ namespace Velo
             }
             if (Error != "" && Error != null)
                 ErrorMessage.Text = Util.LineBreaks("Error: " + Error, 30);
+
+            return true;
         }
     }
 

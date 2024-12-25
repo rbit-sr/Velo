@@ -85,6 +85,10 @@ namespace Velo
             SDL.SDL_GetWindowWMInfo(sdlWin, ref sysWMInfo);
 
             SetHwnd(sysWMInfo.info.win.window);
+
+            Util.EnableCursorOn(() => Enabled.Value.Enabled);
+            Util.DisableMouseInputsOn(() => Enabled.Value.Enabled);
+            Util.DisableKeyInputsOn(() => Enabled.Value.Enabled && DisableKeyInput.Value);
         }
 
         public override void PreUpdate()
@@ -118,11 +122,7 @@ namespace Velo
             if (Enabled.Modified())
             {
                 Input.InitLLKeyboardHook();
-                if (Enabled.Value.Enabled)
-                    Cursor.EnableCursor(this);
-                else
-                    Cursor.DisableCursor(this);
-
+                
                 if (!Enabled.Value.Enabled && initialized)
                     unfocusAll();
                 if (Enabled.Value.Enabled)

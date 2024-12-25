@@ -42,7 +42,7 @@ namespace Velo
         {
             base.Init();
 
-            Velo.OnMainPlayerReset.Add(() =>
+            Velo.AddOnMainPlayerReset(() =>
             {
                 if (drawComp != null && ClearOnReset.Value)
                     drawComp.lines.Clear();

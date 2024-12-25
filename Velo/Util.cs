@@ -421,7 +421,6 @@ namespace Velo
         public static bool IsFocused()
         {
             return IsSrFocused() == 1;
-            //return true;
         }
 
         private readonly static bool filterKeysEnabled = new Func<bool>(() =>
@@ -470,6 +469,60 @@ namespace Velo
                     return TimeSpan.FromSeconds(0.5d);
             }
         })();
+
+        private static readonly List<Func<bool>> enableCursorOn = new List<Func<bool>>();
+
+        public static void EnableCursorOn(Func<bool> enableOn)
+        {
+            enableCursorOn.Add(enableOn);
+        }
+
+        public static bool CursorEnabled()
+        {
+            int count = enableCursorOn.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (enableCursorOn[i]())
+                    return true;
+            }
+            return false;
+        }
+
+        private static readonly List<Func<bool>> disableMouseInputsOn = new List<Func<bool>>();
+
+        public static void DisableMouseInputsOn(Func<bool> disableOn)
+        {
+            disableMouseInputsOn.Add(disableOn);
+        }
+
+        public static bool MouseInputsDisabled()
+        {
+            int count = disableMouseInputsOn.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (disableMouseInputsOn[i]())
+                    return true;
+            }
+            return false;
+        }
+
+        private static readonly List<Func<bool>> disableKeyInputsOn = new List<Func<bool>>();
+
+        public static void DisableKeyInputsOn(Func<bool> disableOn)
+        {
+            disableKeyInputsOn.Add(disableOn);
+        }
+
+        public static bool KeyInputsDisabled()
+        {
+            int count = disableKeyInputsOn.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (disableKeyInputsOn[i]())
+                    return true;
+            }
+            return false;
+        }
     }
 
     public static class StreamUtil
@@ -597,17 +650,26 @@ namespace Velo
             return value;
         }
 
-        public static unsafe void WriteStr(this Stream stream, string str)
+        public static unsafe void WriteStr(this Stream stream, string str, int minLength = 0)
         {
             byte[] bytes = str != null ? Encoding.ASCII.GetBytes(str) : null;
             WriteArr(stream, bytes);
+            if (bytes != null && bytes.Length < minLength)
+            {
+                byte[] dummy = new byte[minLength - bytes.Length];
+                WriteArrFixed(stream, dummy, dummy.Length);
+            }
         }
 
-        public static unsafe string ReadStr(this Stream stream)
+        public static unsafe string ReadStr(this Stream stream, int minLength = 0)
         {
             byte[] bytes = ReadArr<byte>(stream);
             if (bytes == null)
                 return null;
+            if (bytes.Length < minLength)
+            {
+                stream.Position += minLength - bytes.Length;
+            }
             return Encoding.ASCII.GetString(bytes);
         }
     }

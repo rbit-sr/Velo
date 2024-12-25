@@ -64,6 +64,7 @@ namespace Velo
         public HotkeySetting Step10Key;
         public HotkeySetting JumpBack1Key;
         public HotkeySetting JumpBack10Key;
+        public BoolSetting EnableRewind;
 
         private readonly Savestates savestates;
         public TimeSpan SavestateLoadTime = TimeSpan.Zero;
@@ -77,7 +78,7 @@ namespace Velo
         private readonly Playback playback = new Playback();
         private readonly List<Playback> playbackGhosts = new List<Playback>();
 
-        private readonly SavestateStream rewindList = new SavestateStream();
+        private readonly SavestateStack rewindList = new SavestateStack();
 
         private OfflineGameMods() : base("Offline Game Mods")
         {
@@ -163,15 +164,13 @@ namespace Velo
             saveCategory.Tooltip = "Create a savestate.";
             for (int i = 0; i < 10; i++)
             {
-                SaveKeys[i] = new HotkeySetting(this, "save " + (i + 1) + " key", 0x97);
-                saveCategory.Children.Add(SaveKeys[i]);
+                SaveKeys[i] = saveCategory.Add(new HotkeySetting(this, "save " + (i + 1) + " key", 0x97));
             }
             SettingCategory loadCategory = Add(new SettingCategory(this, "load"));
             loadCategory.Tooltip = "Load a savestate.";
             for (int i = 0; i < 10; i++)
             {
-                LoadKeys[i] = new HotkeySetting(this, "load " + (i + 1) + " key", 0x97);
-                loadCategory.Children.Add(LoadKeys[i]);
+                LoadKeys[i] = loadCategory.Add(new HotkeySetting(this, "load " + (i + 1) + " key", 0x97));
             }
             LoadHaltDuration = AddFloat("load halt duration", 0f, 0f, 2f);
             StoreAIVolumes = AddBool("store AI volumes", false);
@@ -226,6 +225,7 @@ namespace Velo
             Step10Key = AddHotkey("step 10 key", 0x97, autoRepeat: true);
             JumpBack1Key = AddHotkey("jump back 1 key", 0x97, autoRepeat: true);
             JumpBack10Key = AddHotkey("jump back 10 key", 0x97, autoRepeat: true);
+            EnableRewind = AddBool("enable rewind", true);
 
             Freeze.Tooltip =
                 "When frozen, the game stops doing any physics updates.";
@@ -233,6 +233,13 @@ namespace Velo
                 "Steps 1 frame forward. Automatically freezes the game.";
             Step10Key.Tooltip =
                 "Steps 10 frames forward. Automatically freezes the game.";
+            JumpBack1Key.Tooltip =
+                "Jumps 1 frame backwards. \"enable rewind\" needs to be enabled.";
+            JumpBack10Key.Tooltip =
+                "Jumps 10 frames backwards. \"enable rewind\" needs to be enabled.";
+            EnableRewind.Tooltip =
+                "Allows you to jump frames backwards while in fixed delta time or stepping mode. " +
+                "Decreases performance and increases RAM usage.";
 
             savestates = new Savestates(this, onSave: null, onLoad: savestate =>
             {
@@ -280,8 +287,9 @@ namespace Velo
                 GrappleCooldown.Version = Version.VERSION_NAME;
             }
 
-            Velo.OnMainPlayerReset.Add(OnMainPlayerReset);
-            Velo.OnLapFinish.Add(OnLapFinish);
+            Velo.AddOnMainPlayerReset(() => Velo.AddOnPreUpdate(OnMainPlayerReset));
+            Velo.AddOnLapFinish(time => Velo.AddOnPreUpdate(() => OnLapFinish(time)));
+            Velo.AddOnMainPlayerReset(() => Savestate.LoadedVersion = Version.VERSION);
 
             playback.OnFinish = (recording, type) => Velo.AddOnPreUpdate(() =>
             {
@@ -370,17 +378,31 @@ namespace Velo
                 stepCount = 10;
             }
 
-            if (JumpBack1Key.Pressed() && rewindList.Position > 0)
+            if (JumpBack1Key.Pressed() && (rewindList.Position > 0 || IsPlaybackRunning()))
             {
-                rewindList.Position -= 2;
-                rewindList.Read().Load(false);
+                if (!IsPlaybackRunning())
+                {
+                    rewindList.Position = Math.Max(0, rewindList.Position - 1);
+                    rewindList.PeekAndLoad(false);
+                }
+                else
+                {
+                    playback.Jump((float)(-DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                }
                 Freeze.Enable();
             }
 
-            if (JumpBack10Key.Pressed() && rewindList.Position > 0)
+            if (JumpBack10Key.Pressed() && (rewindList.Position > 0 || IsPlaybackRunning()))
             {
-                rewindList.Position -= 11;
-                rewindList.Read().Load(false);
+                if (!IsPlaybackRunning())
+                {
+                    rewindList.Position = Math.Max(0, rewindList.Position - 10);
+                    rewindList.PeekAndLoad(false);
+                }
+                else
+                {
+                    playback.Jump((float)(-10 * DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                }
                 Freeze.Enable();
             }
 
@@ -404,7 +426,7 @@ namespace Velo
                     time += delta;
                 cengine.gameTime = new GameTime(new TimeSpan(time), new TimeSpan(delta));
             
-                if (delta > 0)
+                if (delta > 0 && EnableRewind.Value)
                 {
                     Savestate savestate = new Savestate();
                     if (StoreAIVolumes.Value)
@@ -415,7 +437,7 @@ namespace Velo
                 }
             }
 
-            if (!DtFixed)
+            if (!DtFixed || !EnableRewind.Value)
             {
                 rewindList.Clear();
             }

@@ -24,14 +24,9 @@ namespace Velo
         protected HolderW content; // Child classes will put their content in here
         protected readonly LayoutW buttonRow;
 
-        private readonly bool showStatus;
-
-        private float loadingRotation = -(float)Math.PI / 2f;
-
         public MpMenuPage(MpContext context, string title, bool showStatus = true)
         {
             this.context = context;
-            this.showStatus = showStatus;
 
             content = new HolderW(null);
 

@@ -81,6 +81,8 @@ namespace Velo
 
             context = new AuContext(Enabled);
 
+            Util.DisableKeyInputsOn(() => Enabled.Value.Enabled);
+
             Check();
         }
 

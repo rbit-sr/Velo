@@ -47,6 +47,10 @@ namespace Velo
         private TimeSpan lastMeasurementUpdate = TimeSpan.Zero;
         private TextDraw statsTextDraw;
 
+        private static readonly Vector2[] velPrev = new Vector2[4];
+        private static readonly TimeSpan[] lastTrailUpdate = new TimeSpan[4];
+        private static readonly bool[] trailAddPoint = new bool[4];
+
         private Performance() : base("Performance")
         {
             Enabled = AddBool("enabled", true);
@@ -149,6 +153,35 @@ namespace Velo
         private bool resolutionSet = false;
         private TimeSpan lastTimeResolutionSet = TimeSpan.Zero;
 
+        public override void Init()
+        {
+            base.Init();
+
+            Velo.DisableFramelimit = true; // this module will now handle it
+        }
+
+        public override void PreSDLPoll()
+        {
+            base.PreSDLPoll();
+
+            if (
+                Enabled.Value &&
+                FixInputDelay.Value
+                )
+            {
+                Measure("idle");
+                Main.game.Delay(); // limits framerate
+            
+                Input.PollLLHooks();
+                if (!DisableSteamInputApi.Value)
+                {
+                    Measure("steam");
+                    rDnINrpyznfv3CiqSvLCoO4PuuLtVdemAf_0hQLtBAt8T_uP7ugL8U7R00VvHzDHIw.ZR_eFfR_DQhS95b0kUtB2nY.Update(new GameTime(TimeSpan.Zero, Velo.RealDelta));
+                    MeasurePrevious();
+                }
+            }
+        }
+
         public override void PreUpdate()
         {
             base.PreUpdate();
@@ -183,6 +216,44 @@ namespace Velo
             }
             else
                 measurementCount++;
+
+            if (Velo.Ingame)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if ((Velo.MainPlayer.game_time.TotalGameTime - lastTrailUpdate[i]).TotalMilliseconds > TrailResolution.Value)
+                    {
+                        lastTrailUpdate[i] = Velo.MainPlayer.game_time.TotalGameTime;
+                        trailAddPoint[i] = true;
+                    }
+                    else
+                        trailAddPoint[i] = false;
+                }
+            }
+        }
+
+        public override void PostUpdate()
+        {
+            base.PostUpdate();
+
+            if (Velo.Ingame)
+            {
+                for (int i = 0; i < 4; i++)
+                {
+                    if (Main.game.stack.gameInfo.slots[i].Player != null)
+                        velPrev[i] = Main.game.stack.gameInfo.slots[i].Player.actor.Velocity;
+                }
+            }
+
+            if (
+                !(Enabled.Value &&
+                FixInputDelay.Value)
+                )
+            {
+                Measure("idle");
+                Main.game.Delay(); // limits framerate
+                Measure("Velo");
+            }
         }
 
         public override void PostRender()
@@ -342,6 +413,23 @@ namespace Velo
             return FramelimitMethod.Value;
         }
 
+        public bool TrailAddPoint(int quality, double time, Player player)
+        {
+            if (Enabled.Value && TrailResolution.Value != 0)
+            {
+                bool addPoint =
+                    time > TrailResolution.Value / 1000f || 
+                    trailAddPoint[player.slot.Index] ||
+                    (Math.Abs(velPrev[player.slot.Index].X) >= 1200f) != (Math.Abs(player.actor.Velocity.X) >= 1200f) ||
+                    (velPrev[player.slot.Index].Length() >= 800f) != (player.actor.Velocity.Length() >= 800f) ||
+                    Math.Abs(Math.Atan2(velPrev[player.slot.Index].Y, velPrev[player.slot.Index].X) - Math.Atan2(player.actor.Velocity.Y, player.actor.Velocity.X)) > 0.08;
+                if (addPoint)
+                    lastTrailUpdate[player.slot.Index] = player.game_time.TotalGameTime;
+                return addPoint;
+            }
+            return quality != 1 || time > 0.15000000596046448;
+        }
+
         public MessagePools pools = new MessagePools(true, 64);
 
         public class MessagePoller
@@ -352,7 +440,7 @@ namespace Velo
             public MessagePoller(int channel)
             {
                 this.channel = channel;
-                this.messages = new List<Velo.Message>();
+                messages = new List<Velo.Message>();
             }
         }
 

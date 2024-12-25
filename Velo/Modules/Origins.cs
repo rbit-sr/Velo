@@ -47,7 +47,8 @@ namespace Velo
 
             context = new OrContext(Enabled);
 
-            Velo.OnMainPlayerReset.Add(ResetActors);
+            Velo.AddOnMainPlayerReset(() => Velo.AddOnPreUpdate(ResetActors));
+            Velo.AddOnMainPlayerReset(() => Velo.AddOnPreUpdate(RestartTimer));
         }
 
         public override void PostUpdate()
@@ -110,6 +111,13 @@ namespace Velo
                 Velo.ModuleSolo.timer.Trigger();
                 finished = true;
             }
+        }
+
+        public void RestartTimer()
+        {
+            if (!IsOrigins())
+                return;
+            Velo.ModuleSolo?.timer?.Trigger();
         }
 
         public void ResetActors()

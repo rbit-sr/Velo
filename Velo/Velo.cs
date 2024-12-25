@@ -48,14 +48,12 @@ namespace Velo
 
         public static int MainThreadId;
 
-        public static List<Action> OnMainPlayerReset = new List<Action>();
-        public static List<Action<float>> OnLapFinish = new List<Action<float>>();
-
         private static List<Action> onPreUpdate = new List<Action>();
         private static List<Action> onPreUpdateTemp = new List<Action>();
-
-        // thread-safe
         private static readonly List<Action> onPreUpdateTS = new List<Action>();
+        private static List<Action> onExit = new List<Action>();
+        public static List<Action> onMainPlayerReset = new List<Action>();
+        public static List<Action<float>> onLapFinish = new List<Action<float>>();
 
         private static bool playerReset = false;
 
@@ -64,12 +62,39 @@ namespace Velo
         private static bool originsLoaded = false;
         private static bool timerTriggered = false;
 
-        private static readonly TimeSpan[] lastTrailUpdate = new TimeSpan[4];
-        private static readonly bool[] trailAddPoint = new bool[4];
-
         private static ICInputMap moduleSoloInputMap = null;
 
         public static bool WindowMoved = false;
+
+        public static bool DisableFramelimit = false;
+
+        public static void AddOnPreUpdate(Action action)
+        {
+            onPreUpdate.Add(action);
+        }
+
+        public static void AddOnPreUpdateTS(Action action)
+        {
+            lock (onPreUpdateTS)
+            {
+                onPreUpdateTS.Add(action);
+            }
+        }
+
+        public static void AddOnExit(Action action)
+        {
+            onExit.Add(action);
+        }
+
+        public static void AddOnMainPlayerReset(Action action)
+        {
+            onMainPlayerReset.Add(action);
+        }
+
+        public static void AddOnLapFinish(Action<float> action)
+        {
+            onLapFinish.Add(action);
+        }
 
         public static Player GetMainPlayer()
         {
@@ -209,20 +234,6 @@ namespace Velo
             GhostLaserCollision = false;
             GhostFallTileCollision = false;
 
-            if (Ingame)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    if ((MainPlayer.game_time.TotalGameTime - lastTrailUpdate[i]).TotalMilliseconds > Performance.Instance.TrailResolution.Value)
-                    {
-                        lastTrailUpdate[i] = MainPlayer.game_time.TotalGameTime;
-                        trailAddPoint[i] = true;
-                    }
-                    else
-                        trailAddPoint[i] = false;
-                }
-            }
-
             measure("other");
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
             measure("Velo");
@@ -256,19 +267,9 @@ namespace Velo
 
             ModuleManager.Instance.PostUpdate();
 
-            if (Ingame)
-            {
-                for (int i = 0; i < 4; i++)
-                {
-                    if (Main.game.stack.gameInfo.slots[i].Player != null)
-                        vel_prev[i] = Main.game.stack.gameInfo.slots[i].Player.actor.Velocity;
-                }
-            }
+            CEngineInst.Game.IsMouseVisible = Util.CursorEnabled();
 
-            if (
-                !(Performance.Instance.Enabled.Value &&
-                Performance.Instance.FixInputDelay.Value)
-                )
+            if (!DisableFramelimit)
             {
                 measure("idle");
                 Main.game.Delay(); // limits framerate
@@ -282,187 +283,7 @@ namespace Velo
             WindowMoved = false;
 
             if (!originsLoaded)
-            //if (Input.IsPressed((ushort)Keys.F6))
             {
-                /*string[] bundles =
-                {
-                    "StageMetro",
-                    "StageShip",
-                    "StageMansion",
-                    "StagePlaza",
-                    "StageFactory",
-                    "StageThemePark",
-                    "StagePowerplant",
-                    "StageSilo",
-                    "StageLibrary",
-                    "StageNightclub",
-                    "StageZoo",
-                    "StageSki",
-                    "StageCasino",
-                    "StageFestival",
-                    "StageResort",
-                    "StageAirport",
-                    "StageBoostacoke",
-                    "StageVR",
-                    "StageAlley",
-                    "Common",
-                    "Menu",
-                    "OptionsMenu",
-                    "MenuLevel",
-                    "MultiplayerLevelMenu",
-                    "TipMenu",
-                    "Game",
-                    "StoryGame",
-                    "Multiplayer"
-                };
-
-                FileStream stream = File.OpenWrite("test.txt");
-                StreamWriter writer = new StreamWriter(stream);
-                
-                foreach (var bundle in bundles)
-                {
-                    int begin;
-                    int end;
-
-                    begin = 0;
-                    end = ContentManager.ContentCountInBundle(bundle);
-
-                    Dictionary<string, int> namesCount = new Dictionary<string, int>();
-                    List<string> graphicNames = new List<string>();
-                    List<string> soundNames = new List<string>();
-                    var format = (Func<string, int, string>)((path, type) =>
-                    {
-                        path = path.Substring(path.IndexOf('\\') + 1);
-                        path = path.Substring(path.IndexOf('\\') + 1);
-                        path = path.Substring(path.IndexOf('\\') + 1);
-                        path = path.Replace('\\', '_').Replace('-', '_').Replace(' ', '_').Replace('+', '_').Replace('/', '_');
-                        if (path == "out") path = "out_";
-                        if (!namesCount.ContainsKey(path))
-                        {
-                            namesCount.Add(path, 1);
-                        }
-                        else
-                        {
-                            namesCount[path] = namesCount[path] + 1;
-                            path += "_" + namesCount[path];
-                        }
-                        if (type == 0)
-                            graphicNames.Add(path);
-                        else
-                            soundNames.Add(path);
-                        return path;
-                    });
-
-                    var getSoundLabel = (Func<string, string>)(name =>
-                    {
-                        for (int i = 0; i <= 94; i++)
-                        {
-                            if (EditableSoundEmitter.soundFromId(i).Name == name)
-                                return EditableSoundEmitter.soundLabels[i];
-                        }
-                        return "";
-                    });
-
-                    writer.WriteLine("public class " + bundle.Replace("Stage", ""));
-                    writer.WriteLine("{");
-                    writer.WriteLine("public static readonly EBundle Bundle = FromName(\"" + bundle + "\");");
-                    writer.WriteLine();
-
-                    HashSet<ICContent> hashSet = new HashSet<ICContent>();
-                    for (int i = begin; i < end; i++)
-                    {
-                        ICContent content = ContentManager.GetContent(bundle, i);
-                        if (content == null)
-                            continue;
-                        if (!content.IsLoaded)
-                            ContentManager.Load(content, false);
-                        string contentType = "";
-                        if (content is CAnimatedImage)
-                            contentType = "ANIMATED_IMAGE";
-                        else if (content is CAnimation)
-                            contentType = "ANIMATION";
-                        else if (content is CAnimationEvent)
-                            contentType = "ANIMATION_EVENT";
-                        else if (content is CDynamicSpriteImage)
-                            contentType = "DYNAMIC_SPRITE_IMAGE";
-                        else if (content is CEffect)
-                            contentType = "EFFECT";
-                        else if (content is CFont)
-                            contentType = "FONT";
-                        else if (content is CImage)
-                            contentType = "IMAGE";
-                        else if (content is CMultiSpriteAtlas)
-                            contentType = "MULTI_SPRITE_ATLAS";
-                        else if (content is CSpriteAtlas)
-                            contentType = "SPRITE_ATLAS";
-                        else if (content is CSpriteImage)
-                            contentType = "SPRITE_IMAGE";
-                        else if (content is CTexture3D)
-                            contentType = "TEXTURE_3D";
-                        else if (content is CTileImage)
-                            contentType = "TILE_IMAGE";
-                        else if (content is CMusicTrack)
-                            contentType = "MUSIC_TRACK";
-                        else if (content is CSound)
-                            contentType = "SOUND";
-                        else if (content is CSoundCue)
-                            contentType = "SOUND_CUE";
-
-                        if (!hashSet.Contains(content) && content != null && content.Name != null)
-                        {
-                            hashSet.Add(content);
-                            if (content is CAnimatedImage anim)
-                            {
-                                writer.WriteLine("public static readonly Graphic " + format(content.Name + "_" + anim.animations.First().Value.name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + anim.AnimationSize(anim.DefaultAnimation).X + ", Height = " + anim.AnimationSize(anim.DefaultAnimation).Y + " };");
-                            }
-                            else if (content is CSpriteAtlas atlas2)
-                            {
-                                int c = atlas2.atlas.RegionCount;
-                                for (int j = 0; j < c; j++)
-                                {
-                                    writer.WriteLine("public static readonly Graphic " + format(atlas2.atlas.GetRegion(j).Key, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = " + j + ", FrameKey = \"" + atlas2.atlas.GetRegion(j).Key + "\", Width = " + atlas2.atlas.GetRegion(j).Bounds.Width + ", Height = " + atlas2.atlas.GetRegion(j).Bounds.Height + " };");
-                                }
-                            }
-                            else if (content is CMultiSpriteAtlas atlas)
-                            {
-                                foreach (var region in atlas.regions)
-                                {
-                                    writer.WriteLine("public static readonly Graphic " + format(content.Name + "_" + region.region.Key, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = " + atlas.GetIndexForKey(region.region.Key) + ", FrameKey = \"" + region.region.Key + "\", Width = " + region.region.Bounds.Width + ", Height = " + region.region.Bounds.Height + " };");
-                                }
-                            }
-                            else if (content is CSound && getSoundLabel(content.Name) != "")
-                            {
-                                writer.WriteLine("public static readonly Sound " + format(content.Name, 1) + " = new Sound { Type = ESoundType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", SoundLabel = \"" + getSoundLabel(content.Name) + "\" };");
-                            }
-                            else if (content is CImage image)
-                            {
-                                writer.WriteLine("public static readonly Graphic " + format(content.Name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + image.Image.Width + ", Height = " + image.Image.Height + " };");
-                            }
-                            else if (content is CSpriteImage sprite)
-                            {
-                                writer.WriteLine("public static readonly Graphic " + format(content.Name, 0) + " = new Graphic { Type = EGraphicType." + contentType + ", Bundle = \"" + bundle + "\", Name = \"" + content.Name.Replace("\\", "\\\\") + "\", ID = " + i + ", Frame = 0, FrameKey = \"\", Width = " + sprite.TileWidth + ", Height = " + sprite.TileHeight + " };");
-                            }
-                        }
-                    }
-                    writer.WriteLine();
-                    writer.Write("public static readonly Graphic[] AllGraphics = { ");
-                    foreach (string name in graphicNames)
-                    {
-                        writer.Write(name + ",");
-                    }
-                    writer.WriteLine(" };");
-                    writer.Write("public static readonly Sound[] AllSound = { ");
-                    foreach (string name in soundNames)
-                    {
-                        writer.Write(name + ",");
-                    }
-                    writer.WriteLine(" };");
-                    writer.WriteLine("}");
-                    writer.WriteLine();
-                }
-
-                writer.Close();*/
-
                 ContentManager.LoadBundle("Boss01", false);
                 ContentManager.AddBundle("Boss02", Boss02Bundle.Content);
                 ContentManager.LoadBundle("Boss02", false);
@@ -490,43 +311,12 @@ namespace Velo
         public static void on_exit()
         {
             Exiting = true;
-            Input.RemoveHooks();
-        }
-
-        public static void AddOnPreUpdate(Action action)
-        {
-            onPreUpdate.Add(action);
-        }
-
-        public static void AddOnPreUpdateTS(Action action)
-        {
-            lock (onPreUpdateTS)
-            {
-                onPreUpdateTS.Add(action);
-            }
+            onExit.ForEach(a => a());
         }
 
         public static void pre_sdl_poll()
         {
-            if (
-                Performance.Instance.Enabled.Value &&
-                Performance.Instance.FixInputDelay.Value
-                )
-            {
-                measure("idle");
-                Main.game.Delay(); // limits framerate
-            }
-
-            if (Performance.Instance.FixInputDelay.Value && Performance.Instance.Enabled.Value)
-            {
-                Input.PollLLHooks();
-                if (!disable_steam_input_api())
-                {
-                    measure("steam");
-                    rDnINrpyznfv3CiqSvLCoO4PuuLtVdemAf_0hQLtBAt8T_uP7ugL8U7R00VvHzDHIw.ZR_eFfR_DQhS95b0kUtB2nY.Update(new GameTime(TimeSpan.Zero, Velo.RealDelta));
-                    measure_previous();
-                }
-            }
+            ModuleManager.Instance.PreSDLPoll();
         }
 
         // called in Main.game.Delay()
@@ -551,21 +341,13 @@ namespace Velo
         // skip all key inputs on true
         public static bool disable_key_input()
         {
-            return 
-                (SettingsUI.Instance.Enabled.Value.Enabled && 
-                SettingsUI.Instance.DisableKeyInput.Value) ||
-                AutoUpdate.Instance.Enabled.Value.Enabled;
+            return Util.KeyInputsDisabled();
         }
 
         // skip all mouse inputs on true
         public static bool disable_mouse_input()
         {
-            return
-                SettingsUI.Instance.Enabled.Value.Enabled ||
-                Leaderboard.Instance.Enabled.Value.Enabled ||
-                AutoUpdate.Instance.Enabled.Value.Enabled ||
-                Origins.Instance.Enabled.Value.Enabled ||
-                ModPortal.Instance.Enabled.Value.Enabled;
+            return Util.MouseInputsDisabled();
         }
 
         // hooked into FNA.dll's event loop
@@ -580,12 +362,7 @@ namespace Velo
         {
             if (player == MainPlayer && !playerReset)
             {
-                Savestate.LoadedVersion = Version.VERSION;
-                if (Origins.Instance.IsOrigins())
-                    onPreUpdate.Add(() => ModuleSolo?.timer?.Trigger());
-
-                foreach (Action action in OnMainPlayerReset)
-                    onPreUpdate.Add(action);
+                onMainPlayerReset.ForEach(a => a());
 
                 playerReset = true;
             }
@@ -594,8 +371,7 @@ namespace Velo
         // called on lap finish
         public static void lap_finish(float time)
         {
-            foreach (Action<float> action in OnLapFinish)
-                onPreUpdate.Add(() => action(time));
+            onLapFinish.ForEach(a => a(time));
         }
 
         public static void spawn_ghost(Player ghost)
@@ -799,7 +575,6 @@ namespace Velo
             bool result = OfflineGameMods.Instance.SetInputs(player);
             measure("physics");
             return result;
-
         }
 
         public static bool skip_update_sprite(Player player)
@@ -965,16 +740,7 @@ namespace Velo
 
         public static Color get_background_color(ICLayer layer, Color color)
         {
-            if (layer.Id == "BackgroundLayer0")
-                return new Color(color.ToVector4() * Appearance.Instance.Background0Color.Value.Get().ToVector4());
-            if (layer.Id == "BackgroundLayer1")
-                return new Color(color.ToVector4() * Appearance.Instance.Background1Color.Value.Get().ToVector4());
-            if (layer.Id == "BackgroundLayer2")
-                return new Color(color.ToVector4() * Appearance.Instance.Background2Color.Value.Get().ToVector4());
-            if (layer.Id == "BackgroundLayer3")
-                return new Color(color.ToVector4() * Appearance.Instance.Background3Color.Value.Get().ToVector4());
-
-            return color;
+            return Appearance.Instance.GetBackgroundColor(layer, color);
         }
 
         public static Color get_hovered_color()
@@ -1042,22 +808,9 @@ namespace Velo
             Appearance.Instance.ActorSpawned(actor);
         }
 
-        private static readonly Vector2[] vel_prev = new Vector2[4];
-
         public static bool trail_add_point(int quality, double time, Player player)
         {
-            if (Performance.Instance.Enabled.Value && Performance.Instance.TrailResolution.Value != 0)
-            {
-                bool addPoint = 
-                    time > Performance.Instance.TrailResolution.Value / 1000f || trailAddPoint[player.slot.Index] || 
-                    (Math.Abs(vel_prev[player.slot.Index].X) >= 1200f) != (Math.Abs(player.actor.Velocity.X) >= 1200f) ||
-                    (vel_prev[player.slot.Index].Length() >= 800f) != (player.actor.Velocity.Length() >= 800f) ||
-                    Math.Abs(Math.Atan2(vel_prev[player.slot.Index].Y, vel_prev[player.slot.Index].X) - Math.Atan2(player.actor.Velocity.Y, player.actor.Velocity.X)) > 0.08;
-                if (addPoint)
-                    lastTrailUpdate[player.slot.Index] = player.game_time.TotalGameTime;
-                return addPoint;
-            }
-            return quality != 1 || time > 0.15000000596046448;
+            return Performance.Instance.TrailAddPoint(quality, time, player);
         }
 
         public static bool ctrail_update_last()
@@ -1279,6 +1032,66 @@ namespace Velo
             if (!Origins.Instance.IsOrigins())
                 return Vector2.Zero;
             return new Vector2(-100f, -100f);
+        }
+
+        public static Vector2 get_origin(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].Origin.Value;
+        }
+
+        public static Vector2 get_position(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].Position.Value;
+        }
+
+        public static Vector2 get_rope_offset(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].RopeOffset.Value;
+        }
+
+        public static Vector2 get_swing_origin(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingOrigin.Value;
+        }
+
+        public static Vector2 get_swing_position(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingPosition.Value;
+        }
+
+        public static Vector2 get_swing_offset(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingOffset.Value;
+        }
+
+        public static Vector2 get_taunt_origin(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].TauntOrigin.Value;
+        }
+
+        public static Vector2 get_taunt_position(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].TauntPosition.Value;
+        }
+
+        public static Vector2 get_climb_origin(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].ClimbOrigin.Value;
+        }
+
+        public static Vector2 get_climb_position(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].ClimbPosition.Value;
+        }
+
+        public static Vector2 get_scale(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].Scale.Value;
+        }
+
+        public static Color get_character_select_background_color(ICharacter character)
+        {
+            return Miscellaneous.Instance.SkinConstantsLookup[character].CharacterSelectBackgroundColor.Value.Get();
         }
 
         public class Message

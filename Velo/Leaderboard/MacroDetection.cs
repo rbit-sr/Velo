@@ -162,7 +162,7 @@ namespace Velo
         {
             base.Init();
 
-            Velo.OnMainPlayerReset.Add(OnMainPlayerReset);
+            Velo.AddOnMainPlayerReset(OnMainPlayerReset);
         }
 
         public override void PostUpdate()
