@@ -163,15 +163,17 @@ namespace Velo
             stream.Read(obj, 0x4, 0x18);
         }
 
-        private static unsafe void Write(MemoryStream stream, CLineDrawComponent obj)
+        private static unsafe void Write(MemoryStream stream, CLineDrawComponent obj, int minCount = 0)
         {
             stream.Write(obj, 0x18, 0x4);
             stream.Write(obj.lines.Count);
             foreach (CLine line in obj.lines)
                 Write(stream, line);
+            for (int i = obj.Lines.Count; i < minCount; i++)
+                Write(stream, new CLine(Vector2.Zero, Vector2.Zero, Color.Transparent));
         }
 
-        private static unsafe void Read(MemoryStream stream, CLineDrawComponent obj)
+        private static unsafe void Read(MemoryStream stream, CLineDrawComponent obj, int minCount = 0)
         {
             stream.Read(obj, 0x18, 0x4);
             int count = stream.Read<int>();
@@ -181,6 +183,11 @@ namespace Velo
                 CLine line = new CLine(Vector2.Zero, Vector2.Zero, Color.Black);
                 Read(stream, line);
                 obj.lines.Add(line);
+            }
+            for (int i = count; i < minCount; i++)
+            {
+                CLine dummy = new CLine(Vector2.Zero, Vector2.Zero, Color.Black);
+                Read(stream, dummy);
             }
         }
 
@@ -250,7 +257,7 @@ namespace Velo
             Write(stream, obj.line1);
             Write(stream, obj.line2);
             Write(stream, obj.line3);
-            Write(stream, obj.lineDrawComp1);
+            Write(stream, obj.lineDrawComp1, 2);
             stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
             if (obj.target == null)
                 stream.Write(-1);
@@ -276,7 +283,7 @@ namespace Velo
             Read(stream, obj.line1);
             Read(stream, obj.line2);
             Read(stream, obj.line3);
-            Read(stream, obj.lineDrawComp1);
+            Read(stream, obj.lineDrawComp1, version >= 5 ? 2 : 0);
             if (obj.lineDrawComp1.lines.Count > 0)
             {
                 obj.lineDrawComp1.lines.Clear();
@@ -2055,7 +2062,7 @@ namespace Velo
             return savestate;
         }
 
-        public void Compress(Savestate reference)
+        public Savestate Compressed(Savestate reference)
         {
             MemoryStream compressed = new MemoryStream();
             stream.Position = 0;
@@ -2070,7 +2077,7 @@ namespace Velo
                 if (mode == COPY_MODE)
                 {
                     int count = 0;
-                    while (count < 255 && stream.Position < stream.Length && reference.stream.Position < reference.stream.Length)
+                    while (count < 32768 && stream.Position < stream.Length && reference.stream.Position < reference.stream.Length)
                     {
                         if (stream.ReadByte() != reference.stream.ReadByte())
                         {
@@ -2080,7 +2087,15 @@ namespace Velo
                         }
                         count++;
                     }
-                    compressed.WriteByte((byte)count);
+                    if (count < 128)
+                    {
+                        compressed.WriteByte((byte)count);
+                    }
+                    else
+                    {
+                        compressed.WriteByte((byte)((count >> 8) | 0x80));
+                        compressed.WriteByte((byte)(count & 0xFF));
+                    }
                 }
                 if (mode == DIFF_MODE)
                 {
@@ -2104,11 +2119,13 @@ namespace Velo
                 }
                 mode = !mode;
             }
-            stream.Close();
-            stream = compressed;
+            return new Savestate
+            {
+                stream = compressed
+            };
         }
 
-        public void Decompress(Savestate reference)
+        public Savestate Decompressed(Savestate reference)
         {
             MemoryStream uncompressed = new MemoryStream();
             stream.Position = 0;
@@ -2123,6 +2140,12 @@ namespace Velo
                 if (mode == COPY_MODE)
                 {
                     int count = stream.ReadByte();
+                    if ((count & 0x80) != 0)
+                    {
+                        count &= 0x7F;
+                        count <<= 8;
+                        count |= stream.ReadByte();
+                    }
                     for (int i = 0; i < count; i++)
                     {
                         uncompressed.WriteByte((byte)reference.stream.ReadByte());
@@ -2139,36 +2162,24 @@ namespace Velo
                 }
                 mode = !mode;
             }
-            stream.Close();
-            stream = uncompressed;
+            return new Savestate
+            {
+                stream = uncompressed
+            };
         }
     }
 
     public class SavestateStack
     {
-        public static readonly int CHUNK_SIZE = 64;
-
-        private readonly List<Savestate> savestates = new List<Savestate>();
-        private int position = 0;
-        public int Position
+        private struct Slot
         {
-            get => position;
-            set
-            {
-                if (value == position)
-                    return;
-
-                int oldKeySavestateIndex = position / CHUNK_SIZE * CHUNK_SIZE;
-                int newKeySavestateIndex = value / CHUNK_SIZE * CHUNK_SIZE;
-
-                if (position != oldKeySavestateIndex && position < savestates.Count)
-                    savestates[position].Compress(savestates[oldKeySavestateIndex]);
-                if (value != newKeySavestateIndex && value < savestates.Count)
-                    savestates[value].Decompress(savestates[newKeySavestateIndex]);
-
-                position = value;
-            }
+            public Savestate Savestate;
+            public int KeySavestate;
+            public int LossSum;
         }
+
+        private readonly List<Slot> savestates = new List<Slot>();
+        public int Position = 0;
         public int Length => savestates.Count;
 
         public SavestateStack()
@@ -2176,12 +2187,61 @@ namespace Velo
 
         }
 
+        private int GetCurrentKeySavestate()
+        {
+            if (Position == 0)
+                return -1;
+            return savestates[Position - 1].KeySavestate;
+        }
+
+        private int GetCurrentLoss()
+        {
+            if (Position == 0) 
+                return 0;
+            return savestates[Position - 1].LossSum;
+        }
+
+        private Savestate GetCurrentUncompressed()
+        {
+            Slot slot = savestates[Position];
+            return
+                slot.KeySavestate != Position ?
+                slot.Savestate.Decompressed(savestates[slot.KeySavestate].Savestate) :
+                slot.Savestate;
+        }
+
         public void Write(Savestate savestate)
         {
-            if (savestates.Count <= Position)
-                savestates.Add(savestate);
+            Slot newSavestate;
+            int keySavestate = GetCurrentKeySavestate();
+            int currentLoss = GetCurrentLoss();
+            if (keySavestate != -1 && currentLoss < savestate.Stream.Length)
+            {
+                Savestate compressed = savestate.Compressed(savestates[keySavestate].Savestate);
+                int loss = 
+                    Position > keySavestate + 1 ? 
+                    (int)compressed.Stream.Length - (int)savestates[keySavestate + 1].Savestate.Stream.Length : 
+                    0;
+                newSavestate = new Slot
+                {
+                    Savestate = compressed,
+                    KeySavestate = keySavestate,
+                    LossSum = currentLoss + loss
+                };
+            }
             else
-                savestates[Position] = savestate;
+            {
+                newSavestate = new Slot
+                {
+                    Savestate = savestate,
+                    KeySavestate = Position
+                };
+            }
+
+            if (savestates.Count <= Position)
+                savestates.Add(newSavestate);
+            else
+                savestates[Position] = newSavestate;
 
             Position++;
 
@@ -2190,15 +2250,15 @@ namespace Velo
 
         public Savestate Read()
         {
-            Savestate savestate = savestates[Position];
+            Savestate savestate = GetCurrentUncompressed();
 
             Position++;
-            return savestate.Clone();
+            return savestate;
         }
 
         public void PeekAndLoad(bool setGlobalTime)
         {
-            Savestate savestate = savestates[Position];
+            Savestate savestate = GetCurrentUncompressed();
 
             savestate.Load(setGlobalTime);
         }
@@ -2206,7 +2266,7 @@ namespace Velo
         public void Clear()
         {
             savestates.Clear();
-            position = 0;
+            Position = 0;
         }
     }
 }

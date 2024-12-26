@@ -527,6 +527,9 @@ namespace Velo
 
     public static class StreamUtil
     {
+        [DllImport("Velo_UI.dll", EntryPoint = "Memcpy")]
+        private static unsafe extern void Memcpy(void* dst, void* src, uint size);
+
         [ThreadStatic]
         public static byte[] buffer;
 
@@ -537,7 +540,8 @@ namespace Velo
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
             {
-                Buffer.MemoryCopy(objPtr, bufferPtr, size, size);
+                Memcpy(bufferPtr, objPtr, (uint)size);
+                //Buffer.MemoryCopy(objPtr, bufferPtr, size, size);
             }
             stream.Write(buffer, 0, size);
         }
@@ -550,7 +554,8 @@ namespace Velo
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
             {
-                Buffer.MemoryCopy(bufferPtr, objPtr, size, size);
+                Memcpy(objPtr, bufferPtr, (uint)size);
+                //Buffer.MemoryCopy(bufferPtr, objPtr, size, size);
             }
         }
 
@@ -580,8 +585,7 @@ namespace Velo
                 return;
             }
             Write(stream, value.Length);
-            foreach (T elem in value)
-                Write(stream, elem);
+            WriteArrFixed(stream, value, value.Length);
         }
 
         public static unsafe T[] ReadArr<T>(this Stream stream) where T : struct
@@ -589,23 +593,34 @@ namespace Velo
             int length = Read<int>(stream);
             if (length == -1)
                 return null;
-            T[] value = new T[length];
-            for (int i = 0; i < length; i++)
-                value[i] = Read<T>(stream);
-            return value;
+            return ReadArrFixed<T>(stream, length);
         }
 
         public static unsafe void WriteArrFixed<T>(this Stream stream, T[] value, int length) where T : struct
         {
-            for (int i = 0; i < length; i++)
-                Write(stream, value[i]);
+            if (value is byte[] valueBytes)
+            {
+                stream.Write(valueBytes, 0, length);
+            }
+            else
+            {
+                for (int i = 0; i < length; i++)
+                    Write(stream, value[i]);
+            }
         }
 
         public static unsafe T[] ReadArrFixed<T>(this Stream stream, int length) where T : struct
         {
             T[] value = new T[length];
-            for (int i = 0; i < length; i++)
-                value[i] = Read<T>(stream);
+            if (value is byte[] valueBytes)
+            {
+                stream.Read(valueBytes, 0, length);
+            }
+            else
+            {
+                for (int i = 0; i < length; i++)
+                    value[i] = Read<T>(stream);
+            }
             return value;
         }
 
@@ -654,9 +669,10 @@ namespace Velo
         {
             byte[] bytes = str != null ? Encoding.ASCII.GetBytes(str) : null;
             WriteArr(stream, bytes);
-            if (bytes != null && bytes.Length < minLength)
+            int length = bytes != null ? bytes.Length : 0;
+            if (length < minLength)
             {
-                byte[] dummy = new byte[minLength - bytes.Length];
+                byte[] dummy = new byte[minLength - length];
                 WriteArrFixed(stream, dummy, dummy.Length);
             }
         }
@@ -665,7 +681,10 @@ namespace Velo
         {
             byte[] bytes = ReadArr<byte>(stream);
             if (bytes == null)
+            {
+                stream.Position += minLength;
                 return null;
+            }
             if (bytes.Length < minLength)
             {
                 stream.Position += minLength - bytes.Length;

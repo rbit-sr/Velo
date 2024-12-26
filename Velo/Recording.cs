@@ -736,38 +736,70 @@ namespace Velo
                         return;
                     }
 
-                    long rewinded = 0;
+                    deltaSum -= TimeSpan.FromSeconds(-seconds).Ticks;
 
-                    while (recording[i].DeltaSum + recording[i].Delta - recording[startI].DeltaSum >= deltaSum - TimeSpan.FromSeconds(-seconds).Ticks)
+                    while (recording[i - 1].DeltaSum + recording[i - 1].Delta - recording[startI].DeltaSum >= deltaSum)
                     {
                         i--;
-                        rewinded += recording[i].Delta;
                         if (i == 0)
                             break;
                     }
-                    deltaSum -= rewinded;
                 }
                 if (seconds > 0f)
                 {
-                    long forwarded = 0;
+                    deltaSum += TimeSpan.FromSeconds(seconds).Ticks;
 
-                    while (recording[i].DeltaSum + recording[i].Delta - recording[startI].DeltaSum < deltaSum + TimeSpan.FromSeconds(seconds).Ticks)
+                    while (recording[i].DeltaSum + recording[i].Delta - recording[startI].DeltaSum < deltaSum)
                     {
                         i++;
-                        forwarded += recording[i].Delta;
                         if (i >= recording.Count)
                         {
                             Finish();
                             return;
                         }
                     }
-                    deltaSum += forwarded;
                 }
             }
+
+            ApplyCurrentFrame(forceGrapple: true);
+
             if (Type == EPlaybackType.VIEW_REPLAY)
             {
                 Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
             }
+
+            Velo.CEngineInst.World.Update(new GameTime(Velo.GameTime, TimeSpan.Zero));
+            Velo.CEngineInst.CameraManager.Update(new GameTime(TimeSpan.Zero, TimeSpan.Zero));
+
+            ApplyCurrentFrame(forceGrapple: true);
+        }
+
+        public void JumpFrames(int frames)
+        {
+            if (Finished)
+                return;
+
+            i += frames;
+            if (i < 0)
+                i = 0;
+            if (i >= recording.Count)
+            {
+                Finish();
+                return;
+            }
+            deltaSum = recording[i].DeltaSum;
+
+            ApplyCurrentFrame(forceGrapple: true);
+
+            if (Type == EPlaybackType.VIEW_REPLAY)
+            {
+                Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
+            }
+
+            Velo.CEngineInst.World.Update(new GameTime(Velo.GameTime, TimeSpan.Zero));
+            Velo.CEngineInst.CameraManager.Update(new GameTime(TimeSpan.Zero, TimeSpan.Zero));
+
+            ApplyCurrentFrame(forceGrapple: true);
         }
 
         public bool DtFixed
@@ -779,6 +811,38 @@ namespace Velo
         }
 
         public bool Finished { get; set; }
+
+        private void ApplyCurrentFrame(bool forceGrapple = false)
+        {
+            if (i >= recording.Count)
+                return;
+
+            long frameDelta = recording[i].Delta;
+            long nowRel = deltaSum - (recording[i].DeltaSum - recording[startI].DeltaSum);
+            if (nowRel < 0)
+                nowRel = 0;
+            if (nowRel > frameDelta)
+                nowRel = frameDelta;
+
+            Frame frame = Lerp(recording[i - 1], recording[i], (float)((double)nowRel / frameDelta));
+
+            long dt = Velo.GameTime.Ticks - recording[i - 1].Time;
+            forceGrapple |=
+                (!player.grappling &&
+                (recording[i - 1].Flags & (1 << (int)EFlags.GRAPPLING)) != 0 &&
+                (recording[i].Flags & (1 << (int)EFlags.GRAPPLING)) != 0) ||
+                (!player.grapple.connected &&
+                (recording[i - 1].Flags & (1 << (int)EFlags.SWINGING)) != 0 &&
+                (recording[i].Flags & (1 << (int)EFlags.SWINGING)) != 0);
+
+            float grapDirX = recording[i].GrapPosX > recording[i - 1].GrapPosX ? 1f : (recording[i].GrapPosX < recording[i - 1].GrapPosX ? -1f : 0f);
+            frame.Apply(player, dt, setFlags: true, forceGrapple: forceGrapple || Type == EPlaybackType.SET_GHOST, grapDirX: grapDirX);
+
+            Velo.measure("physics");
+            player.UpdateHitbox();
+            player.UpdateSprite(CEngine.CEngine.Instance.gameTime);
+            Velo.measure("Velo");
+        }
 
         public void PreUpdate()
         {
@@ -845,33 +909,9 @@ namespace Velo
                     return;
                 }
             }
-            else if ((Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.SET_GHOST) && i >= 1 && i < recording.Count)
+            else if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.SET_GHOST)
             {
-                long frameDelta = recording[i].Delta;
-                long nowRel = deltaSum - (recording[i].DeltaSum - recording[startI].DeltaSum);
-                if (nowRel < 0)
-                    nowRel = 0;
-                if (nowRel > frameDelta)
-                    nowRel = frameDelta;
-
-                Frame frame = Lerp(recording[i - 1], recording[i], (float)((double)nowRel / frameDelta));
-
-                long dt = Velo.GameTime.Ticks - recording[i - 1].Time;
-                bool forceGrapple =
-                    (!player.grappling &&
-                    (recording[i - 1].Flags & (1 << (int)EFlags.GRAPPLING)) != 0 &&
-                    (recording[i].Flags & (1 << (int)EFlags.GRAPPLING)) != 0) ||
-                    (!player.grapple.connected &&
-                    (recording[i - 1].Flags & (1 << (int)EFlags.SWINGING)) != 0 &&
-                    (recording[i].Flags & (1 << (int)EFlags.SWINGING)) != 0);
-
-                float grapDirX = recording[i].GrapPosX > recording[i - 1].GrapPosX ? 1f : (recording[i].GrapPosX < recording[i - 1].GrapPosX ? -1f : 0f);
-                frame.Apply(player, dt, setFlags: true, forceGrapple: forceGrapple || Type == EPlaybackType.SET_GHOST, grapDirX: grapDirX);
-
-                Velo.measure("physics");
-                player.UpdateHitbox();
-                player.UpdateSprite(CEngine.CEngine.Instance.gameTime);
-                Velo.measure("Velo");
+                ApplyCurrentFrame();
             }
         }
 

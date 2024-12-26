@@ -387,7 +387,10 @@ namespace Velo
                 }
                 else
                 {
-                    playback.Jump((float)(-DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                    if (playback.Type == Playback.EPlaybackType.VIEW_REPLAY || playback.Type == Playback.EPlaybackType.SET_GHOST)
+                        playback.Jump((float)(-DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                    else if (playback.Type == Playback.EPlaybackType.VERIFY)
+                        playback.JumpFrames(-1);
                 }
                 Freeze.Enable();
             }
@@ -401,7 +404,10 @@ namespace Velo
                 }
                 else
                 {
-                    playback.Jump((float)(-10 * DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                    if (playback.Type == Playback.EPlaybackType.VIEW_REPLAY || playback.Type == Playback.EPlaybackType.SET_GHOST)
+                        playback.Jump((float)(-10 * DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
+                    else if (playback.Type == Playback.EPlaybackType.VERIFY)
+                        playback.JumpFrames(-10);
                 }
                 Freeze.Enable();
             }
