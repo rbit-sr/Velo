@@ -768,7 +768,7 @@ namespace Velo
                 Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
             }
 
-            Velo.CEngineInst.World.Update(new GameTime(Velo.GameTime, TimeSpan.Zero));
+            Velo.CEngineInst.World.Update(new GameTime(Velo.GameTime, new TimeSpan(1)));
             Velo.CEngineInst.CameraManager.Update(new GameTime(TimeSpan.Zero, TimeSpan.Zero));
 
             ApplyCurrentFrame(forceGrapple: true);
@@ -816,28 +816,33 @@ namespace Velo
         {
             if (i >= recording.Count)
                 return;
+            if (i > 0)
+            {
+                long frameDelta = recording[i].Delta;
+                long nowRel = deltaSum - (recording[i].DeltaSum - recording[startI].DeltaSum);
+                if (nowRel < 0)
+                    nowRel = 0;
+                if (nowRel > frameDelta)
+                    nowRel = frameDelta;
 
-            long frameDelta = recording[i].Delta;
-            long nowRel = deltaSum - (recording[i].DeltaSum - recording[startI].DeltaSum);
-            if (nowRel < 0)
-                nowRel = 0;
-            if (nowRel > frameDelta)
-                nowRel = frameDelta;
+                Frame frame = Lerp(recording[i - 1], recording[i], (float)((double)nowRel / frameDelta));
 
-            Frame frame = Lerp(recording[i - 1], recording[i], (float)((double)nowRel / frameDelta));
+                long dt = Velo.GameTime.Ticks - recording[i - 1].Time;
+                forceGrapple |=
+                    (!player.grappling &&
+                    (recording[i - 1].Flags & (1 << (int)EFlags.GRAPPLING)) != 0 &&
+                    (recording[i].Flags & (1 << (int)EFlags.GRAPPLING)) != 0) ||
+                    (!player.grapple.connected &&
+                    (recording[i - 1].Flags & (1 << (int)EFlags.SWINGING)) != 0 &&
+                    (recording[i].Flags & (1 << (int)EFlags.SWINGING)) != 0);
 
-            long dt = Velo.GameTime.Ticks - recording[i - 1].Time;
-            forceGrapple |=
-                (!player.grappling &&
-                (recording[i - 1].Flags & (1 << (int)EFlags.GRAPPLING)) != 0 &&
-                (recording[i].Flags & (1 << (int)EFlags.GRAPPLING)) != 0) ||
-                (!player.grapple.connected &&
-                (recording[i - 1].Flags & (1 << (int)EFlags.SWINGING)) != 0 &&
-                (recording[i].Flags & (1 << (int)EFlags.SWINGING)) != 0);
-
-            float grapDirX = recording[i].GrapPosX > recording[i - 1].GrapPosX ? 1f : (recording[i].GrapPosX < recording[i - 1].GrapPosX ? -1f : 0f);
-            frame.Apply(player, dt, setFlags: true, forceGrapple: forceGrapple || Type == EPlaybackType.SET_GHOST, grapDirX: grapDirX);
-
+                float grapDirX = recording[i].GrapPosX > recording[i - 1].GrapPosX ? 1f : (recording[i].GrapPosX < recording[i - 1].GrapPosX ? -1f : 0f);
+                frame.Apply(player, dt, setFlags: true, forceGrapple: forceGrapple || Type == EPlaybackType.SET_GHOST, grapDirX: grapDirX);
+            }
+            else
+            {
+                recording[0].Apply(player, 0, setFlags: true);
+            }
             Velo.measure("physics");
             player.UpdateHitbox();
             player.UpdateSprite(CEngine.CEngine.Instance.gameTime);

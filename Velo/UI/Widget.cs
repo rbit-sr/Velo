@@ -713,7 +713,7 @@ namespace Velo
                         child.Widget.RequestedSize.X :
                         child.Widget.RequestedSize.Y;
                 }
-                else if (size < 0)
+                else if (size < 0f)
                 {
                     if (i == lastWeighted)
                         size = remainingWeightedSize;
@@ -1237,18 +1237,30 @@ namespace Velo
 
     public class ScrollW<W> : Widget, IDecoratorW<W> where W : class, IWidget
     {
+        public enum EOrientation
+        {
+            HORIZONTAL, VERTICAL
+        }
+
         public W Child { get; set; }
+        private readonly EOrientation orientation;
         private readonly EmptyW scrollBar;
         private float scroll = 0f;
         private float targetScroll = 0f;
         private bool scrollBarPicked = false;
-        private float scrollBarPickY;
+        private float scrollBarPickXY;
         private float scrollBarPickScroll;
-        private float mouseY;
+        private float mouseXY;
 
-        public ScrollW(W child = null)
+        public float AutoscrollDelay = -1f;
+        public float AutoscrollSpeed = 0f;
+        private float waitedTime = 0f;
+        private bool autoscrollState = false;
+
+        public ScrollW(EOrientation orientation, W child = null)
         {
             Child = child;
+            this.orientation = orientation;
             scrollBar = new EmptyW
             {
                 BackgroundVisible = true,
@@ -1284,8 +1296,15 @@ namespace Velo
                 scrollBarPicked = false;
 
             bool mouseInside = CheckMouseInside(events.MousePos);
+
+            mouseXY = orientation == EOrientation.HORIZONTAL ? events.MousePos.X : events.MousePos.Y;
+
+            bool canScroll = 
+                orientation == EOrientation.HORIZONTAL ? 
+                Child.Size.X > Size.X : 
+                Child.Size.Y > Size.Y;
             
-            if (!DisableInput && mouseInside && mouseInsideParent && Child.Size.Y > Size.Y)
+            if (!DisableInput && mouseInside && mouseInsideParent && canScroll)
             {
                 events.OnScroll = wevent =>
                 {
@@ -1296,13 +1315,11 @@ namespace Velo
                     events.OnClick = wevent =>
                     {
                         scrollBarPicked = true;
-                        scrollBarPickY = events.MousePos.Y;
+                        scrollBarPickXY = mouseXY;
                         scrollBarPickScroll = scroll;
                     };
                 }
             }
-
-            mouseY = events.MousePos.Y;
         }
 
         public override void UpdateBounds(Bounds parentBounds)
@@ -1314,28 +1331,54 @@ namespace Velo
             Vector2 requestedSize = childRequestedSize;
             childRequestedSize = Vector2.One * float.NegativeInfinity;
 
-            if (!scrollBarPicked)
+            float maxScroll =
+                    orientation == EOrientation.HORIZONTAL ?
+                    requestedSize.X - Size.X :
+                    requestedSize.Y - Size.Y;
+
+            float dt = (float)Velo.RealDelta.TotalSeconds;
+            if (dt > 1f)
+                dt = 1f;
+
+            waitedTime += dt;
+            if (AutoscrollDelay != -1f && maxScroll > 0f && waitedTime >= AutoscrollDelay)
             {
-                if (targetScroll > requestedSize.Y - Size.Y)
+                if (!autoscrollState)
                 {
-                    targetScroll = requestedSize.Y - Size.Y;
+                    scroll += AutoscrollSpeed * dt;
+                    if (scroll > maxScroll)
+                    {
+                        scroll = maxScroll;
+                        waitedTime = 0f;
+                        autoscrollState = true;
+                    }
+                }
+                else
+                {
+                    scroll = 0f;
+                    waitedTime = 0f;
+                    autoscrollState = false;
+                }
+                targetScroll = scroll;
+            }
+            else if (!scrollBarPicked)
+            {
+                if (targetScroll > maxScroll)
+                {
+                    targetScroll = maxScroll;
                 }
                 if (targetScroll < 0)
                 {
                     targetScroll = 0;
                 }
-                if (scroll > requestedSize.Y - Size.Y)
+                if (scroll > maxScroll)
                 {
-                    scroll = requestedSize.Y - Size.Y;
+                    scroll = maxScroll;
                 }
                 if (scroll < 0)
                 {
                     scroll = 0;
                 }
-
-                float dt = (float)Velo.RealDelta.TotalSeconds;
-                if (dt > 1f)
-                    dt = 1f;
 
                 if (scroll != targetScroll)
                 {
@@ -1347,10 +1390,14 @@ namespace Velo
             }
             else
             {
-                scroll = scrollBarPickScroll + (mouseY - scrollBarPickY) * requestedSize.Y / Size.Y;
-                if (scroll > requestedSize.Y - Size.Y)
+                float ratio =
+                    orientation == EOrientation.HORIZONTAL ?
+                    requestedSize.X / Size.X :
+                    requestedSize.Y / Size.Y;
+                scroll = scrollBarPickScroll + (mouseXY - scrollBarPickXY) * ratio;
+                if (scroll > maxScroll)
                 {
-                    scroll = requestedSize.Y - Size.Y;
+                    scroll = maxScroll;
                 }
                 if (scroll < 0)
                 {
@@ -1359,12 +1406,19 @@ namespace Velo
                 targetScroll = scroll;
             }
 
-            if (requestedSize.Y > Size.Y)
+            if (maxScroll > 0f)
             {
                 scrollBar.Visible = true;
                 scrollBar.Hoverable = true;
-                scrollBar.Position = Position + new Vector2(Size.X - ScrollBarWidth, Size.Y * scroll / requestedSize.Y);
-                scrollBar.Size = new Vector2(ScrollBarWidth, Size.Y * Size.Y / requestedSize.Y);
+                scrollBar.Position = Position + (
+                    orientation == EOrientation.HORIZONTAL ?
+                    new Vector2(Size.X * scroll / requestedSize.X, Size.Y - ScrollBarWidth) :
+                    new Vector2(Size.X - ScrollBarWidth, Size.Y * scroll / requestedSize.Y)
+                    );
+                scrollBar.Size = 
+                    orientation == EOrientation.HORIZONTAL ?
+                    new Vector2(Size.X * Size.X / requestedSize.X, ScrollBarWidth) :
+                    new Vector2(ScrollBarWidth, Size.Y * Size.Y / requestedSize.Y);
                 scrollBar.UpdateBounds(Bounds);
             }
             else
@@ -1373,8 +1427,15 @@ namespace Velo
                 scrollBar.Hoverable = false;
             }
 
-            Child.Position = new Vector2(Position.X, Position.Y - scroll) + Offset;
-            Child.Size = new Vector2(Size.X, requestedSize.Y);
+            Child.Position = 
+                (orientation == EOrientation.HORIZONTAL ?
+                new Vector2(Position.X - scroll, Position.Y) :
+                new Vector2(Position.X, Position.Y - scroll))
+                + Offset;
+            Child.Size = 
+                orientation == EOrientation.HORIZONTAL ?
+                new Vector2(requestedSize.X, Size.Y) :
+                new Vector2(Size.X, requestedSize.Y);
             Child.UpdateBounds(Bounds);
         }
 
@@ -1403,9 +1464,37 @@ namespace Velo
         }
     }
 
+    public class HScrollW<W> : ScrollW<W> where W : class, IWidget
+    {
+        public HScrollW(W child) : base(EOrientation.HORIZONTAL, child)
+        {
+        }
+    }
+
+    public class VScrollW<W> : ScrollW<W> where W : class, IWidget
+    {
+        public VScrollW(W child) : base(EOrientation.VERTICAL, child)
+        {
+        }
+    }
+
     public class ScrollW : ScrollW<IWidget>, IDecoratorW
     {
-        public ScrollW(IWidget child) : base(child)
+        public ScrollW(EOrientation orientation, IWidget child) : base(orientation, child)
+        {
+        }
+    }
+
+    public class HScrollW : ScrollW
+    {
+        public HScrollW(IWidget child) : base(EOrientation.HORIZONTAL, child)
+        {
+        }
+    }
+
+    public class VScrollW : ScrollW
+    {
+        public VScrollW(IWidget child) : base(EOrientation.VERTICAL, child)
         {
         }
     }
@@ -1652,6 +1741,8 @@ namespace Velo
 
                     textDraw.Text = string.Join("\n", textLines);
                 }
+                else
+                    textDraw.Text = Text;
                 updateTextCrop = false;
             }
             textDraw.Offset = new Vector2(Position.X + Size.X * Align.X, Position.Y + Size.Y * Align.Y) + Padding + Offset;
@@ -2014,7 +2105,7 @@ namespace Velo
             headers = new HLayoutW();
             columns = new List<TableColumn<T>>();
             list = new ListW<T>(this);
-            scroll = new ScrollW(list);
+            scroll = new VScrollW(list);
 
             AddChild(headers, headerHeight);
             AddChild(scroll, FILL);

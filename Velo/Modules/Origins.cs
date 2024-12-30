@@ -214,7 +214,7 @@ namespace Velo
 
         private readonly LabelW title;
         private readonly LabelW info;
-        private readonly ScrollW scroll;
+        private readonly VScrollW scroll;
         private readonly ListW<OriginMap> list;
 
         public OriginsMenu(OrContext context) :
@@ -230,7 +230,7 @@ namespace Velo
             list = new ListW<OriginMap>(this);
             Style.ApplyList(list);
 
-            scroll = new ScrollW(list);
+            scroll = new VScrollW(list);
             Style.ApplyScroll(scroll);
 
             info = new LabelW("", context.Fonts.FontMedium)

@@ -112,7 +112,7 @@ namespace Velo
             ExampleSetting2 = AddFloat("example 2", 3f, 1f, 5f);
         }
 
-        public static ModPortal Instance = new ModPortal();
+        public static ModPortal Instance/* = new ModPortal()*/;
 
         public override void Init()
         {

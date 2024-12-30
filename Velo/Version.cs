@@ -2,8 +2,8 @@
 {
     public class Version
     {
-        public static readonly ushort VERSION = 55;
-        public static readonly string VERSION_NAME = "2.2.19";
+        public static readonly ushort VERSION = 58;
+        public static readonly string VERSION_NAME = "2.2.20";
         public static readonly string AUTHOR = "rbit, olsu";
 
         public static readonly ushort MIN_SAVESTATE_VERSION = 35;

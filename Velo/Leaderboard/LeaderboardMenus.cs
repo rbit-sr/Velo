@@ -104,7 +104,7 @@ namespace Velo
     public class PlayerEntry : HLayoutW
     {
         private readonly ImageW image;
-        private readonly LabelW label;
+        private readonly HScrollW<LabelW> label;
 
         private readonly RunInfo run;
 
@@ -116,20 +116,25 @@ namespace Velo
                 return;
 
             image = new ImageW(null);
-            label = new LabelW("", font)
+            label = new HScrollW<LabelW>(new LabelW("", font)
             {
-                Align = new Vector2(0f, 0.5f)
+                Align = new Vector2(0f, 0.5f),
+                CropText = false
+            })
+            {
+                AutoscrollDelay = 2f,
+                AutoscrollSpeed = 50f
             };
 
             AddChild(image, 33f);
             AddSpace(4f);
             AddChild(label, FILL);
-            Style.ApplyText(label);
+            Style.ApplyText(label.Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
-                label.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                label.Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
 
             image.Image = SteamCache.GetAvatar(run.PlayerId);
-            label.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
+            label.Child.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -138,35 +143,41 @@ namespace Velo
                 return;
 
             image.Image = SteamCache.GetAvatar(run.PlayerId);
-            label.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
+            label.Child.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
 
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
     }
 
-    public class TimeEntry : LabelW
+    public class TimeEntry : HScrollW<LabelW>
     {
         public TimeEntry(CachedFont font, RunInfo run) :
-            base("", font)
+            base(new LabelW("", font)
+            {
+                CropText = false
+            })
         {
-            Align = new Vector2(0f, 0.5f);
-            Style.ApplyText(this);
+            Child.Align = new Vector2(0f, 0.5f);
+            Style.ApplyText(Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
-                Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+
+            AutoscrollDelay = 2f;
+            AutoscrollSpeed = 50f;
 
             if (run.Id == -1)
             {
-                Text = "";
+                Child.Text = "";
             }
             else
             {
                 long time = run.RunTime;
-                Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value);
+                Child.Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value);
                 if (run.SpeedrunCom == 1)
                 {
-                    int lastDigit = Text.LastIndexOf('9');
+                    int lastDigit = Child.Text.LastIndexOf('9');
                     if (lastDigit != -1)
-                        Text = Text.Remove(lastDigit, 1).Insert(lastDigit, "*");
+                        Child.Text = Child.Text.Remove(lastDigit, 1).Insert(lastDigit, "*");
                 }
             }
         }
@@ -204,30 +215,37 @@ namespace Velo
         }
     }
 
-    public class MapEntry : LabelW
+    public class MapEntry : HScrollW<LabelW>
     {
         private RunInfo run;
         
         public MapEntry(CachedFont font, RunInfo run) :
-            base("", font)
+            base(
+                new LabelW("", font)
+                {
+                    CropText = false
+                })
         {
             this.run = run;
-            
-            Align = new Vector2(0f, 0.5f);
-            Style.ApplyText(this);
+
+            AutoscrollDelay = 2f;
+            AutoscrollSpeed = 50f;
+
+            Child.Align = new Vector2(0f, 0.5f);
+            Style.ApplyText(Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
-                Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
             if (run.Id == -1)
             {
-                Text = "";
+                Child.Text = "";
             }
             else
             {
-                Text = Map.MapIdToName(run.Category.MapId);
+                Child.Text = Map.MapIdToName(run.Category.MapId);
             }
 
             base.Draw(hovered, parentCropRec, scale, opacity);
@@ -255,22 +273,29 @@ namespace Velo
         }
     }
 
-    public class AllMapEntry : LabelW
+    public class AllMapEntry : HScrollW<LabelW>
     {
         private readonly ulong mapId;
 
         public AllMapEntry(CachedFont font, ulong mapId) :
-            base("", font)
+            base(
+                new LabelW("", font)
+                {
+                    CropText = false
+                })
         {
             this.mapId = mapId;
 
-            Align = new Vector2(0f, 0.5f);
-            Style.ApplyText(this);
+            AutoscrollDelay = 2f;
+            AutoscrollSpeed = 50f;
+
+            Child.Align = new Vector2(0f, 0.5f);
+            Style.ApplyText(Child);
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            Text = Map.MapIdToName(mapId);
+            Child.Text = Map.MapIdToName(mapId);
 
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
@@ -289,7 +314,8 @@ namespace Velo
 
             time = new LabelW("", font)
             {
-                Align = new Vector2(!compact ? 0f : 1f, 0.5f)
+                Align = new Vector2(!compact ? 0f : 1f, 0.5f),
+                CropText = false
             };
 
             if (!compact)
@@ -303,7 +329,7 @@ namespace Velo
             {
                 AddChild(player, FILL);
                 AddSpace(10);
-                AddChild(time, 170);
+                AddChild(time, REQUESTED_SIZE);
             }
             Style.ApplyText(time);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
@@ -500,7 +526,7 @@ namespace Velo
                     Style.ApplyText(comments);
                     comments.Align = Vector2.Zero;
                     comments.Padding = 10f * Vector2.One;
-                    ScrollW scroll = new ScrollW(comments)
+                    VScrollW scroll = new VScrollW(comments)
                     {
                         BackgroundColor = () => new Color(20, 20, 20, 150),
                         BackgroundVisible = true,
@@ -736,6 +762,7 @@ namespace Velo
 
             table.AddColumn("#", 50, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
             table.AddColumn("Player", FILL, (run) => new PlayerEntry(context.Fonts.FontMedium, run));
+            table.AddSpace(10f);
             table.AddColumn("Time", 200, (run) => new TimeEntry(context.Fonts.FontMedium, run));
             table.AddColumn("Age", 200, (run) => new AgeEntry(context.Fonts.FontMedium, run));
         }
@@ -1003,6 +1030,7 @@ namespace Velo
 
             int colWidth = filter != EFilter.OTHER && filter != EFilter.ORIGINS ? 230 : 280;
             table.AddColumn("Map", FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium, runs.MapId));
+            table.AddSpace(10f);
             if (filter != EFilter.ORIGINS)
             {
                 table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.NewLap));
@@ -1243,6 +1271,7 @@ namespace Velo
 
             int colWidth = (filter != EFilter.OTHER && filter != EFilter.ORIGINS) ? 230 : 380;
             table.AddColumn("Map", FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium, runs.MapId));
+            table.AddSpace(10f);
             if (filter != EFilter.ORIGINS)
             {
                 table.AddColumn("New Lap", colWidth, runs => new PlayerTimeEntry(context.Fonts.FontMedium, runs.NewLap, compact: filter == EFilter.OTHER));
@@ -1529,8 +1558,10 @@ namespace Velo
             this.filter = filter;
 
             table.AddColumn("Map", FILL, (run) => new MapEntry(context.Fonts.FontMedium, run));
+            table.AddSpace(10f);
             table.AddColumn("Category", 170f, (run) => new CategoryEntry(context.Fonts.FontMedium, run));
-            table.AddColumn("Player", 350f, (run) => new PlayerEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("Player", 340f, (run) => new PlayerEntry(context.Fonts.FontMedium, run));
+            table.AddSpace(10f);
             table.AddColumn("Time", 170f, (run) => new TimeEntry(context.Fonts.FontMedium, run));
             table.AddColumn("Age", 150f, (run) => new AgeEntry(context.Fonts.FontMedium, run));
             table.AddColumn("#", 40f, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
@@ -1819,7 +1850,7 @@ namespace Velo
     public class LbRulesMenuPage : LbMenuPage
     {
         protected LabelW rules;
-        protected ScrollW scroll;
+        protected VScrollW scroll;
 
         public LbRulesMenuPage(LbContext context) :
             base(context, "Rules")
@@ -1831,7 +1862,7 @@ namespace Velo
             };
             Style.ApplyText(rules);
 
-            scroll = new ScrollW(rules)
+            scroll = new VScrollW(rules)
             {
                 BackgroundVisible = true,
                 BackgroundColor = () => SettingsUI.Instance.EntryColor2.Value.Get(),
@@ -2004,7 +2035,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
         private readonly LabelW title;
         private readonly ButtonW compactButton;
         private readonly ListW<ulong> maps;
-        private readonly ScrollW scroll;
+        private readonly VScrollW scroll;
         private readonly VLayoutW layout;
         private readonly FadeW move;
 
@@ -2030,7 +2061,7 @@ you can see whether it was applied for a run under ""Fix BG"".";
             maps = new ListW<ulong>(this);
             Style.ApplyList(maps);
             
-            scroll = new ScrollW(maps);
+            scroll = new VScrollW(maps);
 
             layout = new VLayoutW();
             layout.AddChild(headerLayout, 25f);

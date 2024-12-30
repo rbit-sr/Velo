@@ -1036,62 +1036,86 @@ namespace Velo
 
         public static Vector2 get_origin(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].Origin.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.Origin.Value;
+            return character.Origin;
         }
 
         public static Vector2 get_position(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].Position.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.Position.Value;
+            return character.Position;
         }
 
         public static Vector2 get_rope_offset(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].RopeOffset.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.RopeOffset.Value;
+            return character.RopeOffset;
         }
 
         public static Vector2 get_swing_origin(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingOrigin.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.SwingOrigin.Value;
+            return character.SwingOrigin;
         }
 
         public static Vector2 get_swing_position(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingPosition.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.SwingPosition.Value;
+            return character.SwingPosition;
         }
 
         public static Vector2 get_swing_offset(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].SwingOffset.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.SwingOffset.Value;
+            return character.SwingOffset;
         }
 
         public static Vector2 get_taunt_origin(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].TauntOrigin.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.TauntOrigin.Value;
+            return character.TauntOrigin;
         }
 
         public static Vector2 get_taunt_position(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].TauntPosition.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.TauntPosition.Value;
+            return character.TauntPosition;
         }
 
         public static Vector2 get_climb_origin(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].ClimbOrigin.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.ClimbOrigin.Value;
+            return character.ClimbOrigin;
         }
 
         public static Vector2 get_climb_position(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].ClimbPosition.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.ClimbPosition.Value;
+            return character.ClimbPosition;
         }
 
         public static Vector2 get_scale(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].Scale.Value;
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.Scale.Value;
+            return character.Scale;
         }
 
         public static Color get_character_select_background_color(ICharacter character)
         {
-            return Miscellaneous.Instance.SkinConstantsLookup[character].CharacterSelectBackgroundColor.Value.Get();
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+                return v.CharacterSelectBackgroundColor.Value.Get();
+            return character.CharacterSelectBackgroundColor;
         }
 
         public class Message

@@ -68,7 +68,7 @@ namespace Velo
         }
 
         private readonly ListW<TestEntity> list;
-        private readonly ScrollW scroll;
+        private readonly VScrollW scroll;
 
         private readonly ECategory category;
 
@@ -80,7 +80,7 @@ namespace Velo
             list = new ListW<TestEntity>(this);
             Style.ApplyList(list);
 
-            scroll = new ScrollW(list);
+            scroll = new VScrollW(list);
             Style.ApplyScroll(scroll);
 
             AddChild(scroll, FILL);

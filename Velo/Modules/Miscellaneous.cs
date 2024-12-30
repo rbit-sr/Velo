@@ -6,7 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
 namespace Velo
@@ -136,7 +135,10 @@ namespace Velo
         public EnumSetting<EInput> MiddleButton;
         public EnumSetting<EInput> X1Button;
         public EnumSetting<EInput> X2Button;
+        public IntSetting PlayerNumber;
         public BoolSetting OverwriteInputs;
+        public BoolSetting LockCursor;
+        public VectorSetting LockCursorPosition;
 
         public BoolSetting EnableLayering;
         public BoolSetting SelectFrontmostObject;
@@ -239,7 +241,20 @@ namespace Velo
             MiddleButton = AddEnum("middle button", EInput.NONE, labels);
             X1Button = AddEnum("X1 button", EInput.NONE, labels);
             X2Button = AddEnum("X2 button", EInput.NONE, labels);
+            PlayerNumber = AddInt("player number", 1, 1, 4);
             OverwriteInputs = AddBool("overwrite inputs", false);
+            LockCursor = AddBool("lock cursor", false);
+            LockCursorPosition = AddVector("lock cursor position", new Vector2(960f, 540f), Vector2.Zero, new Vector2(1920f * 2f, 1080f * 2f));
+
+            PlayerNumber.Tooltip =
+                "the player to control with mouse";
+            OverwriteInputs.Tooltip =
+                "Overwrites the original binds so they become unusable.";
+            LockCursor.Tooltip =
+                "Locks the mouse cursor to a fixed position while ingame. " +
+                "It automatically unlocks when not ingame, entering chat or pausing.";
+            LockCursorPosition.Tooltip =
+                "the position to lock the mouse cursor at";
 
             NewCategory("level editor");
             EnableLayering = AddBool("enable layering", false);
@@ -287,6 +302,23 @@ namespace Velo
         public override void PreUpdate()
         {
             base.PreUpdate();
+
+            if (
+                LockCursor.Value && 
+                Velo.Ingame && 
+                !Velo.PauseMenu && 
+                !Main.game.stack.baseModule.chat.Enabled && 
+                !Util.MouseInputsDisabled() &&
+                Input.Focused)
+            {
+                Rectangle window = Velo.CEngineInst.Game.Window.ClientBounds;
+                Vector2 position = new Vector2(window.X, window.Y) + LockCursorPosition.Value;
+                if (position.X > window.Right)
+                    position.X = window.Right;
+                if (position.Y > window.Bottom)
+                    position.Y = window.Bottom;
+                Cursor.Position = new System.Drawing.Point((int)position.X, (int)position.Y);
+            }
 
             if (ReloadKey.Pressed())
                 ReloadContents();
@@ -508,7 +540,7 @@ namespace Velo
             bool dummy = false;
             ref bool playerInput = ref dummy;
 
-            bool mirrored = player.slot != null && player.gameInfo.isOption(2);
+            bool mirrored = player.slot != null && player.gameInfo.isOption((int)EGameOptions.SRENNUR_DEEPS);
             switch (input)
             {
                 case EInput.LEFT:
@@ -563,7 +595,9 @@ namespace Velo
         public void SetMouseInputs(Player player)
         {
             //if (!Util.IsFocused())
-               // return;
+            // return;
+            if (PlayerNumber.Value - 1 != player.slot.Index)
+                return;
             SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton));
             SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton));
             SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton));
