@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using System.IO;
 using static Velo.Frame;
+using Steamworks;
 
 namespace Velo
 {
@@ -646,6 +647,9 @@ namespace Velo
         public EPlaybackType Type;
         public int GhostIndex;
 
+        public byte ItemId;
+        public byte ItemIdPrev;
+
         public Action<Recording, EPlaybackType> OnFinish;
 
         private readonly Savestate savestatePreVerify = new Savestate();
@@ -702,6 +706,9 @@ namespace Velo
                 Velo.ModuleSolo.camera1.position = Velo.MainPlayer.actor.Bounds.Center + new Vector2(0f, -100f);
             deltaSum = 0;
             discrepancy = 0d;
+
+            ItemId = (byte)EItem.NONE;
+            ItemIdPrev = (byte)EItem.NONE;
         }
 
         public void Stop()
@@ -900,6 +907,9 @@ namespace Velo
 
             if (holdingTime > 0f)
                 return;
+
+            ItemIdPrev = ItemId;
+            ItemId = player.item_id;
 
             if (Type == EPlaybackType.VERIFY)
             {

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System;
 using System.Linq;
+using Steamworks;
 
 namespace Velo
 {
@@ -184,6 +185,12 @@ namespace Velo
         {
             return RunsDatabase.Instance.EventTime / TimeSpan.TicksPerSecond >= To;
         }
+    }
+
+    public struct MapEventWithRun
+    {
+        public MapEvent Event;
+        public RunInfo Run;
     }
 
     public class RunsDatabase : Module, IComparer<int>
@@ -595,6 +602,72 @@ namespace Velo
             return new MapEvent { From = 0, To = 0 };
         }
 
+        public IEnumerable<MapEventWithRun> GetEventsWithWRs()
+        {
+            List<MapEventWithRun> events = new List<MapEventWithRun>();
+            
+            foreach (KeyValuePair<ulong, MapEvent> e in mapEvents.Where(pair => !pair.Value.CurrentlyNotRunning()))
+            {
+                Category category = new Category { MapId = e.Key, TypeId = (ulong)ECategoryType.EVENT };
+
+                RunInfo run;
+
+                if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
+                    run = new RunInfo { Id = -1, PlayerId = 0, Category = new Category { MapId = e.Key, TypeId = (ulong)e.Value.CategoryType } };
+                else
+                {
+                    int index = runsForCategory.FindIndex(i => allRuns[i].Place == 0);
+                    if (index == -1)
+                        run = new RunInfo { Id = -1, PlayerId = 0, Category = new Category { MapId = e.Key, TypeId = (ulong)e.Value.CategoryType } };
+                    else
+                    {
+                        run = allRuns[runsForCategory[index]];
+                        run.Category.TypeId = (ulong)e.Value.CategoryType;
+                    }
+                }
+
+                events.Add(new MapEventWithRun { Event = e.Value, Run = run });
+            }
+            events.Sort((e1, e2) =>
+            {
+                return Map.StandardOrder(e1.Run.Category.MapId, e2.Run.Category.MapId);
+            });
+            return events;
+        }
+
+        public IEnumerable<MapEventWithRun> GetEventsWithYourPBs()
+        {
+            List<MapEventWithRun> events = new List<MapEventWithRun>();
+
+            foreach (KeyValuePair<ulong, MapEvent> e in mapEvents.Where(pair => !pair.Value.CurrentlyNotRunning()))
+            {
+                Category category = new Category { MapId = e.Key, TypeId = (ulong)ECategoryType.EVENT };
+
+                RunInfo run;
+
+                if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
+                    run = new RunInfo { Id = -1, PlayerId = 0, Category = new Category { MapId = e.Key, TypeId = (ulong)e.Value.CategoryType } };
+                else
+                {
+                    int index = runsForCategory.FindIndex(i => allRuns[i].PlayerId == SteamUser.GetSteamID().m_SteamID);
+                    if (index == -1)
+                        run = new RunInfo { Id = -1, PlayerId = 0, Category = new Category { MapId = e.Key, TypeId = (ulong)e.Value.CategoryType } };
+                    else
+                    {
+                        run = allRuns[runsForCategory[index]];
+                        run.Category.TypeId = (ulong)e.Value.CategoryType;
+                    }
+                }
+
+                events.Add(new MapEventWithRun { Event = e.Value, Run = run });
+            }
+            events.Sort((e1, e2) =>
+            {
+                return Map.StandardOrder(e1.Run.Category.MapId, e2.Run.Category.MapId);
+            });
+            return events;
+        }
+
         public IEnumerable<ulong> GetPopularThisWeek()
         {
             return popularThisWeek;
@@ -799,10 +872,17 @@ namespace Velo
                 Map.MapIdToName(mapId); // refresh cache
                 if (!initRequest)
                 {
-                    initHandler.Push(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
-                    initHandler.Push(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
+                    initHandler.Push(new GetPlayerPBsRequest(SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
+                    initHandler.Push(new GetPlayerEventPBsRequest(SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
+                    initHandler.Push(new GetPlayerPBsNonCuratedRequest(SteamUser.GetSteamID().m_SteamID), runs => Add(runs, true));
                     initHandler.Push(new SendPlayerNameRequest());
-                    initHandler.Push(new GetEventsRequest());
+                    initHandler.Push(new GetEventsRequest(), events =>
+                    {
+                        mapEvents.Clear();
+                        foreach (var pair in events)
+                            mapEvents.Add(pair.Key, pair.Value);
+                        eventTime = getRunHandler.Time;
+                    });
                     initHandler.Run();
                     initRequest = true;
                 }

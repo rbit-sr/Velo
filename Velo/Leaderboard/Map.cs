@@ -1,12 +1,13 @@
 ﻿using Steamworks;
 using System;
 using System.Collections.Generic;
+using static System.Net.WebRequestMethods;
 
 namespace Velo
 {
     public class Map
     {
-        public static readonly ulong CURATED_COUNT = 85;
+        public static readonly ulong CURATED_COUNT = 88;
 
         // contains curated maps (official and RWS and origins) by level title and maps it to their Velo map ID
         private static readonly Dictionary<string, ulong> CuratedMapNameToId = new Dictionary<string, ulong>
@@ -30,32 +31,20 @@ namespace Velo
             { "Lab v2", 16 },
             { "Citadel", 17 },
             { "City Run R2", 18 },
-            { "Club House", 19 },
             { "Club V", 20 },
-            { "Coastline", 21 },
             { "Dance Hall", 22 },
-            { "Dash the night", 23 },
-            { "Disco Lounge", 24 },
-            { "Dragon City", 25 },
-            { "Genetics", 26 },
-            { "Gift Store", 27 },
-            { "Granary", 28 },
-            { "Lunar Colony", 29 },
             { "Minery", 30 },
             { "New Age City", 31 },
-            { "Oasis", 32 },
             { "Oasis - Abyss", 33 },
             { "Oceanslide", 34 },
             { "Pitfall", 35 },
             { "Plantation", 36 },
             { "Shore Enuff", 37 },
             { "Snowed In", 38 },
-            { "Sound Shiver", 39 },
             { "SpeedCity Nights", 40 },
-            { "Surfing in the oasis", 41 },
-            { "Terminal", 42 },
             { "Texas Run'em", 43 },
-            { "Void", 44 }
+            { "Aztec", 85 },
+            { "Titan", 87 }
         };
 
         // contains curated maps (old RWS) by file IDs and maps it to their Velo map ID
@@ -63,13 +52,28 @@ namespace Velo
         {
             { 459395096UL, 45 }, // Arctic
             { 355112213UL, 46 }, // Boardwalk
+            { 2376184180UL, 19 }, // Club House
+            { 3408572013UL, 21 }, // Coastline
+            { 508262300UL, 23 }, // Dash the night
+            { 3157484074UL, 24 }, // Disco Lounge
+            { 3408573248UL, 25 }, // Dragon City
+            { 3408575314UL, 26 }, // Genetics
+            { 355841009UL, 27 }, // Gift Store
+            { 3408573618UL, 28 }, // Granary
+            { 3366953228UL, 86 }, // Jungle Juice
+            { 1739949510UL, 29 }, // Lunar Colony
             { 366868469UL, 47 }, // Mall
             { 684228943UL, 48 }, // Metalworks
+            { 3408575662UL, 32 }, // Oasis
             { 373772831UL, 49 }, // Park
             { 318216468UL, 50 }, // Rainx Laboratory
             { 726451361UL, 51 }, // Rush Ring
             { 947525541UL, 52 }, // Safari Park r45
+            { 3408574055UL, 39 }, // Sound Shiver
             { 510517129UL, 53 }, // SubWave 1.4
+            { 3431632319UL, 41 }, // Surfing in the Oasis
+            { 3408574219UL, 42 }, // Terminal
+            { 3408574449UL, 44 }, // Void
             { 389154478UL, 54 } // Winds Peak
         };
 
@@ -121,6 +125,20 @@ namespace Velo
             }
             names[6] = "Powerplant";
             names[16] = "Laboratory";
+            names[19] = "Club House";
+            names[21] = "Coastline";
+            names[23] = "Dash the night";
+            names[24] = "Disco Lounge";
+            names[25] = "Dragon City";
+            names[26] = "Genetics";
+            names[27] = "Gift Store";
+            names[28] = "Granary";
+            names[29] = "Lunar Colony";
+            names[32] = "Oasis";
+            names[39] = "Sound Shiver";
+            names[41] = "Surfing in the Oasis";
+            names[42] = "Terminal";
+            names[44] = "Void";
             names[45] = "Arctic";
             names[46] = "Boardwalk";
             names[47] = "Mall";
@@ -161,6 +179,7 @@ namespace Velo
             names[82] = "VR Mission X";
             names[83] = "Final Challenge";
             names[84] = "Unused";
+            names[86] = "Jungle Juice";
             return names;
         })();
 
@@ -232,6 +251,43 @@ namespace Velo
             return ulong.MaxValue;
         }
 
+        public static int GetPage(ulong mapId)
+        {
+            if (IsOfficial(mapId))
+                return 0;
+            if (IsRWS(mapId))
+                return 1;
+            if (IsOldRWS(mapId))
+                return 2;
+            if (IsOrigins(mapId))
+                return 3;
+            return 4;
+        }
+
+        public static int StandardOrder(ulong id1, ulong id2)
+        {
+            int page1 = GetPage(id1);
+            int page2 = GetPage(id2);
+
+            if (page1 != page2)
+                return page1.CompareTo(page2);
+            
+            switch (page1)
+            {
+                case 0:
+                    return id1.CompareTo(id2);
+                case 1:
+                    return MapIdToName(id1).CompareTo(MapIdToName(id2));
+                case 2:
+                    return MapIdToName(id1).CompareTo(MapIdToName(id2));
+                case 3:
+                    return id1.CompareTo(id2);
+                case 4:
+                    return MapIdToName(id1).CompareTo(MapIdToName(id2));
+            }
+            return 0;
+        }
+
         public static bool IsOfficial(ulong mapId)
         {
             return mapId <= 16;
@@ -239,12 +295,25 @@ namespace Velo
 
         public static bool IsRWS(ulong mapId)
         {
-            return mapId >= 17 && mapId <= 44;
+            return 
+                ((mapId >= 17 && mapId <= 44) ||
+                (mapId >= 85 && mapId <= 87)) &&
+                !IsOldRWS(mapId);
         }
 
         public static bool IsOldRWS(ulong mapId)
         {
-            return mapId >= 45 && mapId <= 54;
+            return 
+                mapId == 19 ||
+                mapId == 21 ||
+                (mapId >= 23 && mapId <= 29) ||
+                mapId == 32 ||
+                mapId == 39 ||
+                mapId == 41 ||
+                mapId == 42 ||
+                mapId == 44 ||
+                mapId == 86 ||
+                mapId >= 45 && mapId <= 54;
         }
 
         public static bool IsOrigins(ulong mapId)

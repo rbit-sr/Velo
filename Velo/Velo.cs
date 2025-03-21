@@ -676,6 +676,13 @@ namespace Velo
                 return Appearance.Instance.RemoteColor.Value.Get();
         }
 
+        public static Vector2 get_afterimage_position(Player player)
+        {
+            Vector2 dir = player.actor.Velocity;
+            dir.Normalize();
+            return player.actor.Position - Appearance.Instance.AfterimagesOffset.Value * dir;
+        }
+
         public static Color get_win_star_color()
         {
             return Appearance.Instance.WinStarColor.Value.Get();
@@ -912,6 +919,21 @@ namespace Velo
             Miscellaneous.Instance.SetMouseInputs(player);
         }
 
+        public static bool is_jump_pressed(Player player, bool isPressed)
+        {
+            return Miscellaneous.Instance.IsJumpPressed(player, isPressed);
+        }
+
+        public static bool is_slide_pressed(Player player, bool isPressed)
+        {
+            return Miscellaneous.Instance.IsSlidePressed(player, isPressed);
+        }
+
+        public static bool is_boost_pressed(Player player, bool isPressed)
+        {
+            return Miscellaneous.Instance.IsBoostPressed(player, isPressed);
+        }
+
         public static bool level_editor_reset_released()
         {
             if (!Miscellaneous.Instance.UseResetBind.Value)
@@ -1034,86 +1056,86 @@ namespace Velo
             return new Vector2(-100f, -100f);
         }
 
-        public static Vector2 get_origin(ICharacter character)
+        public static Vector2 get_origin(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.Origin.Value;
             return character.Origin;
         }
 
-        public static Vector2 get_position(ICharacter character)
+        public static Vector2 get_position(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.Position.Value;
             return character.Position;
         }
 
-        public static Vector2 get_rope_offset(ICharacter character)
+        public static Vector2 get_rope_offset(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.RopeOffset.Value;
             return character.RopeOffset;
         }
 
-        public static Vector2 get_swing_origin(ICharacter character)
+        public static Vector2 get_swing_origin(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.SwingOrigin.Value;
             return character.SwingOrigin;
         }
 
-        public static Vector2 get_swing_position(ICharacter character)
+        public static Vector2 get_swing_position(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.SwingPosition.Value;
             return character.SwingPosition;
         }
 
-        public static Vector2 get_swing_offset(ICharacter character)
+        public static Vector2 get_swing_offset(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.SwingOffset.Value;
             return character.SwingOffset;
         }
 
-        public static Vector2 get_taunt_origin(ICharacter character)
+        public static Vector2 get_taunt_origin(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.TauntOrigin.Value;
             return character.TauntOrigin;
         }
 
-        public static Vector2 get_taunt_position(ICharacter character)
+        public static Vector2 get_taunt_position(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.TauntPosition.Value;
             return character.TauntPosition;
         }
 
-        public static Vector2 get_climb_origin(ICharacter character)
+        public static Vector2 get_climb_origin(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.ClimbOrigin.Value;
             return character.ClimbOrigin;
         }
 
-        public static Vector2 get_climb_position(ICharacter character)
+        public static Vector2 get_climb_position(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.ClimbPosition.Value;
             return character.ClimbPosition;
         }
 
-        public static Vector2 get_scale(ICharacter character)
+        public static Vector2 get_scale(ICharacter character, int variant)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, variant), out var v))
                 return v.Scale.Value;
             return character.Scale;
         }
 
         public static Color get_character_select_background_color(ICharacter character)
         {
-            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(character, out var v))
+            if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, 0), out var v))
                 return v.CharacterSelectBackgroundColor.Value.Get();
             return character.CharacterSelectBackgroundColor;
         }

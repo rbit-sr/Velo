@@ -324,6 +324,7 @@ namespace Velo
                 recorder.Stop();
                 playback.Stop();
                 playbackGhosts.ForEach(playback => playback.Stop());
+                playbackGhosts.Clear();
             }
 
             if (Rewind1Second.Pressed())
@@ -601,6 +602,14 @@ namespace Velo
         public int GhostPlaybackCount()
         {
             return playbackGhosts.Count;
+        }
+
+        public bool GhostPlaybackUsedItem()
+        {
+            return playbackGhosts.Any(playback =>
+            {
+                return playback.ItemIdPrev != (byte)EItem.NONE && playback.ItemIdPrev != playback.ItemId;
+            });
         }
 
         public bool IsOwnPlaybackFromLeaderboard()

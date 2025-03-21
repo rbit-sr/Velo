@@ -215,6 +215,31 @@ namespace Velo
         }
     }
 
+    public class RemainingTimeEntry : LabelW
+    {
+        private MapEvent mapEvent;
+
+        public RemainingTimeEntry(CachedFont font, MapEvent mapEvent, ulong wrHolder) :
+            base("", font)
+        {
+            this.mapEvent = mapEvent;
+
+            Align = new Vector2(0f, 0.5f);
+            Style.ApplyText(this);
+            if (wrHolder == SteamUser.GetSteamID().m_SteamID)
+                Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+        }
+
+        public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
+        {
+            long now = RunsDatabase.Instance.EventTime / TimeSpan.TicksPerSecond;
+            long diff = mapEvent.To - now;
+            Text = diff >= 0 ? Util.ApproxTime(diff) : "over";
+
+            base.Draw(hovered, parentCropRec, scale, opacity);
+        }
+    }
+
     public class MapEntry : HScrollW<LabelW>
     {
         private RunInfo run;
@@ -239,14 +264,7 @@ namespace Velo
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
         {
-            if (run.Id == -1)
-            {
-                Child.Text = "";
-            }
-            else
-            {
-                Child.Text = Map.MapIdToName(run.Category.MapId);
-            }
+            Child.Text = Map.MapIdToName(run.Category.MapId);
 
             base.Draw(hovered, parentCropRec, scale, opacity);
         }
@@ -262,14 +280,7 @@ namespace Velo
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
 
-            if (run.Id == -1)
-            {
-                Text = "";
-            }
-            else
-            {
-                Text = ((ECategoryType)run.Category.TypeId).Label();
-            }
+            Text = ((ECategoryType)run.Category.TypeId).Label();
         }
     }
 
@@ -821,7 +832,7 @@ namespace Velo
         private readonly LayoutChild showEventButtonChild;
         private readonly LayoutChild showEventButtonSpaceChild;
 
-        public LbMapMenuPage(LbContext context, ulong mapId) :
+        public LbMapMenuPage(LbContext context, ulong mapId, ECategoryType categoryType = ECategoryType.NEW_LAP) :
             base(context, Map.MapIdToName(mapId), buttonRowUpper: true, buttonRowLower: true)
         {
             this.mapId = mapId;
@@ -848,7 +859,10 @@ namespace Velo
             categories.Add(ECategoryType.EVENT);
 
             string[] categoryLabels = categories.Select(c => c.Label()).ToArray();
-            categorySelect = new SelectorButtonW(categoryLabels, 0, context.Fonts.FontMedium);
+            int selected = categories.IndexOf(categoryType);
+            if (selected == -1)
+                selected = 0;
+            categorySelect = new SelectorButtonW(categoryLabels, selected, context.Fonts.FontMedium);
             Style.ApplySelectorButton(categorySelect);
            
             string[] filters = new string[] { "PBs only", "WR history", "All" };
@@ -1564,7 +1578,7 @@ namespace Velo
             table.AddSpace(10f);
             table.AddColumn("Time", 170f, (run) => new TimeEntry(context.Fonts.FontMedium, run));
             table.AddColumn("Age", 150f, (run) => new AgeEntry(context.Fonts.FontMedium, run));
-            table.AddColumn("#", 40f, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
+            table.AddColumn("#", 50f, (run) => new PlaceEntry(context.Fonts.FontMedium, run));
         }
 
         public override IEnumerable<RunInfo> GetElems()
@@ -1616,6 +1630,95 @@ namespace Velo
 
             content.Child = tables;
 
+            buttonRowLower.AddSpace(FILL);
+            buttonRowLower.AddChild(filterSelect, 380f);
+        }
+
+        public override void PushRequests()
+        {
+            tables.Current.PushRequests();
+        }
+    }
+
+    public class LbEventsTable : LbTable<MapEventWithRun>
+    {
+        public enum EFilter
+        {
+            WRS, YOUR_PB,
+            COUNT
+        }
+
+        private readonly EFilter filter;
+
+        public LbEventsTable(LbContext context, EFilter filter) :
+            base(context)
+        {
+            this.filter = filter;
+
+            table.AddColumn("Map", FILL, pair => new MapEntry(context.Fonts.FontMedium, pair.Run));
+            table.AddSpace(10f);
+            table.AddColumn("Category", 170f, pair => new CategoryEntry(context.Fonts.FontMedium, pair.Run));
+            table.AddColumn("Player", 340f, pair => new PlayerEntry(context.Fonts.FontMedium, pair.Run));
+            table.AddSpace(10f);
+            table.AddColumn("Time", 170f, pair => new TimeEntry(context.Fonts.FontMedium, pair.Run));
+            table.AddColumn("Ends in", 190f, pair => new RemainingTimeEntry(context.Fonts.FontMedium, pair.Event, pair.Run.PlayerId));
+
+            table.OnLeftClickRow = (row, e, i) =>
+            {
+                context.ChangePage(new LbMapMenuPage(context, e.Run.Category.MapId, ECategoryType.EVENT));
+            };
+        }
+
+        public override IEnumerable<MapEventWithRun> GetElems()
+        {
+            if (filter == EFilter.WRS)
+                return RunsDatabase.Instance.GetEventsWithWRs();
+            else
+                return RunsDatabase.Instance.GetEventsWithYourPBs();
+        }
+
+        public override float Height(MapEventWithRun elem, int i)
+        {
+            return 40f;
+        }
+
+        public override void PushRequests()
+        {
+            if (filter == EFilter.WRS)
+                RunsDatabase.Instance.PushRequestRuns(new GetEventWRsRequest(), Refresh);
+            else
+                RunsDatabase.Instance.PushRequestRuns(new GetPlayerEventPBsRequest(SteamUser.GetSteamID().m_SteamID), Refresh);
+        }
+    }
+
+    public class LbEventsMenuPage : LbMenuPage
+    {
+        private readonly SelectorButtonW filterSelect;
+        private readonly TabbedW<LbEventsTable> tables;
+        private readonly ButtonW backButton;
+
+        public LbEventsMenuPage(LbContext context) :
+            base(context, "Events", buttonRowLower: true)
+        {
+            string[] filters = new string[] { "WRs", "Your PBs" };
+
+            filterSelect = new SelectorButtonW(filters, 0, context.Fonts.FontMedium);
+            Style.ApplySelectorButton(filterSelect);
+
+            tables = new TabbedW<LbEventsTable>(filterSelect);
+            for (int i = 0; i < filters.Length; i++)
+            {
+                tables.SetTab(i, new LbEventsTable(context, (LbEventsTable.EFilter)i));
+            }
+            tables.OnSwitch = _ => context.Request();
+
+            backButton = new ButtonW("Back", context.Fonts.FontMedium);
+            Style.ApplyButton(backButton);
+            backButton.OnLeftClick = context.ChangeBack;
+
+            content.Child = tables;
+
+            buttonRowLower.AddChild(backButton, 190f);
             buttonRowLower.AddSpace(FILL);
             buttonRowLower.AddChild(filterSelect, 380f);
         }
@@ -1915,6 +2018,7 @@ A run is invalid if any of the following apply:
   -A savestate was used (1 second cooldown, infinite cooldown when using savestate load halt)
   -A savestate from a version prior 2.2.11 was used
   -A replay was used (1 second cooldown for replays of own runs, 5 second cooldown for other replays)
+  -A ghost used an item
   -An external program like Cheat Engine was used
   -Map was neither official, nor Origins, nor published Workshop
   -Option SuperSpeedRunners, SpeedRapture or Destructible Environment was enabled

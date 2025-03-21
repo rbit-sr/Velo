@@ -9,6 +9,7 @@ namespace Velo
     {
         public BackstackW<ILbWidget> Page;
         public ButtonW ProfileButton;
+        public ButtonW EventsButton;
         public LabelW VersionText;
         public PopularWindow PopularWindow;
         public ImageW LoadingSymbol;
@@ -20,6 +21,7 @@ namespace Velo
             base(enabled, enableDim: true)
         {
             Page = new BackstackW<ILbWidget>();
+
             ProfileButton = new ButtonW("My profile", Fonts.FontMedium);
             Style.ApplyButton(ProfileButton);
             ProfileButton.OnClick = wevent =>
@@ -30,6 +32,20 @@ namespace Velo
                         return;
 
                     Page.TransitionTo(new LbPlayerMenuPage(this, Steamworks.SteamUser.GetSteamID().m_SteamID), 8f, Vector2.Zero);
+                    Request();
+                }
+            };
+
+            EventsButton = new ButtonW("Events", Fonts.FontMedium);
+            Style.ApplyButton(EventsButton);
+            EventsButton.OnClick = wevent =>
+            {
+                if (wevent.Button == WEMouseClick.EButton.LEFT)
+                {
+                    if (Page.Child is LbEventsMenuPage)
+                        return;
+
+                    Page.TransitionTo(new LbEventsMenuPage(this), 8f, Vector2.Zero);
                     Request();
                 }
             };
@@ -57,6 +73,7 @@ namespace Velo
 
             AddElem(Page, StackW.TOP_LEFT, PAGE_POS, PAGE_SIZE);
             AddElem(ProfileButton, StackW.TOP_LEFT, new Vector2(20f, 20f), new Vector2(180f, 35f));
+            AddElem(EventsButton, StackW.TOP_LEFT, new Vector2(20f, 65f), new Vector2(180f, 35f));
             AddElem(VersionText, StackW.BOTTOM_LEFT, new Vector2(20f, -20f), new Vector2(180f, 25f));
             AddElem(PopularWindow, StackW.BOTTOM_RIGHT, Vector2.Zero, new Vector2(300f, 408f));
             AddElem(LoadingSymbol, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - (LoadSymbol.SIZE + BOTTOM_ROW_HEIGHT) / 2), new Vector2(LoadSymbol.SIZE, LoadSymbol.SIZE));
@@ -227,6 +244,7 @@ namespace Velo
                 RunsDatabase.Instance.CancelAll();
                 RunsDatabase.Instance.Clear();
                 RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
+                RunsDatabase.Instance.PushRequestRuns(new GetPlayerEventPBsRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
                 RunsDatabase.Instance.PushRequestRuns(new GetPlayerPBsNonCuratedRequest(Steamworks.SteamUser.GetSteamID().m_SteamID), null);
                 context.Reset();
                 context.Refresh();

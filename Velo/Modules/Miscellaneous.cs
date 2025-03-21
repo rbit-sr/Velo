@@ -41,9 +41,9 @@ namespace Velo
             switch (_event)
             {
                 case EEvent.DEFAULT:
-                    return 255;
+                    return 254;
                 case EEvent.NONE:
-                    return 0;
+                    return 255;
                 case EEvent.SRENNUR_DEEPS:
                     return 2;
                 case EEvent.SCREAM_RUNNERS:
@@ -51,7 +51,7 @@ namespace Velo
                 case EEvent.WINTER:
                     return 14;
                 default:
-                    return 255;
+                    return 254;
             }
         }
     }
@@ -111,7 +111,7 @@ namespace Velo
             public ColorTransitionSetting CharacterSelectBackgroundColor;
         }
 
-        public Dictionary<ICharacter, SkinConstants> SkinConstantsLookup = new Dictionary<ICharacter, SkinConstants>();
+        public Dictionary<KeyValuePair<ICharacter, int>, SkinConstants> SkinConstantsLookup = new Dictionary<KeyValuePair<ICharacter, int>, SkinConstants>();
 
         public EnumSetting<EEvent> Event;
         public BoolSetting BypassPumpkinCosmo;
@@ -144,6 +144,7 @@ namespace Velo
         public BoolSetting SelectFrontmostObject;
         public BoolSetting SelectFrontmostGraphic;
         public BoolSetting EnableBookcase;
+        public BoolSetting EnableCastleWall;
         public BoolSetting EnableDiscoLight;
         public BoolSetting EnableDiscoGlow;
         public BoolSetting EnableLeaves;
@@ -160,25 +161,32 @@ namespace Velo
             NewCategory("skin constants");
             foreach (var character in Characters.Instance.characters)
             {
-                SettingCategory category = Add(new SettingCategory(this, character.Name));
-                SkinConstants constants = new SkinConstants
+                SettingCategory categoryOuter = Add(new SettingCategory(this, character.Name));
+                ColorTransitionSetting characterSelectBackgroundColor = new ColorTransitionSetting(this, "background color", new ColorTransition(character.CharacterSelectBackgroundColor));
+                for (int i = 0; i < character.VariantCount; i++)
                 {
-                    Origin = category.Add(new VectorSetting(this, "origin", character.Origin, Vector2.Zero, Vector2.One * 500f)),
-                    Position = category.Add(new VectorSetting(this, "position", character.Position, Vector2.One * -100f, Vector2.One * 100f)),
-                    RopeOffset = category.Add(new VectorSetting(this, "rope offset", character.RopeOffset, Vector2.One * -500f, Vector2.One * 500f)),
-                    SwingOrigin = category.Add(new VectorSetting(this, "swing origin", character.SwingOrigin, Vector2.Zero, Vector2.One * 500f)),
-                    SwingPosition = category.Add(new VectorSetting(this, "swing position", character.SwingPosition, Vector2.One * -100f, Vector2.One * 100f)),
-                    SwingOffset = category.Add(new VectorSetting(this, "swing target offset", character.SwingOffset, Vector2.One * -100f, Vector2.One * 100f)),
-                    TauntOrigin = category.Add(new VectorSetting(this, "taunt origin", character.TauntOrigin, Vector2.Zero, Vector2.One * 500f)),
-                    TauntPosition = category.Add(new VectorSetting(this, "taunt position", character.TauntPosition, Vector2.One * -100f, Vector2.One * 100f)),
-                    ClimbOrigin = category.Add(new VectorSetting(this, "climb origin", character.ClimbOrigin, Vector2.Zero, Vector2.One * 500f)),
-                    ClimbPosition = category.Add(new VectorSetting(this, "climb position", character.ClimbPosition, Vector2.One * -100f, Vector2.One * 100f)),
-                    Scale = category.Add(new VectorSetting(this, "scale", character.Scale, Vector2.One * 0.2f, Vector2.One * 5f)),
-                    CharacterSelectBackgroundColor = category.Add(new ColorTransitionSetting(this, "background color", new ColorTransition(character.CharacterSelectBackgroundColor)))
-                };
-                constants.SwingOffset.Tooltip = "Offset increases based on angle. Gets mirrored depending on direction.";
-                constants.CharacterSelectBackgroundColor.Tooltip = "character select menu background color";
-                SkinConstantsLookup.Add(character, constants);
+                    SettingCategory categoryInner = categoryOuter.Add(new SettingCategory(this, "variant " + (i + 1)));
+                    SkinConstants constants = new SkinConstants
+                    {
+                        Origin = categoryInner.Add(new VectorSetting(this, "origin", character.Origin, Vector2.Zero, Vector2.One * 500f)),
+                        Position = categoryInner.Add(new VectorSetting(this, "position", character.Position, Vector2.One * -100f, Vector2.One * 100f)),
+                        RopeOffset = categoryInner.Add(new VectorSetting(this, "rope offset", character.RopeOffset, Vector2.One * -500f, Vector2.One * 500f)),
+                        SwingOrigin = categoryInner.Add(new VectorSetting(this, "swing origin", character.SwingOrigin, Vector2.Zero, Vector2.One * 500f)),
+                        SwingPosition = categoryInner.Add(new VectorSetting(this, "swing position", character.SwingPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                        SwingOffset = categoryInner.Add(new VectorSetting(this, "swing target offset", character.SwingOffset, Vector2.One * -100f, Vector2.One * 100f)),
+                        TauntOrigin = categoryInner.Add(new VectorSetting(this, "taunt origin", character.TauntOrigin, Vector2.Zero, Vector2.One * 500f)),
+                        TauntPosition = categoryInner.Add(new VectorSetting(this, "taunt position", character.TauntPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                        ClimbOrigin = categoryInner.Add(new VectorSetting(this, "climb origin", character.ClimbOrigin, Vector2.Zero, Vector2.One * 500f)),
+                        ClimbPosition = categoryInner.Add(new VectorSetting(this, "climb position", character.ClimbPosition, Vector2.One * -100f, Vector2.One * 100f)),
+                        Scale = categoryInner.Add(new VectorSetting(this, "scale", character.Scale, Vector2.One * 0.2f, Vector2.One * 5f)),
+                        CharacterSelectBackgroundColor = characterSelectBackgroundColor
+                    };
+                    constants.SwingOffset.Tooltip = "Offset increases based on angle. Gets mirrored depending on direction.";
+                    if (i == 0)
+                        constants.CharacterSelectBackgroundColor.Tooltip = "character select menu background color";
+                    SkinConstantsLookup.Add(new KeyValuePair<ICharacter, int>(character, i), constants);
+                }
+                categoryOuter.Add(characterSelectBackgroundColor);
             }
 
             NewCategory("event bypass");
@@ -261,6 +269,7 @@ namespace Velo
             SelectFrontmostObject = AddBool("select frontmost object", false);
             SelectFrontmostGraphic = AddBool("select frontmost graphic", false);
             EnableBookcase = AddBool("enable bookcase", false);
+            EnableCastleWall = AddBool("enable castle wall", false);
             EnableDiscoLight = AddBool("enable disco light", false);
             EnableDiscoGlow = AddBool("enable disco glow", false);
             EnableLeaves = AddBool("enable leaves", false);
@@ -278,6 +287,8 @@ namespace Velo
                 "When hovering over graphics, always select the frontmost one (highest layer / last placed).";
             EnableBookcase.Tooltip =
                 "Allows you to place bookcase objects when using Library theme that are otherwise inaccessible.";
+            EnableBookcase.Tooltip =
+                "Allows you to place castle wall objects when using Mansion theme that are otherwise inaccessible.";
             EnableDiscoLight.Tooltip =
                 "Allows you to place disco light objects when using Nightclub theme that are otherwise inaccessible.";
             EnableDiscoGlow.Tooltip =
@@ -399,7 +410,7 @@ namespace Velo
             if (Velo.ModuleLevelEditor != null)
             {
                 Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is BookcaseDef)).ToArray();
-                if (EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageUniversity" || EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMansion")
+                if (EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageUniversity" || EnableCastleWall.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMansion")
                     Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new BookcaseDef(Vector2.Zero, 1f, 1, true)).ToArray();
 
                 Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is DecoLightDef)).ToArray();
@@ -535,6 +546,23 @@ namespace Velo
                 return DisableRemoteGrappleSound.Value;
         }
 
+        private static readonly bool[] mousePressed = new bool[9];
+
+        public void UpdateMouseInputs()
+        {
+            mousePressed.Fill(false);
+            if (LeftButton.Value != EInput.NONE)
+                mousePressed[(int)LeftButton.Value - 1] = Input.IsKeyDown((byte)Keys.LButton);
+            if (RightButton.Value != EInput.NONE)
+                mousePressed[(int)RightButton.Value - 1] = Input.IsKeyDown((byte)Keys.RButton);
+            if (MiddleButton.Value != EInput.NONE)
+                mousePressed[(int)MiddleButton.Value - 1] = Input.IsKeyDown((byte)Keys.MButton);
+            if (X1Button.Value != EInput.NONE)
+                mousePressed[(int)X1Button.Value - 1] = Input.IsKeyDown((byte)Keys.XButton1);
+            if (X2Button.Value != EInput.NONE)
+                mousePressed[(int)X2Button.Value - 1] = Input.IsKeyDown((byte)Keys.XButton2);
+        }
+
         private void SetInput(Player player, EInput input, bool pressed)
         {
             bool dummy = false;
@@ -592,17 +620,88 @@ namespace Velo
             wasItemPressed = player.itemPressed;
         }
 
+        public bool MouseInputsEnabled()
+        {
+            return
+                !LeftButton.IsDefault() ||
+                !RightButton.IsDefault() ||
+                !MiddleButton.IsDefault() ||
+                !X1Button.IsDefault() ||
+                !X2Button.IsDefault();
+        }
+
+        public bool CheckMouseInputPlayerIndex(Player player)
+        {
+            Slot[] slots = Main.game.stack.gameInfo.slots;
+
+            int j = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                if (slots[i].Player != null && slots[i].LocalPlayer)
+                {
+                    if (j == PlayerNumber.Value - 1 && player != slots[i].Player)
+                        return false;
+                    j++;
+                }
+            }
+            return true;
+        }
+
         public void SetMouseInputs(Player player)
         {
-            //if (!Util.IsFocused())
-            // return;
-            if (PlayerNumber.Value - 1 != player.slot.Index)
+            if (!CheckMouseInputPlayerIndex(player))
                 return;
+
             SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton));
             SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton));
             SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton));
             SetInput(player, X1Button.Value, Input.IsKeyDown((byte)Keys.XButton1));
             SetInput(player, X2Button.Value, Input.IsKeyDown((byte)Keys.XButton2));
+        }
+
+        public bool IsJumpPressed(Player player, bool isPressed)
+        {
+            if (!MouseInputsEnabled())
+                return isPressed;
+
+            if (!CheckMouseInputPlayerIndex(player))
+                return isPressed;
+
+            UpdateMouseInputs();
+            if (OverwriteInputs.Value)
+                return mousePressed[(int)EInput.JUMP - 1];
+            else
+                return isPressed || mousePressed[(int)EInput.JUMP - 1];
+        }
+
+        public bool IsSlidePressed(Player player, bool isPressed)
+        {
+            if (!MouseInputsEnabled())
+                return isPressed;
+
+            if (!CheckMouseInputPlayerIndex(player))
+                return isPressed;
+
+            UpdateMouseInputs();
+            if (OverwriteInputs.Value)
+                return mousePressed[(int)EInput.SLIDE - 1];
+            else
+                return isPressed || mousePressed[(int)EInput.SLIDE - 1];
+        }
+
+        public bool IsBoostPressed(Player player, bool isPressed)
+        {
+            if (!MouseInputsEnabled())
+                return isPressed;
+
+            if (!CheckMouseInputPlayerIndex(player))
+                return isPressed;
+
+            UpdateMouseInputs();
+            if (OverwriteInputs.Value)
+                return mousePressed[(int)EInput.BOOST - 1];
+            else
+                return isPressed || mousePressed[(int)EInput.BOOST - 1];
         }
     }
 }

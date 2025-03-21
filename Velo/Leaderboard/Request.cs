@@ -41,6 +41,8 @@ namespace Velo
         GET_EVENTS,
         GET_POPULARITY_ORDER,
         GET_POPULAR_THIS_WEEK,
+        GET_EVENT_WRS,
+        GET_PLAYER_EVENT_PBS,
         SEND_SPEEDRUN_COM_DATA, // not implemented here
         GET_SPEEDRUN_COM_PLAYERS
     }
@@ -1184,6 +1186,76 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.GET_POPULAR_THIS_WEEK;
+        }
+    }
+
+    public class GetEventWRsRequest : IRequest<List<RunInfo>>
+    {
+        public GetEventWRsRequest()
+        {
+
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_EVENT_WRS;
+        }
+    }
+
+    public class GetPlayerEventPBsRequest : IRequest<List<RunInfo>>
+    {
+        private readonly ulong playerId;
+
+        public GetPlayerEventPBsRequest(ulong playerId)
+        {
+            this.playerId = playerId;
+        }
+
+        public void SendHeader(Client client)
+        {
+            client.Send(playerId);
+        }
+
+        public List<RunInfo> Run(Client client)
+        {
+            List<RunInfo> result = new List<RunInfo>();
+            while (true)
+            {
+                RunInfo current = client.Receive<RunInfo>();
+                if (current.Id == -1)
+                    break;
+                result.Add(current);
+            }
+
+            client.VerifyCrc();
+
+            return result;
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.GET_PLAYER_EVENT_PBS;
         }
     }
 

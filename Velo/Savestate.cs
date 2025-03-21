@@ -1870,12 +1870,12 @@ namespace Velo
             {
                 int solo = stream.Read<int>();
                 if ((solo == 1) != (Velo.ModuleSolo != null))
-                    return false;
+                { } //return false;
                 if (solo == 1)
                 {
                     string nameAuthor = stream.ReadStr();
                     if (nameAuthor != Velo.ModuleSolo.LevelData.name + "|" + Velo.ModuleSolo.LevelData.author)
-                        return false;
+                    { } // return false;
                 }
             }
             else if (version >= 2)

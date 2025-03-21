@@ -61,6 +61,7 @@ namespace Velo
         FINISH_LINE_DRIFT, // finish line drifted by more than 100
         PRIMARY_CHECKPOINT_MISSED, // player missed a primary checkpoint
         SECONDARY_AND_TERNARY_CHECKPOINT_MISSED, // player missed a secondary checkpoint and a ternary checkpoint
+        GHOST_ITEM_USED, // a ghost used an item
         COUNT
     }
 
@@ -205,9 +206,13 @@ namespace Velo
 51: { (10000, 1400, 100, 730), (14520, 1480, 100, 380), (4800, 2950, 100, 470) }, { (9180, 1930, 385, 100) }, { },
 52: { (4200, -10000, 100, 15500), (14500, 5780, 450, 410), (3650, 5600, 100, 650) }, { }, { },
 53: { (2400, 30, 100, 650), (7750, 1250, 100, 200), (1700, 150, 100, 550) }, { }, { },
-54: { (1400, -10000, 100, 11420), (13950, 2630, 100, 410), (750, 1130, 100, 200) }, { }, { }";
+54: { (1400, -10000, 100, 11420), (13950, 2630, 100, 410), (750, 1130, 100, 200) }, { }, { },
+85: { (3900, 570, 100, 1000), (12560, 1330, 1000, 100), (3150, 750, 310, 820) }, { }, { },
+86: { (2450, 1300, 100, 450), (6945, 780, 450, 100), (800, 2100, 100, 400), (1800, 1860, 200, 100) }, { }, { },
+87: { (3050, 3990, 100, 700), (14000, 4800, 100, 320), (1800, 4900, 450, 100) }, { }, { }";
 
         public static List<Checkpoints> checkpoints = InitCheckpoints(CHECKPOINTS_STR);
+        //public static List<Checkpoints> checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
 
         public string[] OneLapReasons = new string[(int)E1LapReasons.COUNT];
         public string[] SkipReasons = new string[(int)ESkipReasons.COUNT];
@@ -338,7 +343,7 @@ namespace Velo
             foreach (var entry in Cooldowns)
                 entry.Value.Update((float)Velo.RealDelta.TotalSeconds);
 
-            //if (Input.Pressed((ushort)Keys.F8))
+            //if (Input.IsPressed((ushort)Keys.F8))
             //    checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
 
             if (Velo.MainPlayer.gameInfo.options[(int)EGameOptions.SUPER_SPEED_RUNNERS])
@@ -364,6 +369,8 @@ namespace Velo
                 if (!Map.AllowDrill(MapId) && Velo.ItemIdPrev == (byte)EItem.DRILL)
                     SetCooldown(EViolations.DRILL_USED, float.PositiveInfinity);
             }
+            if (OfflineGameMods.Instance.GhostPlaybackUsedItem())
+                Violations[(int)EViolations.GHOST_ITEM_USED] = "ghost used an item";
             
             if (Velo.MainPlayer.item_id == (byte)EItem.TRIPLE_JUMP)
                 Violations[(int)EViolations.ITEM_USED] = "triple jump item use";

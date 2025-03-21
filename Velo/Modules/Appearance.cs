@@ -33,6 +33,7 @@ namespace Velo
         public ColorTransitionSetting LocalColor;
         public ColorTransitionSetting GhostColor;
         public ColorTransitionSetting RemoteColor;
+        public FloatSetting AfterimagesOffset;
 
         public ColorTransitionSetting Background0Color;
         public ColorTransitionSetting Background1Color;
@@ -137,6 +138,7 @@ namespace Velo
             LocalColor = AddColorTransition("local color", new ColorTransition(Color.White));
             GhostColor = AddColorTransition("ghost color", new ColorTransition(Color.White));
             RemoteColor = AddColorTransition("remote color", new ColorTransition(Color.White));
+            AfterimagesOffset = AddFloat("afterimages offset", 0f, 0f, 30f);
 
             LocalColor.Tooltip =
                "color mask for local players' sprites";

@@ -2,8 +2,6 @@
 using Microsoft.Xna.Framework.Input;
 using System;
 using System.Runtime.InteropServices;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace Velo
 {
@@ -178,6 +176,7 @@ namespace Velo
 
         private static bool first = true;
         private static bool focusedPrev = false;
+        private static bool canInitializeMouseHook = false;
         private static bool initializedLLMouseHook = false;
 
         public static bool Focused = false;
@@ -244,9 +243,15 @@ namespace Velo
                 InitWndProcHook();
                 if (initializedLLMouseHook || IsPressed((ushort)Keys.Escape) || Velo.Ingame != Velo.IngamePrev)
                 {
-                    InitLLMouseHook();
-                    initializedLLMouseHook = true;
+                    canInitializeMouseHook = true;
                 }
+            }
+
+            if (canInitializeMouseHook && Miscellaneous.Instance.MouseInputsEnabled())
+            {
+                InitLLMouseHook();
+                canInitializeMouseHook = false;
+                initializedLLMouseHook = true;
             }
 
             focusedPrev = Focused;

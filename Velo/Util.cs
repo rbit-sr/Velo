@@ -425,48 +425,58 @@ namespace Velo
 
         private readonly static bool filterKeysEnabled = new Func<bool>(() =>
         {
-            string flags = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "Flags", "0");
-            if (int.TryParse(flags, out int result))
-                return (result | 1) == 1;
-            else
-                return false;
+            object flags = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "Flags", "0");
+            if (flags is string flagsStr)
+            {
+                if (int.TryParse(flagsStr, out int resultStr))
+                    return (resultStr | 1) == 1;
+            }
+            return false;
         })();
         public readonly static TimeSpan RepeatDelay = new Func<TimeSpan>(() =>
         {
             if (!filterKeysEnabled)
             {
-                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardDelay", "1");
-                if (int.TryParse(delay, out int result))
-                    return TimeSpan.FromSeconds(0.25d * (result + 1));
-                else
-                    return TimeSpan.FromSeconds(0.5d);
+                object delay = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardDelay", "1");
+                if (delay is string delayStr)
+                {
+                    if (int.TryParse(delayStr, out int result))
+                        return TimeSpan.FromSeconds(0.25d * (result + 1));
+                }
+                return TimeSpan.FromSeconds(0.5d);
             }
             else
             {
-                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "AutoRepeatDelay", "1000");
-                if (int.TryParse(delay, out int result))
-                    return TimeSpan.FromMilliseconds(result);
-                else
-                    return TimeSpan.FromSeconds(1d);
+                object delay = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Accessibility\\Keyboard Response", "AutoRepeatDelay", "1000");
+                if (delay is string delayStr)
+                {
+                    if (int.TryParse(delayStr, out int result))
+                        return TimeSpan.FromMilliseconds(result);
+                }
+                return TimeSpan.FromSeconds(1d);
             }
         })();
         public readonly static TimeSpan RepeatRate = new Func<TimeSpan>(() =>
         {
             if (!filterKeysEnabled)
             {
-                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardSpeed", "31");
-                if (int.TryParse(delay, out int result))
-                    return TimeSpan.FromSeconds(1d / (result + 2));
-                else
-                    return TimeSpan.FromSeconds(0.03d);
+                object delay = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "KeyboardSpeed", "31");
+                if (delay is string delayStr)
+                {
+                    if (int.TryParse(delayStr, out int result))
+                        return TimeSpan.FromSeconds(1d / (result + 2));
+                }
+                return TimeSpan.FromSeconds(0.03d);
             }
             else
             {
-                string delay = (string)Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "AutoRepeatRate", "500");
-                if (int.TryParse(delay, out int result))
-                    return TimeSpan.FromMilliseconds(result);
-                else
-                    return TimeSpan.FromSeconds(0.5d);
+                object delay = Registry.GetValue("HKEY_CURRENT_USER\\Control Panel\\Keyboard", "AutoRepeatRate", "500");
+                if (delay is string delayStr)
+                {
+                    if (int.TryParse(delayStr, out int result))
+                        return TimeSpan.FromMilliseconds(result);
+                }
+                return TimeSpan.FromSeconds(0.5d);
             }
         })();
 
