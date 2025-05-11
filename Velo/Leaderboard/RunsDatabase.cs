@@ -32,7 +32,7 @@ namespace Velo
         public Category Category;
         public byte WasWR;
         public byte HasComments;
-        public byte SpeedrunCom;
+        public byte Outdated;
         public byte PhysicsFlags;
         public int Place;
         public int Dist;

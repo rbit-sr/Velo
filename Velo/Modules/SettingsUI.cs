@@ -7,6 +7,9 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Input;
+using System.Windows.Forms;
+using Steamworks;
+using System.Diagnostics;
 
 namespace Velo
 {
@@ -84,7 +87,22 @@ namespace Velo
             sysWMInfo.version = version;
             SDL.SDL_GetWindowWMInfo(sdlWin, ref sysWMInfo);
 
-            SetHwnd(sysWMInfo.info.win.window);
+            try
+            {
+                SetHwnd(sysWMInfo.info.win.window);
+            }
+            catch (DllNotFoundException)
+            {
+                MessageBox.Show(
+                    "Please install the Microsoft Visual C++ Redistributable Packages (https://aka.ms/vs/17/release/vc_redist.x86.exe)!", 
+                    "Error", 
+                    MessageBoxButtons.OK, 
+                    MessageBoxIcon.Error
+                );
+                Process.Start("https://aka.ms/vs/17/release/vc_redist.x86.exe");
+                SteamAPI.Shutdown();
+                Environment.Exit(0);
+            }
 
             Util.EnableCursorOn(() => Enabled.Value.Enabled);
             Util.DisableMouseInputsOn(() => Enabled.Value.Enabled);

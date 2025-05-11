@@ -49,7 +49,7 @@ namespace Velo
         public string Tooltip 
         {
             get => tooltip;
-            set => tooltip = Util.LineBreaks(value, 80);
+            set => tooltip = Util.LineBreaks(value, 80).Replace("%", "%%");
         }
 
         protected bool modified;
@@ -329,14 +329,12 @@ namespace Velo
 
     public class HotkeySetting : Setting<ushort>
     {
-        private readonly bool autoRepeat;
-        private TimeSpan pressTime;
-        private TimeSpan lastRepeat;
+        private AutorepeatContext autorepeatContext;
 
         public HotkeySetting(Module module, string name, ushort defaultValue, bool autoRepeat = false) :
             base(module, name, defaultValue)
         {
-            this.autoRepeat = autoRepeat;
+            autorepeatContext = new AutorepeatContext(autoRepeat);
         }
 
         public bool Pressed()
@@ -344,28 +342,7 @@ namespace Velo
             if (Value == 0x97)
                 return false;
 
-            if (Input.IsPressed(Value))
-            {
-                if (autoRepeat)
-                {
-                    pressTime = Velo.RealTime;
-                    lastRepeat = TimeSpan.Zero;
-                }
-                return true;
-            }
-
-            if (!autoRepeat || !Input.IsDown(Value))
-                return false;
-
-            TimeSpan now = Velo.RealTime;
-
-            if (now - pressTime >= Util.RepeatDelay && now - lastRepeat >= Util.RepeatRate)
-            {
-                lastRepeat = now;
-                return true;
-            }
-
-            return false;
+            return autorepeatContext.PressEvent(Input.IsDown(Value)) != AutorepeatEvent.NONE;
         }
 
         public override JsonElement ToJson(ToJsonArgs args)

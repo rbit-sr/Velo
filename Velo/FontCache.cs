@@ -1,4 +1,6 @@
 ﻿using CEngine.Graphics.Library;
+using System;
+using System.IO;
 using System.Runtime.CompilerServices;
 
 namespace Velo
@@ -35,10 +37,24 @@ namespace Velo
                 return;
             }
 
-            CFont newFont = new CFont(name);
-            Velo.ContentManager.Load(newFont, false);
-            font = new CachedFont { Key = key, Font = newFont, Count = 1 };
-            fonts.Add(key, font);
+            string[] split = name.Split(':');
+
+            if (File.Exists("Content\\" + split[0]))
+            {
+                CFont newFont = new CFont(name);
+                Velo.ContentManager.Load(newFont, false);
+                font = new CachedFont { Key = key, Font = newFont, Count = 1 };
+                fonts.Add(key, font);
+            }
+            else
+            {
+                int fontSize = 24;
+                if (split.Length >= 2)
+                {
+                    fontSize = int.Parse(split[1]);
+                }
+                Get(ref font, "UI\\Font\\ariblk.ttf:" + fontSize);
+            }
         }
 
         public static void Release(ref CachedFont font)

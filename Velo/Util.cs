@@ -15,6 +15,7 @@ using CEngine.World.Collision.Shape;
 using Microsoft.Win32;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Newtonsoft.Json.Linq;
 
 namespace Velo
 {
@@ -962,6 +963,53 @@ namespace Velo
 
                 font.Font.DrawString(Velo.SpriteBatch, text, Position + Offset * Scale, Color * Opacity, Rotation, stringSize * Align, Scale, Flipped ? SpriteEffects.FlipHorizontally : SpriteEffects.None, 0f);
             }
+        }
+    }
+
+    enum AutorepeatEvent
+    {
+        NONE, PRESS, REPEAT
+    }
+
+    class AutorepeatContext
+    {
+        public bool AutoRepeat;
+
+        private TimeSpan pressTime = TimeSpan.Zero;
+        private TimeSpan lastRepeat = TimeSpan.Zero;
+        private bool downPrev = false;
+
+        public AutorepeatContext(bool autoRepeat) 
+        {
+            AutoRepeat = autoRepeat;
+        }
+
+        public AutorepeatEvent PressEvent(bool down)
+        {
+            if (down && !downPrev)
+            {
+                if (AutoRepeat)
+                {
+                    pressTime = Velo.RealTime;
+                    lastRepeat = TimeSpan.Zero;
+                }
+                downPrev = true;
+                return AutorepeatEvent.PRESS;
+            }
+            downPrev = down;
+
+            if (!AutoRepeat || !down)
+                return AutorepeatEvent.NONE;
+
+            TimeSpan now = Velo.RealTime;
+
+            if (now - pressTime >= Util.RepeatDelay && now - lastRepeat >= Util.RepeatRate)
+            {
+                lastRepeat = now;
+                return AutorepeatEvent.REPEAT;
+            }
+
+            return AutorepeatEvent.NONE;
         }
     }
 }

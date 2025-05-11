@@ -43,6 +43,7 @@ namespace Velo
         GET_POPULAR_THIS_WEEK,
         GET_EVENT_WRS,
         GET_PLAYER_EVENT_PBS,
+        SEND_STACKTRACE,
         SEND_SPEEDRUN_COM_DATA, // not implemented here
         GET_SPEEDRUN_COM_PLAYERS
     }
@@ -1256,6 +1257,34 @@ namespace Velo
         public uint RequestType()
         {
             return (uint)ERequestType.GET_PLAYER_EVENT_PBS;
+        }
+    }
+
+    public class SendStacktraceRequest : IRequest<string>
+    {
+        private readonly string stacktrace;
+
+        public SendStacktraceRequest(string stacktrace)
+        {
+            this.stacktrace = stacktrace;
+        }
+
+        public void SendHeader(Client client)
+        {
+
+        }
+
+        public string Run(Client client)
+        {
+            client.Send(stacktrace);
+            client.SendCrc();
+
+            return "";
+        }
+
+        public uint RequestType()
+        {
+            return (uint)ERequestType.SEND_STACKTRACE;
         }
     }
 

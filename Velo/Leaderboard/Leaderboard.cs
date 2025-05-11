@@ -155,6 +155,7 @@ namespace Velo
     public class Leaderboard : ToggleModule
     {
         public BoolSetting DisableLeaderboard;
+        public BoolSetting DisableSubmissions;
         public BoolSetting PreciseTimer;
         public BoolSetting ShowCheckpoints;
 
@@ -179,6 +180,7 @@ namespace Velo
 
             NewCategory("general");
             DisableLeaderboard = AddBool("disable leaderboard", false);
+            DisableSubmissions = AddBool("disable submissions", false);
             PreciseTimer = AddBool("precise timer", false);
             
             ShowCheckpoints = AddBool("show checkpoints", false);
@@ -186,6 +188,8 @@ namespace Velo
 
             DisableLeaderboard.Tooltip = 
                 "Disabling the leaderboard will disable the automatic submission of new PB runs and any network communication with the leaderboard server.";
+            DisableSubmissions.Tooltip =
+                "Disabling submissions will only disable the automatic submission of new PB runs while still allowing you to access the leaderboard.";
             PreciseTimer.Tooltip =
                 "Makes the timer fully show all milliseconds (XX.XX:XXX).";
             ShowCheckpoints.Tooltip = "Show the primary and secondary checkpoints of Velo's rule checking system.";
@@ -296,7 +300,7 @@ namespace Velo
 
         public void OnRunFinished(Recording run)
         {
-            if (DisableLeaderboard.Value)
+            if (DisableLeaderboard.Value || DisableSubmissions.Value)
                 return;
 
             RecordingSubmitter.Instance.Submit(run);

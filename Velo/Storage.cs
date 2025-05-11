@@ -69,8 +69,6 @@ namespace Velo
                 if (!file.EndsWith(".json"))
                     continue;
                 string moduleName = file.Substring(file.LastIndexOf('\\') + 1).Replace(".json", "");
-                if (moduleName == "Local Game Mods")
-                    moduleName = "Offline Game Mods";
                 Module module = ModuleManager.Instance.Get(moduleName);
                 if (module == null)
                     continue;

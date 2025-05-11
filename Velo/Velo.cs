@@ -14,6 +14,8 @@ using System.IO;
 using System.Threading;
 using CEngine.Util.Input;
 using CSpeedRunner.Library.Bundle;
+using System.Linq;
+using CEngine.Graphics.Library;
 
 namespace Velo
 {
@@ -32,6 +34,7 @@ namespace Velo
         public static GraphicsDevice GraphicsDevice;
         public static Player MainPlayer = null;
         public static ModuleSolo ModuleSolo = null;
+        public static ModuleMP ModuleMP = null;
         public static ModuleLevelEditor ModuleLevelEditor = null; 
         public static bool Ingame = false;
         public static bool IngamePrev = false;
@@ -51,7 +54,7 @@ namespace Velo
         private static List<Action> onPreUpdate = new List<Action>();
         private static List<Action> onPreUpdateTemp = new List<Action>();
         private static readonly List<Action> onPreUpdateTS = new List<Action>();
-        private static List<Action> onExit = new List<Action>();
+        private static readonly List<Action> onExit = new List<Action>();
         public static List<Action> onMainPlayerReset = new List<Action>();
         public static List<Action<float>> onLapFinish = new List<Action<float>>();
 
@@ -139,6 +142,21 @@ namespace Velo
             {
                 if (modules[i] is ModuleSolo moduleSolo)
                     return moduleSolo;
+            }
+            return default;
+        }
+
+        public static ModuleMP GetModuleMP()
+        {
+            if (Main.game.stack.gameInfo == null)
+                return null;
+
+            List<IModule> modules = Main.game.stack.modules;
+            int count = modules.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (modules[i] is ModuleMP moduleMP)
+                    return moduleMP;
             }
             return default;
         }
@@ -240,6 +258,7 @@ namespace Velo
 
             // cache a few commonly needed values
             ModuleSolo = GetModuleSolo();
+            ModuleMP = GetModuleMP();
             ModuleLevelEditor = GetModuleLevelEditor();
             Online = IsOnline(); 
             MainPlayer = GetMainPlayer();
@@ -1138,6 +1157,76 @@ namespace Velo
             if (Miscellaneous.Instance.SkinConstantsLookup.TryGetValue(new KeyValuePair<ICharacter, int>(character, 0), out var v))
                 return v.CharacterSelectBackgroundColor.Value.Get();
             return character.CharacterSelectBackgroundColor;
+        }
+
+        public static int get_player_count()
+        {
+            return 4;
+        }
+
+        public static bool is_16_players()
+        {
+            return true;
+        }
+
+        public static int version_major()
+        {
+            return 65;
+        }
+
+        public static int version_minor()
+        {
+            return 11;
+        }
+
+        public static int version_protocol()
+        {
+            return 108;
+        }
+
+        public static void reset_all_slots_as_bots()
+        {
+            Main.game.stack.gameInfo.GetSlot(0).ResetAsBot(0, 0);
+            Main.game.stack.gameInfo.GetSlot(1).ResetAsBot(1, 0);
+            Main.game.stack.gameInfo.GetSlot(2).ResetAsBot(5, 0);
+            Main.game.stack.gameInfo.GetSlot(3).ResetAsBot(8, 0);
+            if (is_16_players())
+            {
+                Main.game.stack.gameInfo.GetSlot(4).ResetAsBot(2, 0);
+                Main.game.stack.gameInfo.GetSlot(5).ResetAsBot(3, 0);
+                Main.game.stack.gameInfo.GetSlot(6).ResetAsBot(4, 0);
+                Main.game.stack.gameInfo.GetSlot(7).ResetAsBot(6, 0);
+                Main.game.stack.gameInfo.GetSlot(8).ResetAsBot(7, 0);
+                Main.game.stack.gameInfo.GetSlot(9).ResetAsBot(9, 0);
+                Main.game.stack.gameInfo.GetSlot(10).ResetAsBot(10, 0);
+                Main.game.stack.gameInfo.GetSlot(11).ResetAsBot(11, 0);
+                Main.game.stack.gameInfo.GetSlot(12).ResetAsBot(12, 0);
+                Main.game.stack.gameInfo.GetSlot(13).ResetAsBot(13, 0);
+                Main.game.stack.gameInfo.GetSlot(14).ResetAsBot(14, 0);
+                Main.game.stack.gameInfo.GetSlot(15).ResetAsBot(15, 0);
+            }
+        }
+
+        public static void reset_all_slots()
+        {
+            for (byte i = 1; i < get_player_count(); i++)
+                Main.game.stack.gameInfo.GetSlot(i).SetStateAndCharacter(1, byte.MaxValue, 0, -1, null);
+        }
+
+        public static void close_all_slots()
+        {
+            for (byte i = 1; i < get_player_count(); i++)
+                Main.game.stack.gameInfo.GetSlot(i).SetConnectedClosed();
+        }
+
+        public static int[] create_minus_one_array()
+        {
+            return Enumerable.Repeat(-1, get_player_count()).ToArray();
+        }
+
+        public static byte[] create_range_to_player_count()
+        {
+            return Enumerable.Range(0, get_player_count()).Select(i => (byte)i).ToArray();
         }
 
         public class Message

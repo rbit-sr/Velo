@@ -152,6 +152,10 @@ namespace Velo
         public ColorSetting HoveredColor;
         public ColorSetting ResizingColor;
 
+        public HotkeySetting GiveSmiley;
+        public HotkeySetting GiveSunglasses;
+        public HotkeySetting GiveTripleJump;
+
         public bool contentsReloaded = false;
 
         private bool wasItemPressed = false;
@@ -301,6 +305,11 @@ namespace Velo
                 "object highlighting color while hovering over it";
             ResizingColor.Tooltip =
                 "graphic highlighting color while resizing it";
+
+            NewCategory("items");
+            GiveSmiley = AddHotkey("give smiley", 0x97);
+            GiveSunglasses = AddHotkey("give sunglasses", 0x97);
+            GiveTripleJump = AddHotkey("give triple jump", 0x97);
         }
 
         public static Miscellaneous Instance = new Miscellaneous();
@@ -424,6 +433,19 @@ namespace Velo
                 Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is LeaveDef)).ToArray();
                 if (EnableLeaves.Value)
                     Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new LeaveDef(Vector2.Zero, true)).ToArray();
+            }
+
+            if (!Velo.IsOnline() && Velo.MainPlayer != null)
+            {
+                if (GiveSmiley.Pressed())
+                    Velo.MainPlayer.item_id = (byte)EItem.SMILEY;
+                if (GiveSunglasses.Pressed())
+                    Velo.MainPlayer.item_id = (byte)EItem.SUNGLASSES;
+                if (GiveTripleJump.Pressed())
+                {
+                    Velo.MainPlayer.item_id = (byte)EItem.TRIPLE_JUMP;
+                    Velo.MainPlayer.jump_count = 3;
+                }
             }
         }
 

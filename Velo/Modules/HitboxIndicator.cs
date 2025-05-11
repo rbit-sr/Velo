@@ -13,7 +13,10 @@ namespace Velo
         public BoolListSetting IdList;
         public ColorTransitionSetting LocalPlayersColor;
         public ColorTransitionSetting RemotePlayersColor;
-        public ColorTransitionSetting ObjectsColor;
+        public ColorTransitionSetting ItemsColor;
+        public ColorTransitionSetting LevelObjectColor;
+        public ColorTransitionSetting SuperBoostColor;
+        public ColorTransitionSetting TriggerColor;
 
         // collision ID to IdList index
         private static readonly Dictionary<int, int> colToIndex = new Dictionary<int, int>
@@ -92,7 +95,10 @@ namespace Velo
             NewCategory("color");
             LocalPlayersColor = AddColorTransition("local players", new ColorTransition(new Color(0, 255, 0, 128)));
             RemotePlayersColor = AddColorTransition("remote players", new ColorTransition(new Color(0, 0, 255, 128)));
-            ObjectsColor = AddColorTransition("objects", new ColorTransition(new Color(255, 0, 0, 128)));
+            ItemsColor = AddColorTransition("items", new ColorTransition(new Color(255, 0, 0, 128)));
+            LevelObjectColor = AddColorTransition("level objects", new ColorTransition(new Color(255, 0, 0, 128)));
+            SuperBoostColor = AddColorTransition("super boosts", new ColorTransition(new Color(255, 0, 0, 128)));
+            TriggerColor = AddColorTransition("triggers", new ColorTransition(new Color(255, 0, 0, 128)));
         }
 
         public static HitboxIndicator Instance = new HitboxIndicator();
@@ -155,11 +161,45 @@ namespace Velo
                     hitbox = null;
                 }
 
-                Color color = 
-                    actor.CollidableType != 100 ? ObjectsColor.Value.Get() : 
-                    actor.Controller is Player player && player.slot.LocalPlayer && !player.slot.IsBot ? LocalPlayersColor.Value.Get() : 
-                    RemotePlayersColor.Value.Get();
-
+                Color color;
+                switch (actor.CollidableType)
+                {
+                    case 101:
+                    case 119:
+                    case 122:
+                    case 123:
+                    case 131:
+                    case 132:
+                    case -1:
+                        color = ItemsColor.Value.Get();
+                        break;
+                    case 102:
+                    case 104:
+                    case 105:
+                    case 107:
+                    case 117:
+                    case 120:
+                    case 141:
+                    case 142:
+                        color = LevelObjectColor.Value.Get();
+                        break;
+                    case 108:
+                        color = SuperBoostColor.Value.Get();
+                        break;
+                    case 111:
+                        color = TriggerColor.Value.Get();
+                        break;
+                    case 100:
+                        color = 
+                            actor.Controller is Player player && player.slot.LocalPlayer && !player.slot.IsBot ? 
+                            LocalPlayersColor.Value.Get() :
+                            RemotePlayersColor.Value.Get();
+                        break;
+                    default:
+                        color = Color.Transparent;
+                        break;
+                }
+                    
                 if (useRect)
                 {
                     CAABB rect = collision is CAABB cAABB ? cAABB : actor.Bounds;

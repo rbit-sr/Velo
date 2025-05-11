@@ -1,9 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using CEngine.Graphics.Library;
-using CEngine.Graphics.Component;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using System.Linq;
 using Steamworks;
 using System.Threading.Tasks;
@@ -173,12 +170,8 @@ namespace Velo
             {
                 long time = run.RunTime;
                 Child.Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value);
-                if (run.SpeedrunCom == 1)
-                {
-                    int lastDigit = Child.Text.LastIndexOf('9');
-                    if (lastDigit != -1)
-                        Child.Text = Child.Text.Remove(lastDigit, 1).Insert(lastDigit, "*");
-                }
+                if (run.Outdated == 1)
+                    Child.Text += "*";
             }
         }
     }
@@ -353,6 +346,8 @@ namespace Velo
             else
             {
                 time.Text = Util.FormatTime(run.RunTime, Leaderboard.Instance.TimeFormat.Value);
+                if (run.Outdated == 1)
+                    time.Text += "*";
             }
         }
     }
@@ -373,6 +368,8 @@ namespace Velo
             {
                 long time = run.RunTime;
                 Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value) + " (" + (run.Place != -1 ? "#" + (run.Place + 1) : "-") + ")";
+                if (run.Outdated == 1)
+                    Text += "*";
                 if (run.Place == 0)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
             }
@@ -531,7 +528,15 @@ namespace Velo
                 layout.AddSpace(10f);
                 layout.AddChild(infos, 280f);
                 layout.AddSpace(10f);
-                if (run.HasComments != 0)
+                if (run.Outdated == 1)
+                {
+                    LabelW outdatedMessage = new LabelW("This run was played on an older map version!", context.Fonts.FontMedium);
+                    Style.ApplyText(outdatedMessage);
+                    outdatedMessage.Align = new Vector2(0.5f, 0.0f);
+                    outdatedMessage.Color = () => Color.Red;
+                    layout.AddChild(outdatedMessage, 40f);
+                }
+                if (run.HasComments == 1)
                 {
                     comments = new LabelW(RunsDatabase.Instance.GetComment(run.Id), context.Fonts.FontMedium);
                     Style.ApplyText(comments);
@@ -735,7 +740,13 @@ namespace Velo
                 float ease = expandedRow.ChildWidget.Ease.Get();
                 if (elem.Id != expandedId)
                     ease = 1f - ease;
-                return (1f - ease) * 40f + ease * (350f + (elem.PlayerId == 0 || elem.HasComments != 0 ? 210f : 0f));
+                float expandedHeight = 350f;
+                if (elem.HasComments == 1)
+                    expandedHeight += 210f;
+                if (elem.Outdated == 1)
+                    expandedHeight += 40f;
+
+                return (1f - ease) * 40f + ease * expandedHeight;
             }
             else
                 return 40f;

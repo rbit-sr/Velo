@@ -12,6 +12,10 @@ namespace Velo
             writer.WriteLine(ex.Message);
             writer.WriteLine(ex.ToString());
             writer.Close();
+
+            RequestHandler handler = new RequestHandler();
+            handler.Push(new SendStacktraceRequest(ex.Message + "\n" + ex.ToString()));
+            handler.Run(null, null, true);
         }
 #pragma warning restore IDE1006
     }

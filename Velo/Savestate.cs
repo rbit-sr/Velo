@@ -1905,7 +1905,7 @@ namespace Velo
                 int ghostId = Ghosts.Instance.Get(ghostIndex).actor.id;
                 ATPlayer.Read(stream, Ghosts.Instance.Get(ghostIndex).actor.Controller);
                 Ghosts.Instance.Get(ghostIndex).actor.id = ghostId;
-                goto cleanup;
+                goto cleanup2;
             }
 
             int[] counts = new int[actorTypes.Count];
@@ -2019,6 +2019,7 @@ namespace Velo
 
             CheatEngineDetection.MatchValues();
 
+        cleanup:
             foreach (Action action in applyPtr)
                 action();
 
@@ -2044,7 +2045,7 @@ namespace Velo
             collisionEngine.actors = newActors;
             world.nextActorId = Math.Max(nextId, fixedIds.Max());
 
-        cleanup:
+        cleanup2:
             contrLookup.Clear();
             applyPtr.Clear();
             fixedIndexActors.Clear();

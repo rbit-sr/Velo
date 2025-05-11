@@ -18,7 +18,7 @@ namespace Velo
     {
         public enum EButton
         {
-            LEFT, MIDDLE, RIGHT
+            LEFT, MIDDLE, RIGHT, LEFT_REPEATED
         }
 
         public EButton Button;
@@ -68,6 +68,7 @@ namespace Velo
         private MouseState mouseCurr;
         private KeyboardState keyboardPrev;
         private KeyboardState keyboardCurr;
+        private AutorepeatContext arLeft;
         private readonly Queue<char> charInputQueue = new Queue<char>();
 
         public float Opacity { get; set; }
@@ -85,6 +86,7 @@ namespace Velo
             events = new Events();
             Opacity = 1f;
             TextInputEXT.TextInput += InputChar;
+            arLeft = new AutorepeatContext(true);
         }
 
         ~WidgetContainer()
@@ -144,10 +146,14 @@ namespace Velo
 
             if (events.OnClick != null)
             {
-                if (mousePrev.LeftButton == ButtonState.Released && mouseCurr.LeftButton == ButtonState.Pressed)
+                AutorepeatEvent leftEvent = arLeft.PressEvent(mouseCurr.LeftButton == ButtonState.Pressed);
+                if (leftEvent != AutorepeatEvent.NONE)
                 {
                     root.Visit(new UnfocusAllVisitor(), true);
-                    events.OnClick(new WEMouseClick(WEMouseClick.EButton.LEFT));
+                    if (leftEvent == AutorepeatEvent.PRESS)
+                        events.OnClick(new WEMouseClick(WEMouseClick.EButton.LEFT));
+                    else if (leftEvent == AutorepeatEvent.REPEAT)
+                        events.OnClick(new WEMouseClick(WEMouseClick.EButton.LEFT_REPEATED));
                 }
                 if (mousePrev.MiddleButton == ButtonState.Released && mouseCurr.MiddleButton == ButtonState.Pressed)
                     events.OnClick(new WEMouseClick(WEMouseClick.EButton.MIDDLE));

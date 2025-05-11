@@ -10,8 +10,6 @@ namespace Velo
         private readonly OfflineGameMods instance;
 
         private readonly Dictionary<string, Savestate> savestates = new Dictionary<string, Savestate>();
-        private readonly Dictionary<string, TimeSpan> savestatesFileModifiedTimes = new Dictionary<string, TimeSpan>();
-        private TimeSpan savestateFilesLastChecked = TimeSpan.Zero;
 
         private readonly Action<Savestate> onSave;
         private readonly Action<Savestate> onLoad;
@@ -23,8 +21,35 @@ namespace Velo
             this.onLoad = onLoad;
         }
 
+        public void Init()
+        {
+            if (Directory.Exists("Velo\\savestate"))
+            {
+                string[] files = Directory.GetFiles("Velo\\savestate");
+                foreach (string file in files)
+                {
+                    string key = Path.GetFileNameWithoutExtension(file);
+
+                    Task.Run(() =>
+                    {
+                        if (!savestates.ContainsKey(key))
+                            savestates.Add(key, new Savestate());
+                        using (FileStream stream = new FileStream("Velo\\savestate\\" + key + ".srss", FileMode.Open, FileAccess.Read))
+                        {
+                            int size = stream.Read<int>();
+                            byte[] buffer = new byte[size];
+                            stream.ReadExactly(buffer, 0, size);
+                            savestates[key].Stream.Position = 0;
+                            savestates[key].Stream.Write(buffer, 0, size);
+                        }
+                    });
+                }
+            }
+        }
+
         public void PreUpdate()
         {
+            bool savedAny = false;
             for (int i = 0; i < 10; i++)
             {
                 string key = "ss" + (i + 1);
@@ -51,7 +76,16 @@ namespace Velo
                             stream.Write(buffer, 0, buffer.Length);
                         }
                     });
+                    savedAny = true;
                 }
+            }
+
+            if (savedAny)
+                return;
+
+            for (int i = 0; i < 10; i++)
+            {
+                string key = "ss" + (i + 1);
 
                 if (instance.LoadKeys[i].Pressed() && savestates.ContainsKey(key))
                 {
@@ -59,38 +93,6 @@ namespace Velo
 
                     if (savestate.Load(setGlobalTime: false))
                         onLoad?.Invoke(savestate);
-                }
-            }
-
-            if (Velo.RealTime > savestateFilesLastChecked + TimeSpan.FromSeconds(1))
-            {
-                savestateFilesLastChecked = Velo.RealTime;
-                if (Directory.Exists("Velo\\savestate"))
-                {
-                    string[] files = Directory.GetFiles("Velo\\savestate");
-                    foreach (string file in files)
-                    {
-                        string key = Path.GetFileNameWithoutExtension(file);
-                        TimeSpan modified = new TimeSpan(File.GetLastWriteTime("Velo\\savestate\\" + key + ".srss").Ticks);
-
-                        if (!savestatesFileModifiedTimes.ContainsKey(file) || savestatesFileModifiedTimes[file] != modified)
-                        {
-                            savestatesFileModifiedTimes[file] = modified;
-                            Task.Run(() =>
-                            {
-                                if (!savestates.ContainsKey(key))
-                                    savestates.Add(key, new Savestate());
-                                using (FileStream stream = new FileStream("Velo\\savestate\\" + key + ".srss", FileMode.Open, FileAccess.Read))
-                                {
-                                    int size = stream.Read<int>();
-                                    byte[] buffer = new byte[size];
-                                    stream.ReadExactly(buffer, 0, size);
-                                    savestates[key].Stream.Position = 0;
-                                    savestates[key].Stream.Write(buffer, 0, size);
-                                }
-                            });
-                        }
-                    }
                 }
             }
         }

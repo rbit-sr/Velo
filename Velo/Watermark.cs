@@ -1,8 +1,4 @@
-﻿using System;
-using CEngine.Graphics.Component;
-using CEngine.Graphics.Library;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
+﻿using Microsoft.Xna.Framework;
 
 namespace Velo
 {

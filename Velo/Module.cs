@@ -343,22 +343,6 @@ namespace Velo
                 if (!(nameJson is JsonString))
                     continue;
                 string name = nameJson.AsString();
-                if (this is Leaderboard && name == "hotkeys")
-                {
-                    OfflineGameMods.Instance.settingsLookup["recording and replay"].FromJson(setting);
-                    OfflineGameMods.Instance.settingsLookup["recording and replay"].Version = versionStr;
-                    continue;
-                }
-                if (this is Leaderboard && name == "general")
-                {
-                    OfflineGameMods.Instance.settingsLookup["recording and replay"].FromJson(setting);
-                    OfflineGameMods.Instance.settingsLookup["recording and replay"].Version = versionStr;
-                }
-                if (this is Leaderboard && name == "style")
-                {
-                    SettingsUI.Instance.settingsLookup["Velo menu style"].FromJson(setting);
-                    SettingsUI.Instance.settingsLookup["Velo menu style"].Version = versionStr;
-                }
                 if (settingsLookup.ContainsKey(name))
                 {
                     settingsLookup[name].FromJson(setting);

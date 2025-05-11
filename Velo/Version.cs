@@ -2,14 +2,19 @@
 {
     public class Version
     {
-        public static readonly ushort VERSION = 70;
-        public static readonly string VERSION_NAME = "2.2.27b";
+        public static readonly ushort VERSION = 75;
+        public static readonly string VERSION_NAME = "2.2.31";
         public static readonly string AUTHOR = "rbit, olsu";
 
         public static readonly ushort MIN_SAVESTATE_VERSION = 35;
 
         public static int[] ToIntArr(string version)
         {
+            version = version
+                .Replace("a", ".a")
+                .Replace("b", ".b")
+                .Replace("c", ".c")
+                .Replace("d", ".d");
             int[] numbers = new int[4];
             string[] parts = version.Split('.');
             for (int i = 0; i < parts.Length && i < 4; i++)

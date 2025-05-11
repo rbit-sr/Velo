@@ -33,6 +33,8 @@ namespace Velo
             { "City Run R2", 18 },
             { "Club V", 20 },
             { "Dance Hall", 22 },
+            { "Dash the night", 23 },
+            { "Genetics", 26 },
             { "Minery", 30 },
             { "New Age City", 31 },
             { "Oasis - Abyss", 33 },
@@ -54,10 +56,8 @@ namespace Velo
             { 355112213UL, 46 }, // Boardwalk
             { 2376184180UL, 19 }, // Club House
             { 3408572013UL, 21 }, // Coastline
-            { 508262300UL, 23 }, // Dash the night
             { 3157484074UL, 24 }, // Disco Lounge
             { 3408573248UL, 25 }, // Dragon City
-            { 3408575314UL, 26 }, // Genetics
             { 355841009UL, 27 }, // Gift Store
             { 3408573618UL, 28 }, // Granary
             { 3366953228UL, 86 }, // Jungle Juice
@@ -127,10 +127,8 @@ namespace Velo
             names[16] = "Laboratory";
             names[19] = "Club House";
             names[21] = "Coastline";
-            names[23] = "Dash the night";
             names[24] = "Disco Lounge";
             names[25] = "Dragon City";
-            names[26] = "Genetics";
             names[27] = "Gift Store";
             names[28] = "Granary";
             names[29] = "Lunar Colony";
@@ -218,15 +216,29 @@ namespace Velo
 
         public static ulong GetCurrentMapId()
         {
-            if (Velo.ModuleSolo == null)
+            LevelData levelData;
+            GameInfo gameInfo;
+
+            if (Velo.ModuleSolo != null)
+            {
+                levelData = Velo.ModuleSolo.LevelData;
+                gameInfo = Velo.ModuleSolo.gameInfo;
+            }
+            else if (Velo.ModuleMP != null)
+            {
+                levelData = Velo.ModuleMP.LevelData;
+                gameInfo = Velo.ModuleMP.gameInfo;
+            }
+            else
                 return ulong.MaxValue;
+
             if (Origins.Instance.IsOrigins())
                 return Origins.Instance.Current;
-            if (Velo.ModuleSolo.LevelData == null)
+            if (levelData == null)
                 return ulong.MaxValue;
             
-            string mapName = Velo.ModuleSolo.LevelData.name;
-            string mapAuthor = Velo.ModuleSolo.LevelData.author;
+            string mapName = levelData.name;
+            string mapAuthor = levelData.author;
 
             // check for official or RWS
             if (mapAuthor == "Casper van Est" || mapAuthor == "Gert-Jan Stolk" || mapAuthor == "dd_workshop")
@@ -235,9 +247,9 @@ namespace Velo
                     return CuratedMapNameToId[mapName];
             }
 
-            if (Velo.ModuleSolo.gameInfo.unknown1 != null)
+            if (gameInfo.unknown1 != null)
             {
-                ulong fileId = ((PublishedFileId)Velo.ModuleSolo.gameInfo.unknown1.publishedFileId).published_file_id.m_PublishedFileId;
+                ulong fileId = ((PublishedFileId)gameInfo.unknown1.publishedFileId).published_file_id.m_PublishedFileId;
                 // check for old RWS
                 if (CuratedMapFileIdToId.ContainsKey(fileId))
                     return CuratedMapFileIdToId[fileId];
@@ -306,7 +318,8 @@ namespace Velo
             return 
                 mapId == 19 ||
                 mapId == 21 ||
-                (mapId >= 23 && mapId <= 29) ||
+                (mapId >= 24 && mapId <= 25) ||
+                (mapId >= 27 && mapId <= 29) ||
                 mapId == 32 ||
                 mapId == 39 ||
                 mapId == 41 ||
