@@ -4,13 +4,18 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using CEngine.Graphics.Camera;
+using CEngine.Graphics.Camera.Modifier;
 using CEngine.Graphics.Component;
 using CEngine.Graphics.Library;
+using CEngine.Util.Misc;
+using CEngine.World.Actor;
+using CEngine.World.Collision;
 using CEngine.World.Collision.Shape;
 using Microsoft.Win32;
 using Microsoft.Xna.Framework;
@@ -117,7 +122,7 @@ namespace Velo
             }
             else if (seconds < 60 * 60)
             {
-                value =  seconds / 60;
+                value = seconds / 60;
                 unit = "minute";
             }
             else if (seconds < 60 * 60 * 24)
@@ -300,7 +305,7 @@ namespace Velo
             return new Color(color.R, color.G, color.B, 255);
         }
 
-        public static void ReadExactly(this System.IO.Stream stream, byte[] buffer, int offset, int count)
+        public static void ReadExactly(this Stream stream, byte[] buffer, int offset, int count)
         {
             int remaining = count;
             while (remaining > 0)
@@ -313,44 +318,33 @@ namespace Velo
             }
         }
 
-        public static byte[] ToBytes<T>(this T value) where T : struct
+        [DllImport("Velo_UI.dll", EntryPoint = "Memcpy")]
+        public static unsafe extern void Memcpy(void* dst, void* src, uint size);
+
+        public static int PrimitiveSize(Type type)
         {
-            unsafe
-            {
-                byte[] bytes = new byte[Marshal.SizeOf<T>()];
-                void* valuePtr = Unsafe.AsPointer(ref value);
-                fixed (byte* bytePtr = bytes)
-                {
-                    Buffer.MemoryCopy(valuePtr, bytePtr, bytes.Length, bytes.Length);
-                }
-                return bytes;
-            }
+            if (type == typeof(bool) || type == typeof(byte) || type == typeof(sbyte))
+                return 1;
+            if (type == typeof(short) || type == typeof(ushort))
+                return 2;
+            if (type == typeof(int) || type == typeof(uint))
+                return 4;
+            if (type == typeof(long) || type == typeof(ulong))
+                return 8;
+            return Marshal.SizeOf(type);
         }
 
         public static void ToBytes<T>(this T value, byte[] buffer) where T : struct
         {
             unsafe
             {
-                int size = Marshal.SizeOf<T>();
+                int size = PrimitiveSize(typeof(T));
                 void* valuePtr = Unsafe.AsPointer(ref value);
                 fixed (byte* bytePtr = buffer)
                 {
-                    Buffer.MemoryCopy(valuePtr, bytePtr, size, size);
+                    // Buffer.MemoryCopy(valuePtr, bytePtr, size, size);
+                    Memcpy(bytePtr, valuePtr, (uint)size);
                 }
-            }
-        }
-
-        public static T FromBytes<T>(this byte[] bytes) where T : struct
-        {
-            unsafe
-            {
-                T value = new T();
-                void* valuePtr = Unsafe.AsPointer(ref value);
-                fixed (byte* bytePtr = bytes)
-                {
-                    Buffer.MemoryCopy(bytePtr, valuePtr, bytes.Length, bytes.Length);
-                }
-                return value;
             }
         }
 
@@ -534,56 +528,263 @@ namespace Velo
             }
             return false;
         }
+
+        private static readonly List<Func<bool>> disableHotkeysOn = new List<Func<bool>>();
+
+        public static void DisableHotkeysOn(Func<bool> disableOn)
+        {
+            disableHotkeysOn.Add(disableOn);
+        }
+
+        public static bool HotkeysDisabled()
+        {
+            int count = disableHotkeysOn.Count;
+            for (int i = 0; i < count; i++)
+            {
+                if (disableHotkeysOn[i]())
+                    return true;
+            }
+            return false;
+        }
+
+        public static void StableSort<T>(T[] values, Comparison<T> comparison)
+        {
+            var keys = new KeyValuePair<int, T>[values.Length];
+            for (var i = 0; i < values.Length; i++)
+                keys[i] = new KeyValuePair<int, T>(i, values[i]);
+            Array.Sort(keys, values, new StabilizingComparer<T>(comparison));
+        }
+    }
+
+    class StabilizingComparer<T> : IComparer<KeyValuePair<int, T>>
+    {
+        private readonly Comparison<T> _comparison;
+
+        public StabilizingComparer(Comparison<T> comparison)
+        {
+            _comparison = comparison;
+        }
+
+        public int Compare(KeyValuePair<int, T> x,
+                           KeyValuePair<int, T> y)
+        {
+            var result = _comparison(x.Value, y.Value);
+            return result != 0 ? result : x.Key.CompareTo(y.Key);
+        }
     }
 
     public static class StreamUtil
     {
-        [DllImport("Velo_UI.dll", EntryPoint = "Memcpy")]
-        private static unsafe extern void Memcpy(void* dst, void* src, uint size);
-
         [ThreadStatic]
-        public static byte[] buffer;
+        private static byte[] buffer1;
+        private static byte[] buffer2;
 
-        public static unsafe void Write(this Stream stream, object obj, int off, int size)
+        private static byte[] GetBufferInternal(int size)
         {
-            if (buffer == null || buffer.Length < size)
-                buffer = new byte[size * 2];
+            if (buffer1 == null)
+                buffer1 = new byte[size];
+            else if (buffer1.Length < size)
+                buffer1 = new byte[Math.Max(size, buffer1.Length * 5 / 4)];
+            return buffer1;
+        }
+
+        public static byte[] GetBuffer(int size)
+        {
+            if (buffer2 == null)
+                buffer2 = new byte[size];
+            else if (buffer2.Length < size)
+                buffer2 = new byte[Math.Max(size, buffer2.Length * 5 / 4)];
+            return buffer2;
+        }
+
+        struct CompatibilityField
+        {
+            public FieldInfo Info;
+            public int Size;
+            public Action<Stream, object> Write;
+            public Action<Stream, object> Read;
+        }
+
+        private static readonly Dictionary<Type, CompatibilityField[]> compatibilityTypeFields = new Dictionary<Type, CompatibilityField[]>();
+
+        private static CompatibilityField[] GetCompatabilityTypeFields(Type type)
+        {
+            if (!compatibilityTypeFields.TryGetValue(type, out CompatibilityField[] fields) || fields == null)
+            {
+                FieldInfo[] fieldInfos =
+                    type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).
+                    Where(f => f.FieldType.IsValueType && f.DeclaringType == type).
+                    ToArray();
+                Util.StableSort(fieldInfos, (f1, f2) =>
+                {
+                    if (f1.FieldType.IsPrimitive && !f2.FieldType.IsPrimitive)
+                        return -1;
+                    if (!f1.FieldType.IsPrimitive && f2.FieldType.IsPrimitive)
+                        return 1;
+                    if (f1.FieldType.IsPrimitive && f2.FieldType.IsPrimitive)
+                    {
+                        return -Util.PrimitiveSize(f1.FieldType).CompareTo(Util.PrimitiveSize(f2.FieldType));
+                    }
+                    return 0;
+                });
+                fields = fieldInfos.Select(f => new CompatibilityField()
+                {
+                    Info = f,
+                    Size = Util.PrimitiveSize(f.FieldType),
+                    Write = GetWriteAction(f),
+                    Read = GetReadAction(f)
+                }).ToArray();
+                compatibilityTypeFields.Add(type, fields);
+            }
+            return fields;
+        }
+
+        private static Action<Stream, object> GetWriteAction(FieldInfo field)
+        {
+            if (field.FieldType == typeof(bool))             return (s, o) => s.Write((bool)field.GetValue(o));
+            if (field.FieldType == typeof(byte))             return (s, o) => s.Write((byte)field.GetValue(o));
+            if (field.FieldType == typeof(sbyte))            return (s, o) => s.Write((sbyte)field.GetValue(o));
+            if (field.FieldType == typeof(short))            return (s, o) => s.Write((short)field.GetValue(o));
+            if (field.FieldType == typeof(ushort))           return (s, o) => s.Write((ushort)field.GetValue(o));
+            if (field.FieldType == typeof(int))              return (s, o) => s.Write((int)field.GetValue(o));
+            if (field.FieldType == typeof(uint))             return (s, o) => s.Write((uint)field.GetValue(o));
+            if (field.FieldType == typeof(long))             return (s, o) => s.Write((long)field.GetValue(o));
+            if (field.FieldType == typeof(ulong))            return (s, o) => s.Write((ulong)field.GetValue(o));
+            if (field.FieldType == typeof(float))            return (s, o) => s.Write((float)field.GetValue(o));
+            if (field.FieldType == typeof(double))           return (s, o) => s.Write((double)field.GetValue(o));
+            if (field.FieldType == typeof(TimeSpan))         return (s, o) => s.Write((TimeSpan)field.GetValue(o));
+            if (field.FieldType == typeof(CEncryptedFloat))  return (s, o) => s.Write((CEncryptedFloat)field.GetValue(o));
+            if (field.FieldType == typeof(CCollisionFilter)) return (s, o) => s.Write((CCollisionFilter)field.GetValue(o));
+            if (field.FieldType == typeof(Vector2))          return (s, o) => s.Write((Vector2)field.GetValue(o));
+            if (field.FieldType == typeof(Color))            return (s, o) => s.Write((Color)field.GetValue(o));
+            if (field.FieldType == typeof(Rectangle))        return (s, o) => s.Write((Rectangle)field.GetValue(o));
+            if (field.FieldType == typeof(Matrix))           return (s, o) => s.Write((Matrix)field.GetValue(o));
+            if (field.FieldType == typeof(Viewport))         return (s, o) => s.Write((Viewport)field.GetValue(o));
+            return (s, o) => s.Position += Util.PrimitiveSize(field.FieldType);
+        }
+
+        private static Action<Stream, object> GetReadAction(FieldInfo field)
+        {
+            if (field.FieldType == typeof(bool))             return (s, o) => field.SetValue(o, s.Read<bool>());
+            if (field.FieldType == typeof(byte))             return (s, o) => field.SetValue(o, s.Read<byte>());
+            if (field.FieldType == typeof(sbyte))            return (s, o) => field.SetValue(o, s.Read<sbyte>());
+            if (field.FieldType == typeof(short))            return (s, o) => field.SetValue(o, s.Read<short>());
+            if (field.FieldType == typeof(ushort))           return (s, o) => field.SetValue(o, s.Read<ushort>());
+            if (field.FieldType == typeof(int))              return (s, o) => field.SetValue(o, s.Read<int>());
+            if (field.FieldType == typeof(uint))             return (s, o) => field.SetValue(o, s.Read<uint>());
+            if (field.FieldType == typeof(long))             return (s, o) => field.SetValue(o, s.Read<long>());
+            if (field.FieldType == typeof(ulong))            return (s, o) => field.SetValue(o, s.Read<ulong>());
+            if (field.FieldType == typeof(float))            return (s, o) => field.SetValue(o, s.Read<float>());
+            if (field.FieldType == typeof(double))           return (s, o) => field.SetValue(o, s.Read<double>());
+            if (field.FieldType == typeof(TimeSpan))         return (s, o) => field.SetValue(o, s.Read<TimeSpan>());
+            if (field.FieldType == typeof(CEncryptedFloat))  return (s, o) => field.SetValue(o, s.Read<CEncryptedFloat>());
+            if (field.FieldType == typeof(CCollisionFilter)) return (s, o) => field.SetValue(o, s.Read<CCollisionFilter>());
+            if (field.FieldType == typeof(Vector2))          return (s, o) => field.SetValue(o, s.Read<Vector2>());
+            if (field.FieldType == typeof(Color))            return (s, o) => field.SetValue(o, s.Read<Color>());
+            if (field.FieldType == typeof(Rectangle))        return (s, o) => field.SetValue(o, s.Read<Rectangle>());
+            if (field.FieldType == typeof(Matrix))           return (s, o) => field.SetValue(o, s.Read<Matrix>());
+            if (field.FieldType == typeof(Viewport))         return (s, o) => field.SetValue(o, s.Read<Viewport>());
+            return (s, o) => s.Position += Util.PrimitiveSize(field.FieldType);
+        }
+
+        public static unsafe void Write(this Stream stream, object obj, int off, int size, Type type = null)
+        {
+            if (OfflineGameMods.Instance.CompatabilityMode.Value)
+            {
+                if (type == null)
+                    type = obj.GetType();
+                CompatibilityField[] fields = GetCompatabilityTypeFields(type);
+                int offset = 0;
+                long startPos = stream.Position;
+                foreach (CompatibilityField field in fields)
+                {
+                    while (field.Size >= 4 && ((offset & 0b11) != 0))
+                    {
+                        stream.Position++;
+                        offset++;
+                    }
+
+                    if (offset >= size)
+                        break;
+
+                    field.Write(stream, obj);
+
+                    offset += field.Size;
+                }
+                stream.Position = startPos + size;
+                return;
+            }
+
+            byte[] buffer = GetBufferInternal(size);
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
             {
-                Memcpy(bufferPtr, objPtr, (uint)size);
+                Util.Memcpy(bufferPtr, objPtr, (uint)size);
                 //Buffer.MemoryCopy(objPtr, bufferPtr, size, size);
             }
             stream.Write(buffer, 0, size);
         }
 
-        public static unsafe void Read(this Stream stream, object obj, int off, int size)
+        private static unsafe bool SetValueIfSameType<T>(Stream stream, FieldInfo field, object obj) where T : struct
         {
-            if (buffer == null || buffer.Length < size)
-                buffer = new byte[size * 2];
+            if (field.FieldType == typeof(T))
+            {
+                field.SetValue(obj, stream.Read<T>());
+                return true;
+            }
+            return false;
+        }
+
+        public static unsafe void Read(this Stream stream, object obj, int off, int size, Type type = null)
+        {
+            if (OfflineGameMods.Instance.CompatabilityMode.Value)
+            {
+                if (type == null)
+                    type = obj.GetType();
+                CompatibilityField[] fields = GetCompatabilityTypeFields(type);
+                int offset = 0;
+                long startPos = stream.Position;
+                foreach (CompatibilityField field in fields)
+                {
+                    while (field.Size >= 4 && ((offset & 0b11) != 0))
+                    {
+                        stream.Position++;
+                        offset++;
+                    }
+
+                    if (offset >= size)
+                        break;
+
+                    field.Read(stream, obj);
+
+                    offset += field.Size;
+                }
+                stream.Position = startPos + size;
+                return;
+            }
+
+            byte[] buffer = GetBufferInternal(size);
             stream.ReadExactly(buffer, 0, size);
             void* objPtr = (byte*)MemUtil.GetPtr(obj) + off;
             fixed (byte* bufferPtr = buffer)
             {
-                Memcpy(objPtr, bufferPtr, (uint)size);
+                Util.Memcpy(objPtr, bufferPtr, (uint)size);
                 //Buffer.MemoryCopy(bufferPtr, objPtr, size, size);
             }
         }
 
         public static unsafe void Write<T>(this Stream stream, T value) where T : struct
         {
-            int size = Marshal.SizeOf<T>();
-            if (buffer == null || buffer.Length < size)
-                buffer = new byte[size * 2];
+            int size = Util.PrimitiveSize(typeof(T));
+            byte[] buffer = GetBufferInternal(size);
             value.ToBytes(buffer);
             stream.Write(buffer, 0, size);
         }
 
         public static unsafe T Read<T>(this Stream stream) where T : struct
         {
-            int size = Marshal.SizeOf<T>();
-            if (buffer == null || buffer.Length < size)
-                buffer = new byte[size * 2];
+            int size = Util.PrimitiveSize(typeof(T));
+            byte[] buffer = GetBufferInternal(size);
             stream.ReadExactly(buffer, 0, size);
             return buffer.FromBytes<T>(size);
         }
@@ -683,8 +884,8 @@ namespace Velo
             int length = bytes != null ? bytes.Length : 0;
             if (length < minLength)
             {
-                byte[] dummy = new byte[minLength - length];
-                WriteArrFixed(stream, dummy, dummy.Length);
+                byte[] dummy = GetBufferInternal(minLength - length);
+                WriteArrFixed(stream, dummy, minLength - length);
             }
         }
 
@@ -850,6 +1051,7 @@ namespace Velo
         {
             this.font = font;
             fontName = "";
+            update = true;
         }
 
         public Color Color { get; set; }

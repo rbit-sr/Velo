@@ -25,13 +25,14 @@ namespace Velo
                 string[] fileAndHash = fileHash.Split(':');
                 unsafe
                 {
-                    fixed (byte* fileBytes = Encoding.ASCII.GetBytes(fileAndHash[0]))
+                    byte[] file = Encoding.ASCII.GetBytes(fileAndHash[0]);
+                    fixed (byte* fileBytes = file)
                     {
                         fixed (byte* hashBytes = Encoding.ASCII.GetBytes(fileAndHash[1]))
                         {
                             try
                             {
-                                result.Add(fileAndHash[0], File.Exists(fileAndHash[0]) && verify((IntPtr)fileBytes, 32, (IntPtr)hashBytes));
+                                result.Add(fileAndHash[0], File.Exists(fileAndHash[0]) && verify((IntPtr)fileBytes, file.Length, (IntPtr)hashBytes));
                             }
                             catch (Exception) { }
                         }

@@ -43,7 +43,7 @@ namespace Velo
             AddElem(ErrorMessage, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
         }
 
-        public override void EnterMenu()
+        public override void EnterMenu(bool animation = true)
         {
             Page.Clear(); // clear the backstack
             

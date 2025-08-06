@@ -24,6 +24,10 @@ namespace Velo
         public static readonly byte FLAG_NEW_GCD = 1 << 0;
         public static readonly byte FLAG_FIX_BOUNCE_GLITCH = 1 << 1;
 
+        public static readonly byte FLAG_OUTDATED = 1 << 0;
+        public static readonly byte FLAG_DELETED_RECORDING = 1 << 1;
+        public static readonly byte FLAG_NO_SAVESTATE = 1 << 2;
+
         public ulong PlayerId;
         public long CreateTime;
 
@@ -32,7 +36,7 @@ namespace Velo
         public Category Category;
         public byte WasWR;
         public byte HasComments;
-        public byte Outdated;
+        public byte InfoFlags;
         public byte PhysicsFlags;
         public int Place;
         public int Dist;
@@ -61,39 +65,50 @@ namespace Velo
     public struct MapRunInfos
     {
         public ulong MapId;
-        public RunInfo NewLap;
-        public RunInfo OneLap;
-        public RunInfo NewLapSkip;
-        public RunInfo OneLapSkip;
-        public RunInfo AnyPerc;
-        public RunInfo HundredPerc;
+        public List<RunInfo> NewLap;
+        public List<RunInfo> OneLap;
+        public List<RunInfo> NewLapSkip;
+        public List<RunInfo> OneLapSkip;
+        public List<RunInfo> AnyPerc;
+        public List<RunInfo> HundredPerc;
 
-        public void Set(ECategoryType type, RunInfo info)
+        public MapRunInfos(ulong MapId)
+        {
+            this.MapId = MapId;
+            NewLap = new List<RunInfo>();
+            OneLap = new List<RunInfo>();
+            NewLapSkip = new List<RunInfo>();
+            OneLapSkip = new List<RunInfo>();
+            AnyPerc = new List<RunInfo>();
+            HundredPerc = new List<RunInfo>();
+        }
+
+        public void Add(ECategoryType type, RunInfo info)
         {
             switch (type)
             {
                 case ECategoryType.NEW_LAP:
-                    NewLap = info;
+                    NewLap.Add(info);
                     break;
                 case ECategoryType.ONE_LAP:
-                    OneLap = info;
+                    OneLap.Add(info);
                     break;
                 case ECategoryType.NEW_LAP_SKIPS:
-                    NewLapSkip = info;
+                    NewLapSkip.Add(info);
                     break;
                 case ECategoryType.ONE_LAP_SKIPS:
-                    OneLapSkip = info;
+                    OneLapSkip.Add(info);
                     break;
                 case ECategoryType.ANY_PERC:
-                    AnyPerc = info;
+                    AnyPerc.Add(info);
                     break;
                 case ECategoryType.HUNDRED_PERC:
-                    HundredPerc = info;
+                    HundredPerc.Add(info);
                     break;
             }
         }
 
-        public RunInfo Get(ECategoryType type)
+        public IEnumerable<RunInfo> Get(ECategoryType type)
         {
             switch (type)
             {
@@ -250,7 +265,7 @@ namespace Velo
                 {
                     for (int i = index + 1; i < runs.Count; i++)
                     {
-                        if (info.CompareTo(allRuns[runs[i]]) < 0 && allRuns[runs[i]].Place != -1)
+                        if (info.CompareTo(allRuns[runs[i]]) < 0 && info.RunTime != allRuns[runs[i]].RunTime && allRuns[runs[i]].Place != -1)
                         {
                             RunInfo info2 = allRuns[runs[i]];
                             info2.Place++;
@@ -281,7 +296,7 @@ namespace Velo
 
             RunInfo info = allRuns[id];
 
-            if (runsPerCategory[info.Category] == null)
+            if (!runsPerCategory.ContainsKey(info.Category) || runsPerCategory[info.Category] == null)
                 return;
             List<int> runs = runsPerCategory[info.Category];
 
@@ -293,7 +308,7 @@ namespace Velo
             {
                 for (int i = index; i < runs.Count; i++)
                 {
-                    if (info.CompareTo(allRuns[runs[i]]) < 0 && allRuns[runs[i]].Place != -1)
+                    if (info.CompareTo(allRuns[runs[i]]) < 0 && info.RunTime != allRuns[runs[i]].RunTime && allRuns[runs[i]].Place != -1)
                     {
                         RunInfo info2 = allRuns[runs[i]];
                         info2.Place--;
@@ -430,22 +445,21 @@ namespace Velo
             IEnumerable<ulong> maps = curated ? (popularity ? curatedMapPopularityOrder : curatedMapChronologicOrder) : nonCuratedMapPopularityOrder;
             foreach (ulong m in maps)
             {
-                MapRunInfos mapRuns = new MapRunInfos
-                {
-                    MapId = m
-                };
+                MapRunInfos mapRuns = new MapRunInfos(m);
                 for (int t = 0; t < (int)ECategoryType.COUNT; t++)
                 {
                     Category category = new Category { MapId = m, TypeId = (ulong)t };
-                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
-                        mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
-                    else
+                    if (runsPerCategory.TryGetValue(category, out List<int> runsForCategory) && runsForCategory != null)
                     {
                         int index = runsForCategory.FindIndex(i => allRuns[i].Place == place);
-                        if (index == -1)
-                            mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
-                        else
-                            mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[index]]);
+                        if (index != -1)
+                        {
+                            while (index < runsForCategory.Count && allRuns[runsForCategory[index]].Place == place)
+                            {
+                                mapRuns.Add((ECategoryType)t, allRuns[runsForCategory[index]]);
+                                index++;
+                            }
+                        }
                     }
                 }
                 runs.Add(mapRuns);
@@ -461,22 +475,15 @@ namespace Velo
             IEnumerable<ulong> maps = curated ? (popularity ? curatedMapPopularityOrder : curatedMapChronologicOrder) : nonCuratedMapPopularityOrder;
             foreach (ulong m in maps)
             {
-                MapRunInfos mapRuns = new MapRunInfos
-                {
-                    MapId = m
-                };
+                MapRunInfos mapRuns = new MapRunInfos(m);
                 for (int t = 0; t < (int)ECategoryType.COUNT; t++)
                 {
                     Category category = new Category { MapId = m, TypeId = (ulong)t };
-                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null || runsForCategory.Count == 0)
-                        mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
-                    else
+                    if (runsPerCategory.TryGetValue(category, out List<int> runsForCategory) && runsForCategory != null && runsForCategory.Count != 0)
                     {
                         int j = runsForCategory.FindIndex((id) => allRuns[id].PlayerId == playerId);
-                        if (j == -1)
-                            mapRuns.Set((ECategoryType)t, new RunInfo { Id = -1 });
-                        else
-                            mapRuns.Set((ECategoryType)t, allRuns[runsForCategory[j]]);
+                        if (j != -1)
+                            mapRuns.Add((ECategoryType)t, allRuns[runsForCategory[j]]);
                     }
                 }
                 runs.Add(mapRuns);
@@ -537,19 +544,24 @@ namespace Velo
                     if (t == (int)ECategoryType.EVENT)
                         continue;
                     Category category = new Category { MapId = m, TypeId = (ulong)t };
-                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null || runsForCategory.Count == 0)
+                    if (!runsPerCategory.TryGetValue(category, out List<int> runsForCategory) || runsForCategory == null)
                         continue;
 
-                    RunInfo run = allRuns[runsForCategory[0]];
-                    if (run.Id == -1)
-                        continue;
-                    if (!playerDict.ContainsKey(run.PlayerId))
-                        playerDict.Add(run.PlayerId, new PlayerInfoWRs { PlayerId = run.PlayerId, WrCount = 1 });
-                    else
+                    for (int i = 0; i < runsForCategory.Count; i++)
                     {
-                        PlayerInfoWRs player = playerDict[run.PlayerId];
-                        player.WrCount++;
-                        playerDict[run.PlayerId] = player;
+                        RunInfo run = allRuns[runsForCategory[i]];
+                        if (run.Id == -1)
+                            continue;
+                        if (run.Place != 0)
+                            break;
+                        if (!playerDict.ContainsKey(run.PlayerId))
+                            playerDict.Add(run.PlayerId, new PlayerInfoWRs { PlayerId = run.PlayerId, WrCount = 1 });
+                        else
+                        {
+                            PlayerInfoWRs player = playerDict[run.PlayerId];
+                            player.WrCount++;
+                            playerDict[run.PlayerId] = player;
+                        }
                     }
                 }
             }
@@ -805,7 +817,12 @@ namespace Velo
         {
             getRecordingHandler.Push(new GetRecordingRequest(id), recording =>
             {
-                recording.Info.Id = id;
+                RunInfo info = recording.Info;
+                info.Id = id;
+                if (allRuns.ContainsKey(id))
+                    info = allRuns[id];
+                recording.Info = info;
+
                 if (recordingCache.Count >= 10)
                     recordingCache.Dequeue();
                 recordingCache.Enqueue(new KeyValuePair<int, Recording>(id, recording));

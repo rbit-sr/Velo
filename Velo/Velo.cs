@@ -1,21 +1,22 @@
-﻿using CEngine.Graphics.Component;
+﻿using CEngine.Content;
+using CEngine.Graphics.Camera;
+using CEngine.Graphics.Component;
+using CEngine.Graphics.Layer;
+using CEngine.Graphics.Library;
+using CEngine.Util.Input;
+using CEngine.World.Actor;
+using CEngine.World.Collision;
+using CSpeedRunner.Library.Bundle;
+using Lidgren.Network;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using System;
-using CEngine.Content;
-using CEngine.World.Collision;
-using CEngine.Graphics.Camera;
-using CEngine.World.Actor;
-using CEngine.Graphics.Layer;
-using Lidgren.Network;
 using SDL2;
+using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
-using CEngine.Util.Input;
-using CSpeedRunner.Library.Bundle;
 using System.Linq;
-using CEngine.Graphics.Library;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace Velo
 {
@@ -28,6 +29,7 @@ namespace Velo
         public static TimeSpan RealDelta;
         public static TimeSpan GameTime => CEngine.CEngine.Instance.gameTime.TotalGameTime;
         public static TimeSpan GameDelta => CEngine.CEngine.Instance.gameTime.ElapsedGameTime;
+        public static TimeSpan GameDeltaPreFreeze = TimeSpan.Zero;
         public static CEngine.CEngine CEngineInst;
         public static SpriteBatch SpriteBatch;
         public static CContentBundleManager ContentManager;
@@ -48,6 +50,8 @@ namespace Velo
         public static bool BoostaCokeModified = false;
         public static bool GhostLaserCollision = false;
         public static bool GhostFallTileCollision = false;
+        public static bool GhostFocused = false;
+        public static List<Vector2> VelocityPrev = new List<Vector2>();
 
         public static int MainThreadId;
 
@@ -58,7 +62,7 @@ namespace Velo
         public static List<Action> onMainPlayerReset = new List<Action>();
         public static List<Action<float>> onLapFinish = new List<Action<float>>();
 
-        private static bool playerReset = false;
+        private static bool ignorePlayerReset = false;
 
         private static int ghostPollCounter = 0;
 
@@ -70,6 +74,11 @@ namespace Velo
         public static bool WindowMoved = false;
 
         public static bool DisableFramelimit = false;
+
+        // The game becomes "poisoned" if a "set" command was executed or a poisoned savestate was loaded
+        public static bool Poisoned = false;
+
+        public static RenderTarget2D RenderTarget;
 
         public static void AddOnPreUpdate(Action action)
         {
@@ -221,7 +230,23 @@ namespace Velo
                 File.Delete("VeloUpdater.exe");
             if (File.Exists("VeloVerifier.exe")) // old version
                 File.Delete("VeloVerifier.exe");
+            if (Directory.Exists("Velo\\recording") && !Directory.Exists("Velo\\recordings"))
+                Directory.Move("Velo\\recording", "Velo\\recordings");
+            if (Directory.Exists("Velo\\savestate") && !Directory.Exists("Velo\\savestates"))
+                Directory.Move("Velo\\savestate", "Velo\\savestates");
+            if (!File.Exists("Velo\\_statsMessage.txt"))
+            {
+                File.WriteAllText("Velo\\_statsMessage.txt",
+@"${Velo.frame}:
+vx: ${Player.actor.velocity.x 2 8}, vy: ${Player.actor.velocity.y 2 8}, va: ${Player.actor.velocity._a 2 7},
+px: ${Player.actor.position.x 2 8}, py: ${Player.actor.position.y 2 8}, ax: ${Player.actor._acceleration.x 2 7},
+j: ${Player.jumpVelocity.y 2 7}, b: ${Player.boost 3 5}, ib: ${Player.insideBoostSection 0 5}, sf: ${Player._surfCooldown 6 8},
+gcd: ${Player._grappleCooldown 6 8}, bcd: ${Player.boostCooldown 6 9}, scd: ${Player._slideCooldown 6 8}");
+            }
         }
+
+        [DllImport("Velo_UI.dll", EntryPoint = "Capture")]
+        private static extern void Capture();
 
         // replaces the game's update call
         public static void game_update(GameTime gameTime)
@@ -251,10 +276,31 @@ namespace Velo
             BoostaCokeModified = false;
             GhostLaserCollision = false;
             GhostFallTileCollision = false;
+            GhostFocused = false;
+
+            if (GameDelta != TimeSpan.Zero && !PauseMenu)
+            {
+                count = CEngineInst.World.CollisionEngine.actorsById.Count;
+                for (int i = 0; i < count; i++)
+                {
+                    if (VelocityPrev.Count <= i)
+                        VelocityPrev.Add(Vector2.Zero);
+                    CActor actor = CEngineInst.World.CollisionEngine.actorsById[i];
+                    if (actor != null)
+                        VelocityPrev[i] = actor.Velocity;
+                    else
+                        VelocityPrev[i] = Vector2.Zero;
+                }
+            }
 
             measure("other");
             Main.game.GameUpdate(gameTime); // the game's usual update procedure
             measure("Velo");
+
+            if (GameDelta != TimeSpan.Zero && !PauseMenu)
+            {
+                GameDeltaPreFreeze = GameDelta;
+            }
 
             // cache a few commonly needed values
             ModuleSolo = GetModuleSolo();
@@ -269,14 +315,17 @@ namespace Velo
             PausedPrev = Paused;
             Paused = CEngineInst.IsPaused && !PauseMenu;
             ItemIdPrev = ItemId;
-            ItemId = MainPlayer != null ? MainPlayer.item_id : (byte)0;
+            ItemId = MainPlayer != null ? MainPlayer.itemId : (byte)0;
 
             if (ModuleLevelEditor == null)
                 moduleSoloInputMap = null;
+
+            if (ModuleSolo == null)
+                Poisoned = false;
            
             if (is_origins() && Ingame && !Paused && PausedPrev && !timerTriggered)
             {
-                ModuleSolo.timerView.Trigger();
+                ModuleSolo.hud.Trigger();
                 ModuleSolo.timer.Trigger();
                 timerTriggered = true;
             }
@@ -295,7 +344,7 @@ namespace Velo
                 measure("Velo");
             }
 
-            playerReset = false;
+            ignorePlayerReset = false;
 
             ghostPollCounter = 0;
 
@@ -313,6 +362,15 @@ namespace Velo
             measure("other");
         }
 
+        public static RenderTarget2D set_render_target(RenderTarget2D target)
+        {
+            if (RenderTarget != null && target == null)
+            {
+                return RenderTarget;
+            }
+            return target;
+        }
+
         public static void game_draw(GameTime gameTime)
         {
             measure("Velo");
@@ -324,13 +382,29 @@ namespace Velo
             measure("Velo");
             ModuleManager.Instance.PostRender();
 
+            OfflineGameMods.Instance.RecordingAndReplay.PlaybackPostRender();
+
             measure("render");
+        }
+
+        public static void post_present()
+        {
+            measure("Velo");
+
+            ModuleManager.Instance.PostPresent();
+
+            measure("other");
         }
 
         public static void on_exit()
         {
             Exiting = true;
             onExit.ForEach(a => a());
+            if (OfflineGameMods.Instance.RecordingAndReplay.Recorder is TASRecorder tasRecorder)
+            {
+                if (tasRecorder.NeedsSave)
+                    tasRecorder.Save(false, recover: true);
+            }
         }
 
         public static void pre_sdl_poll()
@@ -379,11 +453,11 @@ namespace Velo
         // gets called twice on pressing reset for some reason
         public static void player_reset(Player player)
         {
-            if (player == MainPlayer && !playerReset)
+            if (player == MainPlayer && !ignorePlayerReset)
             {
                 onMainPlayerReset.ForEach(a => a());
 
-                playerReset = true;
+                ignorePlayerReset = true;
             }
         }
 
@@ -437,7 +511,7 @@ namespace Velo
 
         public static bool disable_ghost_poll()
         {
-            return OfflineGameMods.Instance.GhostPlaybackCount() > 0;
+            return OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackCount > 0;
         }
 
         public static bool disable_grapple_sound(Player player)
@@ -479,7 +553,7 @@ namespace Velo
 
         public static float get_wall_jump_strength(float jumpStrength, Player player)
         {
-            if (player is PlayerBot || player.gameInfo.Options[(int)EGameOptions.SUPER_SPEED_RUNNERS])
+            if (player is PlayerBot || player.gameInfo.isOption((int)EGameOptions.SUPER_SPEED_RUNNERS))
                 return jumpStrength;
 
             if (Online)
@@ -540,6 +614,11 @@ namespace Velo
             return OfflineGameMods.Instance.EnableOldMoonwalk.Value;
         }
 
+        public static void update_buffer_grapples(Player player)
+        {
+            OfflineGameMods.Instance.UpdateBufferGrapples(player);
+        }
+
         private static bool isLaserTraceLine = false;
 
         public static void set_is_laser_trace_line(bool value)
@@ -591,14 +670,14 @@ namespace Velo
         public static bool set_inputs(Player player)
         {
             measure("Velo");
-            bool result = OfflineGameMods.Instance.SetInputs(player);
+            bool result = OfflineGameMods.Instance.RecordingAndReplay.SetInputs(player);
             measure("physics");
             return result;
         }
 
         public static bool skip_update_sprite(Player player)
         {
-            return OfflineGameMods.Instance.SkipUpdateSprite(player);
+            return OfflineGameMods.Instance.RecordingAndReplay.SkipUpdateSprite(player);
         }
 
         public static void update_camera(ICCameraModifier cameraMod)
@@ -916,6 +995,8 @@ namespace Velo
 
         public static bool is_down(bool isDown, Microsoft.Xna.Framework.Input.Keys key)
         {
+            if (Util.KeyInputsDisabled())
+                return false;
             if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value || !enabled_reduced_input_delay)
                 return isDown;
             return Input.IsKeyDown((byte)key);
@@ -923,6 +1004,8 @@ namespace Velo
 
         public static bool is_up(bool isUp, Microsoft.Xna.Framework.Input.Keys key)
         {
+            if (Util.KeyInputsDisabled())
+                return true;
             if (!Performance.Instance.FixInputDelay.Value || !Performance.Instance.Enabled.Value)
                 return isUp;
             return !Input.IsKeyDown((byte)key);
@@ -1166,7 +1249,7 @@ namespace Velo
 
         public static bool is_16_players()
         {
-            return true;
+            return false;
         }
 
         public static int version_major()
@@ -1227,6 +1310,116 @@ namespace Velo
         public static byte[] create_range_to_player_count()
         {
             return Enumerable.Range(0, get_player_count()).Select(i => (byte)i).ToArray();
+        }
+
+        public static void ghost_focused()
+        {
+            GhostFocused = true;
+        }
+
+        public static string get_frame_key(Deco deco, string frameKey)
+        {
+            if (deco.bundleId.Value == "StageMetro")
+            {
+                return ((CMultiSpriteAtlas)deco.graphic).regions[deco.frame.Value].region.Key;
+            }
+            return frameKey;
+        }
+
+        public static bool disable_quickchat()
+        {
+            if (ModuleSolo != null)
+                return Miscellaneous.Instance.DisableSoloQuickchat.Value;
+            return false;
+        }
+
+        public static void load_content(string name, object content)
+        {
+            /*if (content is Texture2D texture)
+            {
+                if (
+                    !name.StartsWith("Backgrounds") &&
+                    !name.StartsWith("Sprites\\Deco")
+                    )
+                    return;
+                if (texture.Format == SurfaceFormat.Dxt1 || texture.Format == SurfaceFormat.Dxt3 || texture.Format == SurfaceFormat.Dxt5)
+                    return;
+
+                List<int> stack = new List<int>();
+
+                int size = texture.Width * texture.Height;
+                int w = texture.Width;
+                Color[] data = new Color[size];
+                texture.GetData(data);
+
+                byte[] visited = new byte[size];
+                for (int i = 0; i < size; i++)
+                {
+                    if (visited[i] != 0 || data[i].A == 0)
+                        continue;
+
+                    stack.Add(i);
+                    
+                    int rSum = 0;
+                    int gSum = 0;
+                    int bSum = 0;
+                    int count = 0;
+
+                    while (stack.Count > 0)
+                    {
+                        int j = stack.Last();
+                        stack.RemoveAt(stack.Count - 1);
+
+                        if (visited[j] != 0 || data[j].A == 0)
+                            continue;
+
+                        rSum += data[j].R;
+                        gSum += data[j].G;
+                        bSum += data[j].B;
+                        count++;
+                        visited[j] = 1;
+
+                        if (j >= 1)
+                            stack.Add(j - 1);
+                        if (j < size - 1)
+                            stack.Add(j + 1);
+                        if (j >= w)
+                            stack.Add(j - w);
+                        if (j < size - w)
+                            stack.Add(j + w);
+                    }
+
+                    stack.Add(i);
+                    byte r = (byte)(rSum / (double)count);
+                    byte g = (byte)(gSum / (double)count);
+                    byte b = (byte)(bSum / (double)count);
+
+                    while (stack.Count > 0)
+                    {
+                        int j = stack.Last();
+                        stack.RemoveAt(stack.Count - 1);
+
+                        if (visited[j] != 1 || data[j].A == 0)
+                            continue;
+
+                        data[j].R = (byte)(r * data[j].A / 255d);
+                        data[j].G = (byte)(g * data[j].A / 255d);
+                        data[j].B = (byte)(b * data[j].A / 255d);
+                        visited[j] = 2;
+
+                        if (j >= 1)
+                            stack.Add(j - 1);
+                        if (j < size - 1)
+                            stack.Add(j + 1);
+                        if (j >= w)
+                            stack.Add(j - w);
+                        if (j < size - w)
+                            stack.Add(j + w);
+                    }
+                }
+
+                texture.SetData(data);
+            }*/
         }
 
         public class Message

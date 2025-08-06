@@ -86,10 +86,19 @@ namespace Velo
             else
             {
                 key &= 0x3ff;
+
                 bool isShift = (key & 0x100) != 0;
                 bool isCtrl = (key & 0x200) != 0;
                 bool shiftDown = keys[Keys.LeftShift] == KeyState.Down || keys[Keys.RightShift] == KeyState.Down;
                 bool ctrlDown = keys[Keys.LeftControl] == KeyState.Down || keys[Keys.RightControl] == KeyState.Down;
+
+                if (
+                    (key == (ushort)Keys.LeftShift && keys[Keys.LeftShift] == KeyState.Down) ||
+                    (key == (ushort)Keys.RightShift && keys[Keys.LeftShift] == KeyState.Down) ||
+                    (key == (ushort)Keys.LeftControl && keys[Keys.LeftControl] == KeyState.Down) ||
+                    (key == (ushort)Keys.RightControl && keys[Keys.RightControl] == KeyState.Down)
+                )
+                    return true;
 
                 if (isShift != shiftDown || isCtrl != ctrlDown)
                     return false;

@@ -80,7 +80,7 @@ namespace Velo
                 PlayerDef ghostDef = new PlayerDef(Velo.MainPlayer.actor.Position, Main.game.stack, slot, 6, false);
                 Player ghost = (Player)Velo.CEngineInst.World.SpawnActor(ghostDef);
                 slot.l4yokIuZOlldyR5VFwaPFbo(ghost, false);
-                ghost.charId = (byte)index;
+                ghost.characterId = (byte)index;
                 ghosts[index] = ghost;
                 ghostSpawnTimes[index] = Velo.RealTime;
                 return ghosts[index];

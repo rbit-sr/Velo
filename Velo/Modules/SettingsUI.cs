@@ -10,6 +10,7 @@ using Microsoft.Xna.Framework.Input;
 using System.Windows.Forms;
 using Steamworks;
 using System.Diagnostics;
+using System.Reflection;
 
 namespace Velo
 {
@@ -22,12 +23,15 @@ namespace Velo
         public ColorTransitionSetting TextColor;
         public ColorTransitionSetting HeaderTextColor;
         public ColorTransitionSetting HighlightTextColor;
+        public ColorTransitionSetting Highlight2TextColor;
+        public ColorTransitionSetting TextGreyedOutColor;
         public ColorTransitionSetting EntryColor1;
         public ColorTransitionSetting EntryColor2;
         public ColorTransitionSetting EntryHoveredColor;
         public ColorTransitionSetting ButtonColor;
         public ColorTransitionSetting ButtonHoveredColor;
         public ColorTransitionSetting ButtonSelectedColor;
+        public ColorTransitionSetting ButtonGreyedOutColor;
         public IntSetting ScrollBarWidth;
         public ColorTransitionSetting PanelBackgroundColor;
         public ColorTransitionSetting DimColor;
@@ -58,12 +62,15 @@ namespace Velo
             TextColor = AddColorTransition("text color", new ColorTransition(Color.White));
             HeaderTextColor = AddColorTransition("header text color", new ColorTransition(new Color(185, 253, 224)));
             HighlightTextColor = AddColorTransition("highlight text color", new ColorTransition(Color.Gold));
+            Highlight2TextColor = AddColorTransition("highlight 2 text color", new ColorTransition(new Color(63, 127, 255)));
+            TextGreyedOutColor = AddColorTransition("text greyed out color", new ColorTransition(new Color(128, 128, 128)));
             EntryColor1 = AddColorTransition("entry color 1", new ColorTransition(new Color(40, 40, 40, 150)));
             EntryColor2 = AddColorTransition("entry color 2", new ColorTransition(new Color(30, 30, 30, 150)));
             EntryHoveredColor = AddColorTransition("entry hovered color", new ColorTransition(new Color(100, 100, 100, 150)));
             ButtonColor = AddColorTransition("button color", new ColorTransition(new Color(150, 150, 150, 150)));
             ButtonHoveredColor = AddColorTransition("button hovered color", new ColorTransition(new Color(200, 200, 200, 150)));
             ButtonSelectedColor = AddColorTransition("button selected color", new ColorTransition(new Color(240, 70, 100, 200)));
+            ButtonGreyedOutColor = AddColorTransition("button greyed out color", new ColorTransition(new Color(60, 60, 60, 200)));
             ScrollBarWidth = AddInt("scroll bar width", 10, 0, 20);
             PanelBackgroundColor = AddColorTransition("panel background color", new ColorTransition(new Color(20, 20, 20, 150)));
             DimColor = AddColorTransition("dim color", new ColorTransition(new Color(0, 0, 0, 127)));
@@ -219,7 +226,7 @@ namespace Velo
             }
         }
 
-        private delegate uint GetPtrFromObjDel(object o);
+        private delegate uint GetPtrFromObjDel(IntPtr o);
 
         enum ERenderer
         {
@@ -247,16 +254,10 @@ namespace Velo
 
             if (renderer == ERenderer.D3D11)
             {
-                var dyn = new DynamicMethod("GetSwapChainPtr", typeof(uint), new[] { typeof(object) }, typeof(Velo).Module);
+                var dyn = new DynamicMethod("GetSwapChainPtr", typeof(uint), new[] { typeof(IntPtr) }, typeof(Velo).Module);
                 var il = dyn.GetILGenerator();
-                il.DeclareLocal(typeof(object), true);
-                il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Stloc_0);
-                il.Emit(OpCodes.Ldloc_0); // load GraphicsDevice
-                il.Emit(OpCodes.Conv_I);
-                il.Emit(OpCodes.Ldc_I4, 0x7C);
-                il.Emit(OpCodes.Add);
-                il.Emit(OpCodes.Ldind_I4); // load GraphicsDevice::GLDevice : FNA3D_Device*
+                il.DeclareLocal(typeof(IntPtr), true);
+                il.Emit(OpCodes.Ldarg_0); // load GraphicsDevice::GLDevice : FNA3D_Device*
                 il.Emit(OpCodes.Conv_I);
                 il.Emit(OpCodes.Ldc_I4, 0x12C);
                 il.Emit(OpCodes.Add);
@@ -274,7 +275,8 @@ namespace Velo
                 GetPtrFromObjDel GetSwapChainPtr = (GetPtrFromObjDel)dyn.CreateDelegate(typeof(GetPtrFromObjDel));
 
                 GraphicsDevice o = CEngine.CEngine.Instance.GraphicsDevice;
-                uint SwapChainPtr = GetSwapChainPtr(o);
+                FieldInfo field = typeof(GraphicsDevice).GetField("GLDevice", BindingFlags.Instance | BindingFlags.NonPublic);
+                uint SwapChainPtr = GetSwapChainPtr((IntPtr)field.GetValue(o));
 
                 InitializeImGui_d3d11((IntPtr)SwapChainPtr);
             }

@@ -57,7 +57,7 @@ namespace Velo
             ShowStats = AddBool("show stats", false);
 
             ShowStats.Tooltip =
-                "Shows measures of the exact durations of each step in the game's update cycle in milliseconds." +
+                "Shows measures for the exact durations of each step in the game's update cycle in milliseconds. " +
                 "The duration it takes to render these stats is excluded for better comparability.";
 
             NewCategory("framerate");
@@ -173,12 +173,13 @@ namespace Velo
                 Main.game.Delay(); // limits framerate
             
                 Input.PollLLHooks();
-                if (!DisableSteamInputApi.Value)
-                {
-                    Measure("steam");
-                    rDnINrpyznfv3CiqSvLCoO4PuuLtVdemAf_0hQLtBAt8T_uP7ugL8U7R00VvHzDHIw.ZR_eFfR_DQhS95b0kUtB2nY.Update(new GameTime(TimeSpan.Zero, Velo.RealDelta));
-                    MeasurePrevious();
-                }
+            }
+
+            if (!DisableSteamInputApi.Value)
+            {
+                Measure("steam");
+                rDnINrpyznfv3CiqSvLCoO4PuuLtVdemAf_0hQLtBAt8T_uP7ugL8U7R00VvHzDHIw.ZR_eFfR_DQhS95b0kUtB2nY.Update(new GameTime(TimeSpan.Zero, Velo.RealDelta));
+                MeasurePrevious();
             }
         }
 

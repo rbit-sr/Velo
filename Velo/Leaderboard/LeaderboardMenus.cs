@@ -89,6 +89,8 @@ namespace Velo
             Style.ApplyText(this);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
             if (run.Id == -1)
                 Text = "";
             else if (run.Place != -1)
@@ -129,6 +131,8 @@ namespace Velo
             Style.ApplyText(label.Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 label.Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                label.Child.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
 
             image.Image = SteamCache.GetAvatar(run.PlayerId);
             label.Child.Text = RunsDatabase.Instance.GetPlayerName(run.PlayerId);
@@ -158,6 +162,8 @@ namespace Velo
             Style.ApplyText(Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                Child.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
 
             AutoscrollDelay = 2f;
             AutoscrollSpeed = 50f;
@@ -170,7 +176,7 @@ namespace Velo
             {
                 long time = run.RunTime;
                 Child.Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value);
-                if (run.Outdated == 1)
+                if ((run.InfoFlags & RunInfo.FLAG_OUTDATED) != 0)
                     Child.Text += "*";
             }
         }
@@ -189,6 +195,8 @@ namespace Velo
             Style.ApplyText(this);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -221,6 +229,8 @@ namespace Velo
             Style.ApplyText(this);
             if (wrHolder == SteamUser.GetSteamID().m_SteamID)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(wrHolder), EFriendFlags.k_EFriendFlagImmediate))
+                Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -253,6 +263,8 @@ namespace Velo
             Style.ApplyText(Child);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Child.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                Child.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
         }
 
         public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -272,6 +284,8 @@ namespace Velo
             Style.ApplyText(this);
             if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+            if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
 
             Text = ((ECategoryType)run.Category.TypeId).Label();
         }
@@ -305,49 +319,52 @@ namespace Velo
         }
     }
 
-    public class PlayerTimeEntry : LayoutW
+    public class PlayerTimeEntry : VLayoutW
     {
-        private readonly PlayerEntry player;
-
-        private readonly LabelW time;
-
-        public PlayerTimeEntry(CachedFont font, RunInfo run, bool compact = false) :
-            base(!compact ? EOrientation.VERTICAL : EOrientation.HORIZONTAL)
+        public PlayerTimeEntry(CachedFont font, IEnumerable<RunInfo> runs, bool compact = false)
         {
-            player = new PlayerEntry(font, run);
+            foreach (RunInfo run in runs)
+            {
+                LayoutW layout = new LayoutW(!compact ? EOrientation.VERTICAL : EOrientation.HORIZONTAL);
 
-            time = new LabelW("", font)
-            {
-                Align = new Vector2(!compact ? 0f : 1f, 0.5f),
-                CropText = false
-            };
+                PlayerEntry player = new PlayerEntry(font, run);
 
-            if (!compact)
-            {
-                AddSpace(2);
-                AddChild(time, 28);
-                AddChild(player, 40);
-                AddSpace(4);
-            }
-            else
-            {
-                AddChild(player, FILL);
-                AddSpace(10);
-                AddChild(time, REQUESTED_SIZE);
-            }
-            Style.ApplyText(time);
-            if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
-                time.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                LabelW time = new LabelW("", font)
+                {
+                    Align = new Vector2(!compact ? 0f : 1f, 0.5f),
+                    CropText = false
+                };
 
-            if (run.Id == -1)
-            {
-                time.Text = "";
-            }
-            else
-            {
-                time.Text = Util.FormatTime(run.RunTime, Leaderboard.Instance.TimeFormat.Value);
-                if (run.Outdated == 1)
-                    time.Text += "*";
+                if (!compact)
+                {
+                    layout.AddSpace(2);
+                    layout.AddChild(time, 28);
+                    layout.AddChild(player, 40);
+                    layout.AddSpace(4);
+                }
+                else
+                {
+                    layout.AddChild(player, FILL);
+                    layout.AddSpace(10);
+                    layout.AddChild(time, REQUESTED_SIZE);
+                }
+                Style.ApplyText(time);
+                if (run.PlayerId == SteamUser.GetSteamID().m_SteamID)
+                    time.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(run.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    time.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
+
+                if (run.Id == -1)
+                {
+                    time.Text = "";
+                }
+                else
+                {
+                    time.Text = Util.FormatTime(run.RunTime, Leaderboard.Instance.TimeFormat.Value);
+                    if ((run.InfoFlags & RunInfo.FLAG_OUTDATED) != 0)
+                        time.Text += "*";
+                }
+                AddChild(layout, !compact ? 74.0f : 40.0f);
             }
         }
     }
@@ -368,7 +385,7 @@ namespace Velo
             {
                 long time = run.RunTime;
                 Text = Util.FormatTime(time, Leaderboard.Instance.TimeFormat.Value) + " (" + (run.Place != -1 ? "#" + (run.Place + 1) : "-") + ")";
-                if (run.Outdated == 1)
+                if ((run.InfoFlags & RunInfo.FLAG_OUTDATED) != 0)
                     Text += "*";
                 if (run.Place == 0)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
@@ -507,6 +524,16 @@ namespace Velo
                     requestRecording(run.Id, Playback.EPlaybackType.VERIFY);
                 };
 
+                if ((run.InfoFlags & RunInfo.FLAG_DELETED_RECORDING) != 0)
+                {
+                    setGhost.Color = SettingsUI.Instance.TextGreyedOutColor.Value.Get;
+                    viewReplay.Color = SettingsUI.Instance.TextGreyedOutColor.Value.Get;
+                    verify.Color = SettingsUI.Instance.TextGreyedOutColor.Value.Get;
+                    setGhost.BackgroundColor = SettingsUI.Instance.ButtonGreyedOutColor.Value.Get;
+                    viewReplay.BackgroundColor = SettingsUI.Instance.ButtonGreyedOutColor.Value.Get;
+                    verify.BackgroundColor = SettingsUI.Instance.ButtonGreyedOutColor.Value.Get;
+                }
+
                 LayoutW buttons = new LayoutW(EOrientation.HORIZONTAL);
                 //if (mapEvent.CurrentlyNotRunning() || run.PlayerId == SteamUser.GetSteamID().m_SteamID)
                 {
@@ -528,7 +555,7 @@ namespace Velo
                 layout.AddSpace(10f);
                 layout.AddChild(infos, 280f);
                 layout.AddSpace(10f);
-                if (run.Outdated == 1)
+                if ((run.InfoFlags & RunInfo.FLAG_OUTDATED) != 0)
                 {
                     LabelW outdatedMessage = new LabelW("This run was played on an older map version!", context.Fonts.FontMedium);
                     Style.ApplyText(outdatedMessage);
@@ -590,12 +617,15 @@ namespace Velo
                     {
                         viewProfile.Hoverable = true;
                         mapPage.Hoverable = true;
-                        if (setGhost.OnClick != null)
-                            setGhost.Hoverable = true;
-                        if (viewReplay.OnClick != null)
-                            viewReplay.Hoverable = true;
-                        if (verify.OnClick != null)
-                            verify.Hoverable = true;
+                        if ((run.InfoFlags & RunInfo.FLAG_DELETED_RECORDING) == 0)
+                        {
+                            if (setGhost.OnClick != null)
+                                setGhost.Hoverable = true;
+                            if (viewReplay.OnClick != null)
+                                viewReplay.Hoverable = true;
+                            if (verify.OnClick != null)
+                                verify.Hoverable = true;
+                        }
                     }
                     else
                     {
@@ -680,9 +710,9 @@ namespace Velo
                 return;
             }
 
-            int ghostIndex = !OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.GhostPlaybackCount();
+            int ghostIndex = !OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackCount;
             if (type == Playback.EPlaybackType.SET_GHOST)
-                Ghosts.Instance.GetOrSpawn(!OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.GhostPlaybackCount(), OfflineGameMods.Instance.GhostDifferentColors.Value);
+                Ghosts.Instance.GetOrSpawn(ghostIndex, OfflineGameMods.Instance.GhostDifferentColors.Value);
 
             RunsDatabase.Instance.RequestRecordingCached(id, (recording) =>
             {
@@ -693,7 +723,7 @@ namespace Velo
                     Velo.AddOnPreUpdate(() =>
                     {
                         context.ExitMenu(false);
-                        OfflineGameMods.Instance.StartPlayback(recording, type, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
+                        OfflineGameMods.Instance.RecordingAndReplay.StartPlayback(recording, type, ghostIndex, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
                     });
                 });
             },
@@ -743,7 +773,7 @@ namespace Velo
                 float expandedHeight = 350f;
                 if (elem.HasComments == 1)
                     expandedHeight += 210f;
-                if (elem.Outdated == 1)
+                if ((elem.InfoFlags & RunInfo.FLAG_OUTDATED) != 0)
                     expandedHeight += 40f;
 
                 return (1f - ease) * 40f + ease * expandedHeight;
@@ -1056,20 +1086,21 @@ namespace Velo
             int colWidth = filter != EFilter.OTHER && filter != EFilter.ORIGINS ? 230 : 280;
             table.AddColumn("Map", FILL, (runs) => new AllMapEntry(context.Fonts.FontMedium, runs.MapId));
             table.AddSpace(10f);
+            var getOrDefault = (Func<IEnumerable<RunInfo>, RunInfo>)(infos => infos.Count() > 0 ? infos.First() : new RunInfo() { Id = -1 });
             if (filter != EFilter.ORIGINS)
             {
-                table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.NewLap));
-                table.AddColumn("1 Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.OneLap));
+                table.AddColumn("New Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.NewLap)));
+                table.AddColumn("1 Lap", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.OneLap)));
                 if (filter != EFilter.OTHER)
                 {
-                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.NewLapSkip));
-                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.OneLapSkip));
+                    table.AddColumn("New Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.NewLapSkip)));
+                    table.AddColumn("1 Lap (Skip)", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.OneLapSkip)));
                 }
             }
             else
             {
-                table.AddColumn("Any%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.AnyPerc));
-                table.AddColumn("100%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, runs.HundredPerc));
+                table.AddColumn("Any%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.AnyPerc)));
+                table.AddColumn("100%", colWidth, (runs) => new TimePlaceEntry(context.Fonts.FontMedium, getOrDefault(runs.HundredPerc)));
             }
             table.OnLeftClickRow = (row, runs, i) =>
             {
@@ -1090,7 +1121,7 @@ namespace Velo
                 case EFilter.ORIGINS:
                     return RunsDatabase.Instance.GetPlayerPBs(PlayerId, curated: true, popularity: false).Where((infos) => Map.IsOrigins(infos.MapId));
                 case EFilter.OTHER:
-                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, curated: false, popularity: true).Where((infos) => infos.NewLap.Id != -1 || infos.OneLap.Id != -1);
+                    return RunsDatabase.Instance.GetPlayerPBs(PlayerId, curated: false, popularity: true).Where((infos) => infos.NewLap.Count > 0 || infos.OneLap.Count > 0);
                 default:
                     return null;
             }
@@ -1213,7 +1244,9 @@ namespace Velo
             {
                 for (int t = 0; t < 6; t++)
                 {
-                    RunInfo info = infos.Get((ECategoryType)t);
+                    if (infos.Get((ECategoryType)t).Count() == 0)
+                        continue;
+                    RunInfo info = infos.Get((ECategoryType)t).First();
                     if (info.Id != -1)
                     {
                         pbs++;
@@ -1226,7 +1259,9 @@ namespace Velo
             {
                 for (int t = 0; t < 6; t++)
                 {
-                    RunInfo info = infos.Get((ECategoryType)t);
+                    if (infos.Get((ECategoryType)t).Count() == 0)
+                        continue;
+                    RunInfo info = infos.Get((ECategoryType)t).First();
                     if (info.Id != -1)
                         pbsNonCurated++;
                 }
@@ -1354,7 +1389,7 @@ namespace Velo
                 case ESorting.ALPHABET:
                     return elems.OrderBy(infos => Map.MapIdToName(infos.MapId));
                 case ESorting.RECENT_WR:
-                    return elems.OrderByDescending(infos => Enumerable.Range(0, 6).Select(i => infos.Get((ECategoryType)i).Id).Max());
+                    return elems.OrderByDescending(infos => Enumerable.Range(0, 6).Select(i => infos.Get((ECategoryType)i).Count() > 0 ? infos.Get((ECategoryType)i).First().Id : -1).Max());
                 case ESorting.RECENTLY_BUILT:
                     return elems.OrderByDescending(infos => infos.MapId);
                 case ESorting.CHRONOLOGIC:
@@ -1366,7 +1401,9 @@ namespace Velo
 
         public override float Height(MapRunInfos elem, int i)
         {
-            return Filter != EFilter.ORIGINS && Filter != EFilter.OTHER ? 74f : 40f;
+            return 
+                (Filter != EFilter.ORIGINS && Filter != EFilter.OTHER ? 74f : 40f) *
+                Enumerable.Range(0, 6).Select(t => elem.Get((ECategoryType)t).Count()).Max();
         }
 
         public override void PushRequests()
@@ -1752,6 +1789,8 @@ namespace Velo
                 Style.ApplyText(this);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
             }
         }
 
@@ -1779,6 +1818,8 @@ namespace Velo
                 Style.ApplyText(label);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     label.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    label.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
             }
 
             public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -1799,6 +1840,8 @@ namespace Velo
                 Style.ApplyText(this);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
 
                 Text = "" + player.Score;
             }
@@ -1845,6 +1888,8 @@ namespace Velo
                 Style.ApplyText(this);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
             }
         }
 
@@ -1871,6 +1916,8 @@ namespace Velo
                 Style.ApplyText(label);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     label.Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    label.Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
             }
 
             public override void Draw(IWidget hovered, Rectangle parentCropRec, float scale, float opacity)
@@ -1891,6 +1938,8 @@ namespace Velo
                 Style.ApplyText(this);
                 if (player.PlayerId == SteamUser.GetSteamID().m_SteamID)
                     Color = SettingsUI.Instance.HighlightTextColor.Value.Get;
+                if (SteamFriends.HasFriend(new CSteamID(player.PlayerId), EFriendFlags.k_EFriendFlagImmediate))
+                    Color = SettingsUI.Instance.Highlight2TextColor.Value.Get;
 
                 Text = "" + player.WrCount;
             }
@@ -1989,20 +2038,20 @@ namespace Velo
             AddSpace(10f);
             
             rules.Text =
-@"All runs are automatically verified and categorized by Velo itself before being automatically submitted as
-you play. In case an invalid run still manages to get submitted either by a bug or in a cheated manner, 
-contact a leaderboard moderator and they will be able to remove the run.
+@"Velo records, verifies, categorizes and submits your runs as you play. This process is fully automatic 
+and requires no interaction. In case an invalid run still manages to get submitted either by a bug or 
+in a cheated manner, contact a leaderboard moderator and they will be able to remove the run.
 Maps in the ""other"" category do not count towards score or WRs.
 
 A run is categorized as ""1 lap"" if any of the following apply:
   -Lap was started by finishing a previous lap
   -Player had boost upon starting the lap
-  -Player had boostacoke upon starting the lap (laboratory only)
+  -Player had boostacoke upon starting the lap (Laboratory only)
   -A gate was not closed upon starting the lap (except Club V)
   -A fall tile (black obstacle) was broken upon starting the lap
-  -Lap did not start from countdown and reset lasers setting is disabled (powerplant and libary only)
-  -Player pressed lap reset while climbing and reset wall boost setting is disabled
-  -Player pressed lap reset right after pressing jump and reset jump boost setting is disabled
+  -Lap did not start from countdown and ""reset lasers"" setting is disabled (Powerplant and Library only)
+  -Player pressed lap reset while in wall climbing state and ""reset wall boost"" setting is disabled
+  -Player pressed lap reset while in a jump state and ""reset jump boost"" setting is disabled
 
 A run is categorized as ""Skip"" if any of the following apply:
   -Player missed a secondary checkpoint
@@ -2020,16 +2069,18 @@ A run is invalid if any of the following apply:
   -An item actor was still alive upon starting the lap
   -A ghost blocked a laser (use ""disable ghost laser interaction"")
   -A ghost hit a fall tile (use ""disable ghost fall tile interaction"")
-  -Player had boostacoke upon starting the lap (any map except laboratory)
+  -Player had boostacoke upon starting the lap (any map except Laboratory)
   -Player modified their boostacoke by pressing + or -
   -Time of the run is longer than 30 minutes
   -Physics, camera or TAS settings were changed in Velo (changing camera zoom on Origins is allowed)
   -Framelimit was set below 30 or above 300 in Velo
   -Blindrun simulator was enabled in Velo
-  -A savestate was used (1 second cooldown, infinite cooldown when using savestate load halt)
+  -A ""set"" command was used (infinite cooldown that does not reset when pressing ""reset lap"")
+  -A savestate was used (1 second cooldown, infinite cooldown when using ""savestate load halt"")
   -A savestate from a version prior 2.2.11 was used
   -A replay was used (1 second cooldown for replays of own runs, 5 second cooldown for other replays)
   -A ghost used an item
+  -Camera was focused to a ghost
   -An external program like Cheat Engine was used
   -Map was neither official, nor Origins, nor published Workshop
   -Option SuperSpeedRunners, SpeedRapture or Destructible Environment was enabled
@@ -2053,7 +2104,7 @@ to hit all secondary checkpoints.
 The score system:
 Each PB run grants you somewhere between 1 to 1000 (or 500) points, depending on how close it is to the
 WR run. If we denote WR time as 'wr' and your PB time as 'pb', you get M * wr / (wr + 25 * (pb - wr)) points
-per run where M = 1000 on all maps except for old RWS and Origins with M = 500.
+per run where M = 1000 on all official and RWS maps and M = 500 on old RWS and Origins.
 
 The new grapple cooldown:
 On 09/OCT/2024 the game received an update, lowering the grapple cooldown from 0.25s to 0.20s. Playing
@@ -2064,7 +2115,7 @@ On 12/DEC/2024 the game received an update, fixing the flat slope bounce glitch.
 is a glitch where 25 units behind the peak of a slope there is a 1 unit wide spot on the ground that has
 slope properties. This fix removes this spot when going up the slope, making it impossible to get bounced
 up by it, while still allowing you to land on it from above. Playing with or without this fix is allowed and
-you can see whether it was applied for a run under ""Fix BG"".";
+you can see whether it was applied to a run under ""Fix BG"".";
         }
 
         public override void PushRequests()

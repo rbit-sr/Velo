@@ -42,7 +42,7 @@ namespace Velo
             Color = AddColorTransition("color", new ColorTransition(Microsoft.Xna.Framework.Color.Red));
             
             Variable.Tooltip =
-                "Set the variable to which the color transition should be bound to:\n" +
+                "Binds the color transition to a specific variable:\n" +
                 "-global time: global time in milliseconds\n" +
                 "-framerate: frames per second";
 

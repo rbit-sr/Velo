@@ -265,7 +265,7 @@ namespace Velo
         public override string ToString(bool whiteSpace, int depth = 0)
         {
             if (value.Count == 0)
-                return "{}";
+                return "[]";
 
             string space = "";
             if (whiteSpace)

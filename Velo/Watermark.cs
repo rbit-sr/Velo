@@ -19,7 +19,7 @@ namespace Velo
 
             string text = "";
 
-            if (!OfflineGameMods.Instance.IsPlaybackRunning())
+            if (!OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning)
             {
                 if (Velo.get_time_scale() != 1f)
                     text += "\nx" + Velo.get_time_scale();
@@ -33,10 +33,18 @@ namespace Velo
                 if ((Velo.RealTime - OfflineGameMods.Instance.SavestateLoadTime).TotalSeconds <= 0.5f)
                     text += "\nload";
             }
-            else if (!OfflineGameMods.Instance.IsOwnPlaybackFromLeaderboard())
+            if (
+                OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning &&
+                OfflineGameMods.Instance.WatermarkType.Value == OfflineGameMods.EWatermarkType.TAS &&
+                OfflineGameMods.Instance.RecordingAndReplay.PlaybackRecording is Timeline
+            )
+            {
+                text = "\nTAS";
+            }
+            /*else if (!OfflineGameMods.Instance.IsOwnPlaybackFromLeaderboard())
             {
                 text = "\nreplay";
-            }
+            }*/
 
             if (text.Length > 0)
             {

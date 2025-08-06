@@ -154,10 +154,11 @@ namespace Velo
             this.crc = 0;
         }
 
-        public void Send(byte[] data)
+        public void Send(byte[] data, int size = -1)
         {
             int off = 0;
-            int size = data.Length;
+            if (size == -1)
+                size = data.Length;
             while (size > 0)
             {
                 Task<int> task = socket.SendAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
@@ -182,10 +183,11 @@ namespace Velo
             UpdateCrc(data);
         }
 
-        public void Receive(byte[] data)
+        public void Receive(byte[] data, int size = -1)
         {
             int off = 0;
-            int size = data.Length;
+            if (size == -1)
+                size = data.Length;
             while (size > 0)
             {
                 Task<int> task = socket.ReceiveAsync(new ArraySegment<byte>(data, off, size), SocketFlags.None);
@@ -217,14 +219,18 @@ namespace Velo
 
         public void Send<T>(T data) where T : struct
         {
-            Send(data.ToBytes());
+            int size = Util.PrimitiveSize(typeof(T));
+            byte[] buffer = new byte[size];
+            data.ToBytes(buffer);
+            Send(buffer, size);
         }
 
         public T Receive<T>() where T : struct
         {
-            byte[] bytes = new byte[Marshal.SizeOf<T>()];
-            Receive(bytes);
-            return bytes.FromBytes<T>();
+            int size = Util.PrimitiveSize(typeof(T));
+            byte[] buffer = new byte[size];
+            Receive(buffer, size);
+            return buffer.FromBytes<T>(size);
         }
 
         public void Send(string data)
@@ -237,9 +243,9 @@ namespace Velo
         public string ReceiveStr()
         {
             int len = Receive<int>();
-            byte[] bytes = new byte[len];
-            Receive(bytes);
-            return Encoding.UTF8.GetString(bytes);
+            byte[] buffer = new byte[len];
+            Receive(buffer, len);
+            return Encoding.UTF8.GetString(buffer, 0, len);
         }
     }
 }

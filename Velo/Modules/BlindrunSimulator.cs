@@ -67,7 +67,7 @@ namespace Velo
             if (!Velo.Ingame)
                 return;
 
-            Camera camera = (Camera)cameraMod;
+            SoloCameraModifier camera = (SoloCameraModifier)cameraMod;
 
             if (Enabled.Modified())
             {
@@ -76,8 +76,8 @@ namespace Velo
             }
                 
             Vector2 diff = camera.player.actor.Bounds.Center + new Vector2(0f, -100f) - camPos;
-            Vector2 slowSpeedBorder = (new Vector2(640f, 360f) + SlowBorderOff.Value) * camera.zoom1;
-            Vector2 fastSpeedBorder = (new Vector2(640f, 360f) + FastBorderOff.Value) * camera.zoom1;
+            Vector2 slowSpeedBorder = (new Vector2(640f, 360f) + SlowBorderOff.Value) * camera.zoom;
+            Vector2 fastSpeedBorder = (new Vector2(640f, 360f) + FastBorderOff.Value) * camera.zoom;
             Vector2 targetVel;
 
             if (Math.Abs(diff.X) < slowSpeedBorder.X)
@@ -124,7 +124,7 @@ namespace Velo
             camVelDiff = new Vector2(MathHelper.Clamp(camVelDiff.X, -clamp.X, clamp.X), MathHelper.Clamp(camVelDiff.Y, -clamp.Y, clamp.Y));
             camVel += camVelDiff;
             camPos += camVel * (float)Velo.CEngineInst.gameTime.ElapsedGameTime.TotalSeconds;
-            camera.position = camPos;
+            camera.worldFocusPoint = camPos;
         }
     }
 }

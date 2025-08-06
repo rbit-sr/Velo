@@ -29,9 +29,9 @@ namespace Velo
             Color = AddColorTransition("color", new ColorTransition(50, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
 
             Variable.Tooltip =
-                "Set the variable to which the color transition should be bound to:\n" +
+                "Binds the color transition to a specific variable:\n" +
                 "-global time: global time in milliseconds\n" +
-                "-angle offset: last grapple release angle in degrees minus 90";
+                "-angle offset: difference of last grapple release angle in degrees to 90 degrees";
 
             AddStyleSettings();
             Offset.SetValueAndDefault(new Vector2(7f, -30f));

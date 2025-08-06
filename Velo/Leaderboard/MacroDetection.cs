@@ -13,13 +13,13 @@ namespace Velo
             public InputState(Player player)
             {
                 State = (byte)(
-                    (player.leftPressed    ? 1 << 0 : 0) |
-                    (player.rightPressed   ? 1 << 1 : 0) |
-                    (player.jumpPressed    ? 1 << 2 : 0) |
-                    (player.grapplePressed && (player.can_grapple || player.grappling) 
+                    (player.leftHeld    ? 1 << 0 : 0) |
+                    (player.rightHeld ? 1 << 1 : 0) |
+                    (player.jumpHeld ? 1 << 2 : 0) |
+                    (player.grappleHeld && (player.canGrapple || player.grappling) 
                                            ? 1 << 3 : 0) |
-                    (player.slidePressed && !player.grappling && !player.unknown7 &&
-                        ((player.actor.Velocity.Length() >= 300f && (player.game_time.TotalGameTime - player.timespan7).TotalSeconds > 0.5) || player.sliding)
+                    (player.slideHeld && !player.grappling && !player.slideCancelled &&
+                        ((player.actor.Velocity.Length() >= 300f && (player.game_time.TotalGameTime - player.slideTime).TotalSeconds > 0.5) || player.sliding)
                                            ? 1 << 4 : 0)
                     );
             }
@@ -169,7 +169,7 @@ namespace Velo
         {
             base.PostUpdate();
 
-            if (!Velo.Ingame || Velo.Online || OfflineGameMods.Instance.IsPlaybackRunning())
+            if (!Velo.Ingame || Velo.Online || OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning)
                 return;
 
             if (Velo.ModuleSolo != null)

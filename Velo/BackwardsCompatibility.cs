@@ -61,10 +61,10 @@ namespace Velo
 
     public struct FrameBWC1
     {
-        public long Delta;
-        public long Time;
-        public long DeltaSum;
-        public long JumpTime;
+        public TimeSpan Delta;
+        public TimeSpan Time;
+        public TimeSpan DeltaSum;
+        public TimeSpan JumpTime;
         public float PosX;
         public float PosY;
         public float VelX;
@@ -81,7 +81,7 @@ namespace Velo
         {
             return new Frame
             {
-                RealTime = 0,
+                RealTime = TimeSpan.Zero,
                 Delta = Delta,
                 Time = Time,
                 DeltaSum = DeltaSum,
@@ -92,10 +92,10 @@ namespace Velo
                 VelY = VelY,
                 Boost = Boost,
                 JumpState = JumpState,
-                Unknown27 = Unknown27,
+                DominatingDirection = Unknown27,
                 GrapPosX = GrapPosX,
                 GrapPosY = GrapPosY,
-                GrapRad = GrapRad,
+                SwingRadius = GrapRad,
                 Flags = Flags
             };
         }

@@ -80,7 +80,7 @@ namespace Velo
             AddElem(ErrorMessage, StackW.TOP_LEFT, PAGE_POS + new Vector2(PAGE_SIZE.X + 8f, PAGE_SIZE.Y - 35f / 2 - ERROR_MESSAGE_SIZE.Y / 2), ERROR_MESSAGE_SIZE);
         }
 
-        public override void EnterMenu()
+        public override void EnterMenu(bool animation = true)
         {
             Page.Clear();
             
@@ -234,7 +234,7 @@ namespace Velo
 
             if (ShowAppliedRulesHotkey.Pressed())
             {
-                OfflineGameMods.Instance.ShowLastAppliedRules();
+                OfflineGameMods.Instance.RecordingAndReplay.ShowLastAppliedRules();
             }
         }
 
@@ -257,10 +257,10 @@ namespace Velo
 
             base.PostRender();
 
-            int status = OfflineGameMods.Instance.CurrentRunStatus();
+            int status = OfflineGameMods.Instance.RecordingAndReplay.CurrentRunStatus();
             if (
                 ShowRunStatus.Value && status != 0 && 
-                !OfflineGameMods.Instance.IsPlaybackRunning() &&
+                !OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning &&
                 Velo.get_time_scale() == 1f &&
                 !OfflineGameMods.Instance.IsModded() && 
                 !BlindrunSimulator.Instance.Enabled.Value.Enabled &&

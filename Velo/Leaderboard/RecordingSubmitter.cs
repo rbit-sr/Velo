@@ -26,7 +26,8 @@ namespace Velo
             {
                 task = Task.Run(() =>
                 {
-                    byte[] bytes = recording.ToBytes();
+                    byte[] bytes = recording.ToBytes(out int size);
+                    bytes = (byte[])bytes.Clone();
                     if (recording.Sign == null)
                     {
                         recording.GenerateSign(bytes);
@@ -61,7 +62,7 @@ namespace Velo
                         if (!Directory.Exists("Velo\\pending"))
                             Directory.CreateDirectory("Velo\\pending");
 
-                        using (FileStream stream = new FileStream(path, FileMode.Create, FileAccess.Write))
+                        using (FileStream stream = File.Create(path))
                         {
                             stream.Write(bytes, 0, bytes.Length);
                             stream.Write(recording.Sign, 0, recording.Sign.Length);
@@ -128,9 +129,19 @@ namespace Velo
                         else if (result.RecordType == 1)
                             message = "New event PB!";
                         else if (result.RecordType == 2)
-                            message = "New WR!";
+                        {
+                            if (result.Tied == 0)
+                                message = "New WR!";
+                            else
+                                message = "Tied WR!";
+                        }
                         else if (result.RecordType == 3)
-                            message = "New event WR!";
+                        {
+                            if (result.Tied == 0)
+                                message = "New event WR!";
+                            else
+                                message = "Tied event WR!";
+                        }
                         else
                             message = "";
 

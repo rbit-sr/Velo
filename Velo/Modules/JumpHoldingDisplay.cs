@@ -36,7 +36,7 @@ namespace Velo
             NewCategory("general");
             Grapple = AddBool("grapple", true);
             SlopeSurf = AddBool("slope surf", true);
-            IgnoreFullJump = AddBool("ignore full jump", false);
+            IgnoreFullJump = AddBool("ignore full jump", true);
 
             CurrentCategory.Tooltip =
                 "Shows you how efficient your jump holding during spam grappling or slope surfing is. " +
@@ -57,7 +57,7 @@ namespace Velo
             Color = AddColorTransition("color", new ColorTransition(100, 0, false, new[] { new Color(0, 255, 0), new Color(255, 0, 0) }));
 
             Variable.Tooltip =
-                "Set the variable to which the color transition should be bound to:\n" +
+                "Binds the color transition to a specific variable:\n" +
                 "-global time: global time in milliseconds\n" +
                 "-miss: time between the last jump release and subsequent grapple or slope connection in milliseconds";
 
@@ -75,14 +75,14 @@ namespace Velo
 
             bool missChanged = false;
 
-            if (Velo.MainPlayer.jumpPressed && !prevJumpPress)
+            if (Velo.MainPlayer.jumpHeld && !prevJumpPress)
             {
                 hasJumped = true;
             }
 
             if (
-                (Velo.MainPlayer.jumpPressed && !Velo.MainPlayer.sliding && !Velo.MainPlayer.on_ground && Velo.MainPlayer.timespan2 + TimeSpan.FromSeconds(0.25) > Velo.CEngineInst.gameTime.TotalGameTime) ||
-                (IgnoreFullJump.Value && Velo.MainPlayer.jump_vel.Y <= -359.49f)
+                (Velo.MainPlayer.jumpHeld && !Velo.MainPlayer.sliding && !Velo.MainPlayer.onGround && Velo.MainPlayer.repressJumpTime + TimeSpan.FromSeconds(0.25) > Velo.CEngineInst.gameTime.TotalGameTime) ||
+                (IgnoreFullJump.Value && Velo.MainPlayer.jumpVelocity.Y <= -359.49f)
                 )
             {
                 releaseTime = Velo.CEngineInst.gameTime.TotalGameTime;
@@ -91,7 +91,7 @@ namespace Velo
             if (Velo.MainPlayer.grapple.connected && !wasConnected)
             {
                 wasConnected = true;
-                if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && new Vector2(velPrev.X, Velo.MainPlayer.jump_vel.Y).Length() > 750f && hasJumped)
+                if (Grapple.Value && Velo.MainPlayer.actor.Velocity.Y < 0.0f && new Vector2(velPrev.X, Velo.MainPlayer.jumpVelocity.Y).Length() > 750f && hasJumped)
                 {
                     miss = Velo.CEngineInst.gameTime.TotalGameTime - releaseTime;
                     missChanged = true;
@@ -103,7 +103,7 @@ namespace Velo
                 wasConnected = false;
             }
 
-            if (Velo.MainPlayer.on_ground && !wasOnGround)
+            if (Velo.MainPlayer.onGround && !wasOnGround)
             {
                 wasOnGround = true;
                 if (SlopeSurf.Value && velPrev.Y < -10.0f && Velo.MainPlayer.actor.Velocity.Y < -10.0f && hasJumped)
@@ -115,7 +115,7 @@ namespace Velo
             }
             timePrev = Velo.CEngineInst.gameTime.TotalGameTime;
             velPrev = Velo.MainPlayer.actor.Velocity;
-            if (!Velo.MainPlayer.on_ground)
+            if (!Velo.MainPlayer.onGround)
             {
                 wasOnGround = false;
             }
@@ -125,7 +125,7 @@ namespace Velo
                 text = RoundingMultiplier.Value.ToStringRounded((float)(miss.Ticks / (double)TimeSpan.TicksPerSecond));
             }
 
-            prevJumpPress = Velo.MainPlayer.jumpPressed;
+            prevJumpPress = Velo.MainPlayer.jumpHeld;
         }
 
         public override string GetText()

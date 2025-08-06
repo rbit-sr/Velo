@@ -17,6 +17,7 @@ namespace Velo
         private readonly List<Module> modulesPostUpdate = new List<Module>();
         private readonly List<Module> modulesPreRender = new List<Module>();
         private readonly List<Module> modulesPostRender = new List<Module>();
+        private readonly List<Module> modulesPostPresent = new List<Module>();
         private readonly Dictionary<string, Module> modulesLookup = new Dictionary<string, Module>();
         private readonly Dictionary<int, Setting> idToSetting = new Dictionary<int, Setting>();
         private int nextId = 0;
@@ -58,6 +59,7 @@ namespace Velo
             modulesPostUpdate.Remove(module);
             modulesPreRender.Remove(module);
             modulesPostRender.Remove(module);
+            modulesPostPresent.Remove(module);
         }
 
         public void AddToCycle(Module module)
@@ -69,6 +71,7 @@ namespace Velo
             if (t.GetMethod("PostUpdate").DeclaringType != m) modulesPostUpdate.Add(module);
             if (t.GetMethod("PreRender").DeclaringType != m) modulesPreRender.Add(module);
             if (t.GetMethod("PostRender").DeclaringType != m) modulesPostRender.Add(module);
+            if (t.GetMethod("PostPresent").DeclaringType != m) modulesPostPresent.Add(module);
         }
 
         public void Add(Module module)
@@ -131,25 +134,11 @@ namespace Velo
                 modulesPostRender[i].PostRender();
         }
 
-        public static void Swap<T>(IList<T> list, T A, T B)
+        public void PostPresent()
         {
-            (list[list.IndexOf(B)], list[list.IndexOf(A)]) = (list[list.IndexOf(A)], list[list.IndexOf(B)]);
-        }
-
-        public void EnsureOrder(Module first, Module second)
-        {
-            if (modules.IndexOf(first) > modules.IndexOf(second))
-                Swap(modules, first, second);
-            if (modulesPreSDLPoll.IndexOf(first) > modulesPreSDLPoll.IndexOf(second))
-                Swap(modulesPreSDLPoll, first, second);
-            if (modulesPreUpdate.IndexOf(first) > modulesPreUpdate.IndexOf(second))
-                Swap(modulesPreUpdate, first, second);
-            if (modulesPostUpdate.IndexOf(first) > modulesPostUpdate.IndexOf(second))
-                Swap(modulesPostUpdate, first, second);
-            if (modulesPreRender.IndexOf(first) > modulesPreRender.IndexOf(second))
-                Swap(modulesPreRender, first, second);
-            if (modulesPostRender.IndexOf(first) > modulesPostRender.IndexOf(second))
-                Swap(modulesPostRender, first, second);
+            int count = modulesPostPresent.Count;
+            for (int i = 0; i < count; i++)
+                modulesPostPresent[i].PostPresent();
         }
 
         public JsonElement ToJson(ToJsonArgs args)
@@ -238,6 +227,14 @@ namespace Velo
         public bool HasSettings()
         {
             return settings.Count > 0;
+        }
+
+        public IEnumerable<Setting> Settings => settings;
+
+        public void RemoveAllSettings()
+        {
+            settings.Clear();
+            settingsLookup.Clear();
         }
 
         protected IntSetting AddInt(string name, int defaultValue, int min, int max)
@@ -357,6 +354,7 @@ namespace Velo
         public virtual void PostUpdate() { }
         public virtual void PreRender() { }
         public virtual void PostRender() { }
+        public virtual void PostPresent() { }
     }
 
     public abstract class ToggleModule : Module
@@ -375,7 +373,7 @@ namespace Velo
         {
             base.PreUpdate();
 
-            if (Input.IsPressed(Enabled.Value.Hotkey))
+            if (Input.IsPressed(Enabled.Value.Hotkey) && !Util.HotkeysDisabled())
             {
                 Enabled.ToggleState();
             }
@@ -658,7 +656,7 @@ namespace Velo
             NewCategory("style");
             Scale = AddFloat("scale", 1f, 0f, 10f);
             Orientation = AddEnum("orientation", EOrientation.PLAYER, 
-                Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(orientation => orientation.Label()).ToArray());
+                Enum.GetValues(typeof(EOrientation)).Cast<EOrientation>().Select(o => o.Label()).ToArray());
             Offset = AddVector("offset", Vector2.Zero, new Vector2(-500f, -500f), new Vector2(500f, 500f));
             Font = AddString("font", "UI\\Font\\Souses.ttf");
             FontSize = AddInt("font size", 24, 1, 50);

@@ -115,13 +115,13 @@ namespace Velo
 
             bool[] pressed = new bool[] 
             { 
-                player.leftPressed, 
-                player.rightPressed, 
-                player.jumpPressed, 
-                player.grapplePressed, 
-                player.slidePressed, 
-                player.boostPressed, 
-                player.itemPressed 
+                player.leftHeld, 
+                player.rightHeld, 
+                player.jumpHeld, 
+                player.grappleHeld, 
+                player.slideHeld, 
+                player.boostHeld, 
+                player.itemHeld
             };
             InputBox[] inputBoxes = new InputBox[]
             {

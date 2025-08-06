@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using CEngine.Graphics.Component;
+using CEngine.Graphics.Library;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using CEngine.Graphics.Library;
-using CEngine.Graphics.Component;
-using System.Linq;
 using Microsoft.Xna.Framework.Input;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 
 namespace Velo
 {
@@ -1463,6 +1464,12 @@ namespace Velo
             targetScroll = 0f;
         }
 
+        public void ScrollDown()
+        {
+            scroll = float.PositiveInfinity;
+            targetScroll = float.PositiveInfinity;
+        }
+
         public override void Reset()
         {
             base.Reset();
@@ -1658,6 +1665,11 @@ namespace Velo
             }
         }
 
+        public void RefreshAllEntries()
+        {
+            entries.Clear();
+        }
+
         public bool ReachedEnd => reachedEnd;
     }
 
@@ -1703,6 +1715,12 @@ namespace Velo
             }
         }
 
+        public CFont Font => textDraw.Font;
+
+        public void SetFont(CachedFont font)
+        {
+            textDraw.SetFont(font);
+        }
         public override Vector2 RequestedSize => textDraw.Bounds.Size / textDraw.Scale + 2 * Padding;
         public override IEnumerable<IWidget> Children => Enumerable.Empty<IWidget>();
 
@@ -2234,7 +2252,8 @@ namespace Velo
 
         public void TransitionBack(float speed, Vector2 offset, bool opposite = false, Action onFinish = null)
         {
-            base.TransitionTo(backStack.Pop(), speed, offset, opposite, onFinish);
+            if (backStack.Count > 0)
+                base.TransitionTo(backStack.Pop(), speed, offset, opposite, onFinish);
         }
 
         public new void GoTo(W widget)

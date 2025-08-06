@@ -1,142 +1,11 @@
 ﻿using CEngine.Graphics.Camera;
-using Microsoft.Xna.Framework;
-using System.Collections.Generic;
-using System;
 using CEngine.World.Actor;
-using System.IO;
-using System.Linq;
-
+using Microsoft.Xna.Framework;
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
 namespace Velo
 {
-    public class ReplayHUDContex : MenuContext
-    {
-        public ButtonW PauseButton;
-        public ButtonW Rewind1FrameButton;
-        public ButtonW Forward1FrameButton;
-        public ButtonW Rewind200msButton;
-        public ButtonW Forward200msButton;
-        public ButtonW StopButton;
-        public ButtonW SpeedButton;
-        public LayoutW Layout;
-
-        private readonly float[] speedModes = new[] { 0.1f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f, 4.0f };
-        private int currentSpeedMode = 3;
-        private bool speedmodeChanged = false;
-
-        public ReplayHUDContex(ToggleSetting enabled) :
-            base(enabled, false)
-        {
-            PauseButton = new ButtonW("Pause", Fonts.FontMedium);
-            Style.ApplyButton(PauseButton);
-            PauseButton.OnLeftClick = () =>
-            {
-                OfflineGameMods.Instance.Freeze.ToggleState();
-            };
-
-            Rewind1FrameButton = new ButtonW("<", Fonts.FontMedium);
-            Style.ApplyButton(Rewind1FrameButton);
-            Rewind1FrameButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT || wevent.Button == WEMouseClick.EButton.LEFT_REPEATED)
-                    OfflineGameMods.Instance.RewindFrames(1);
-            };
-
-            Forward1FrameButton = new ButtonW(">", Fonts.FontMedium);
-            Style.ApplyButton(Forward1FrameButton);
-            Forward1FrameButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT || wevent.Button == WEMouseClick.EButton.LEFT_REPEATED)
-                    OfflineGameMods.Instance.StepFrames(1);
-            };
-
-            Rewind200msButton = new ButtonW("<<", Fonts.FontMedium);
-            Style.ApplyButton(Rewind200msButton);
-            Rewind200msButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT || wevent.Button == WEMouseClick.EButton.LEFT_REPEATED)
-                    OfflineGameMods.Instance.RewindSeconds(0.2f);
-            };
-
-            Forward200msButton = new ButtonW(">>", Fonts.FontMedium);
-            Style.ApplyButton(Forward200msButton);
-            Forward200msButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT || wevent.Button == WEMouseClick.EButton.LEFT_REPEATED)
-                    OfflineGameMods.Instance.ForwardSeconds(0.2f);
-            };
-
-            StopButton = new ButtonW("×", Fonts.FontMedium);
-            Style.ApplyButton(StopButton);
-            StopButton.OnLeftClick = () =>
-            {
-                OfflineGameMods.Instance.StopPlayback();
-            };
-
-            SpeedButton = new ButtonW("1.00", Fonts.FontMedium);
-            Style.ApplyButton(SpeedButton);
-            SpeedButton.OnClick = wevent =>
-            {
-                if (wevent.Button == WEMouseClick.EButton.LEFT)
-                {
-                    currentSpeedMode--;
-                    if (currentSpeedMode < 0)
-                        currentSpeedMode = 0;
-                    OfflineGameMods.Instance.TimeScale.Value = speedModes[currentSpeedMode];
-                    speedmodeChanged = true;
-                }
-                if (wevent.Button == WEMouseClick.EButton.RIGHT)
-                {
-                    currentSpeedMode++;
-                    if (currentSpeedMode >= speedModes.Length)
-                        currentSpeedMode = speedModes.Length - 1;
-                    OfflineGameMods.Instance.TimeScale.Value = speedModes[currentSpeedMode];
-                    speedmodeChanged = true;
-                }
-            };
-
-            Layout = new HLayoutW();
-            Layout.AddChild(StopButton, 35f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(Rewind200msButton, 35f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(Rewind1FrameButton, 35f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(PauseButton, 70f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(Forward1FrameButton, 35f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(Forward200msButton, 35f);
-            Layout.AddSpace(10f);
-            Layout.AddChild(SpeedButton, 55f);
-
-            AddElem(Layout, StackW.BOTTOM_LEFT, new Vector2((1920f - Layout.RequestedSize.X) / 2f, -10f), new Vector2(StackW.REQUESTED_SIZE_X, 35f));
-        }
-
-        public override void EnterMenu()
-        {
-            base.EnterMenu();
-            speedmodeChanged = false;
-        }
-
-        public override void ExitMenu(bool animation = true)
-        {
-            base.ExitMenu(animation);
-            if (speedmodeChanged)
-                OfflineGameMods.Instance.TimeScale.Value = 1.0f;
-        }
-
-        public override bool Draw()
-        {
-            if (OfflineGameMods.Instance.Freeze.Value.Enabled)
-                PauseButton.BackgroundColor = SettingsUI.Instance.ButtonHoveredColor.Value.Get;
-            else
-                PauseButton.BackgroundColor = SettingsUI.Instance.ButtonColor.Value.Get;
-            SpeedButton.Text = new RoundingMultiplier("0.01").ToStringRounded(OfflineGameMods.Instance.TimeScale.Value);
-            return base.Draw();
-        }
-    }
-
-    // TODO: separate the recording logic from this class
     public class OfflineGameMods : Module
     {
         public FloatSetting TimeScale;
@@ -152,6 +21,7 @@ namespace Velo
         public ToggleSetting FixGrappleGlitches;
         public BoolSetting FixBounceGlitch;
         public BoolSetting EnableOldMoonwalk;
+        public BoolSetting BufferGrapples;
         public BoolSetting DisableGhostLaserInteraction;
         public BoolSetting DisableGhostFallTileInteraction;
 
@@ -172,19 +42,27 @@ namespace Velo
         public HotkeySetting[] LoadKeys = new HotkeySetting[10];
         public FloatSetting LoadHaltDuration;
         public BoolSetting StoreAIVolumes;
+        public BoolSetting CompatabilityMode;
 
         public BoolSetting EnableReplayHUD;
-        public HotkeySetting StopReplay;
-        public HotkeySetting Rewind1Second;
-        public HotkeySetting SaveRun;
-        public HotkeySetting ReplaySavedRun;
-        public HotkeySetting VerifySavedRun;
-        public HotkeySetting SetGhostSavedRun;
+        public BoolSetting UnfreezeOnReplayStart;
         public BoolSetting LoopReplay;
+        public BoolSetting DisableReplayNotifications;
+        public BoolSetting DisableVerifyNotifications;
+        public HotkeySetting StopReplay;
+        public HotkeySetting SaveLast;
+        public HotkeySetting Replay;
+        public HotkeySetting Verify;
+        public HotkeySetting SetGhost;
         public FloatSetting GhostOffsetTime;
         public BoolSetting EnableMultiGhost;
         public BoolSetting GhostDifferentColors;
-        public BoolSetting DisableReplayNotifications;
+
+        public enum EWatermarkType
+        {
+            TAS,
+            SUNGLASSES
+        }
 
         public IntSetting DeltaTime;
         public BoolSetting FixDeltaTime;
@@ -193,24 +71,16 @@ namespace Velo
         public HotkeySetting Step10Key;
         public HotkeySetting JumpBack1Key;
         public HotkeySetting JumpBack10Key;
-        public BoolSetting EnableRewind;
+        public HotkeySetting SaveKey;
+        public IntSetting SaveReminderInterval;
+        public EnumSetting<EWatermarkType> WatermarkType;
 
-        private readonly Savestates savestates;
         public TimeSpan SavestateLoadTime = TimeSpan.Zero;
 
         private int stepCount = 0;
 
-        private readonly Recording recCurrent = new Recording();
-        private Recording recLast;
-
-        private readonly Recorder recorder = new Recorder();
-        private readonly Playback playback = new Playback();
-        private readonly List<Playback> playbackGhosts = new List<Playback>();
-
-        private readonly SavestateStack rewindList = new SavestateStack();
-
-        private ToggleSetting replayHUDEnabled;
-        private ReplayHUDContex replayHUDContext;
+        private readonly RecordingAndReplayManager recordingAndReplay = new RecordingAndReplayManager();
+        public RecordingAndReplayManager RecordingAndReplay => recordingAndReplay;
 
         private OfflineGameMods() : base("Offline Game Mods")
         {
@@ -228,6 +98,7 @@ namespace Velo
             FixGrappleGlitches = AddToggle("fix grapple glitches", new Toggle());
             FixBounceGlitch = AddBool("fix bounce glitch", true);
             EnableOldMoonwalk = AddBool("enable old moonwalk", false);
+            BufferGrapples = AddBool("buffer grapples", false);
             DisableGhostLaserInteraction = AddBool("disable ghost laser interaction", true);
             DisableGhostFallTileInteraction = AddBool("disable ghost fall tile interaction", true);
 
@@ -246,7 +117,7 @@ namespace Velo
                 "Partially fixes the flat slope glitch where 25 units behind the peak of a slope there is a 1 unit wide spot on the ground that has slope properties. " +
                 "This fix only makes it impossible to get bounced up by this spot while landing on it is still possible.";
             EnableOldMoonwalk.Tooltip =
-                "Reenables an old and long fixed glitch that allowed you to initiate a moonwalk" +
+                "Re-enables an old and long fixed glitch that allowed you to initiate a moonwalk " +
                 "by hitting ceiling slopes from below.";
             DisableGhostLaserInteraction.Tooltip =
                 "Disables any interactions of ghosts with lasers. " +
@@ -306,6 +177,7 @@ namespace Velo
             }
             LoadHaltDuration = AddFloat("load halt duration", 0f, 0f, 2f);
             StoreAIVolumes = AddBool("store AI volumes", false);
+            CompatabilityMode = AddBool("compatability mode", Environment.OSVersion.Platform != PlatformID.Win32NT);
 
             CurrentCategory.Tooltip =
                 "Savestates allow you to save the current state of the player and level and to then restore it at any time by pressing a hotkey. " +
@@ -318,22 +190,22 @@ namespace Velo
 
             NewCategory("recording and replay");
             EnableReplayHUD = AddBool("enable replay HUD", true);
-            StopReplay = AddHotkey("stop replay", 0x97);
-            Rewind1Second = AddHotkey("rewind 1 second", 0x97, autoRepeat: true);
-            SaveRun = AddHotkey("save last run", 0x97);
-            ReplaySavedRun = AddHotkey("replay saved run", 0x97);
-            VerifySavedRun = AddHotkey("verify saved run", 0x97);
-            SetGhostSavedRun = AddHotkey("set ghost saved run", 0x97);
+            UnfreezeOnReplayStart = AddBool("unfreeze on replay start", true);
             LoopReplay = AddBool("loop replay", false);
+            DisableReplayNotifications = AddBool("disable replay notifications", false);
+            DisableVerifyNotifications = AddBool("disable verify notificaitons", false);
+
+            StopReplay = AddHotkey("stop replay", 0x97);
+            SaveLast = AddHotkey("save last", 0x97);
+            Replay = AddHotkey("replay", 0x97);
+            Verify = AddHotkey("verify", 0x97);
+            SetGhost = AddHotkey("set ghost", 0x97);
             GhostOffsetTime = AddFloat("ghost offset", 0f, -2f, 2f);
             EnableMultiGhost = AddBool("enable multighost", false);
             GhostDifferentColors = AddBool("ghosts different colors", true);
-            DisableReplayNotifications = AddBool("disable replay notifications", false);
 
-            Rewind1Second.Tooltip =
-                "Rewinds replay by 1 second.";
-            SaveRun.Tooltip =
-                "Saves a recording of the previous run to \"Velo\\saved run\". If you believe your run to be wrongly categorized or invalidated, send the file to a leaderboard moderator.";
+            SaveLast.Tooltip =
+                "Saves a recording of the previous run to \"Velo\\recordings\\run.srrec\". If you believe your run to be wrongly categorized or invalidated, send the file to a leaderboard moderator.";
             GhostOffsetTime.Tooltip = "ghost offset time in seconds";
             EnableMultiGhost.Tooltip = "Allows you to have multiple ghosts at the same time.";
             GhostDifferentColors.Tooltip = "Color multiple ghosts differently or use the same color.";
@@ -358,7 +230,9 @@ namespace Velo
             Step10Key = AddHotkey("step 10 key", 0x97, autoRepeat: true);
             JumpBack1Key = AddHotkey("jump back 1 key", 0x97, autoRepeat: true);
             JumpBack10Key = AddHotkey("jump back 10 key", 0x97, autoRepeat: true);
-            EnableRewind = AddBool("enable rewind", true);
+            SaveKey = AddHotkey("save key", 0x97);
+            SaveReminderInterval = AddInt("save reminder interval", 15, 2, 120);
+            WatermarkType = AddEnum("watermark type", EWatermarkType.TAS, new[] { "TAS text", "sunglasses" });
 
             Freeze.Tooltip =
                 "When frozen, the game stops doing any physics updates.";
@@ -370,37 +244,32 @@ namespace Velo
                 "Jumps 1 frame backwards. \"enable rewind\" needs to be enabled.";
             JumpBack10Key.Tooltip =
                 "Jumps 10 frames backwards. \"enable rewind\" needs to be enabled.";
-            EnableRewind.Tooltip =
-                "Allows you to jump frames backwards while in fixed delta time or stepping mode. " +
-                "Decreases performance and increases RAM usage.";
-
-            savestates = new Savestates(this, onSave: null, onLoad: savestate =>
-            {
-                SavestateLoadTime = Velo.RealTime;
-                recorder.Restart();
-            });
+            SaveKey.Tooltip =
+                "Saves the TAS-project.";
+            SaveReminderInterval.Tooltip =
+                "interval in minutes";
         }
 
         public static OfflineGameMods Instance = new OfflineGameMods();
 
-        public bool DtFixed
-        {
-            get
-            {
-                if (Velo.Online)
-                    return false;
-
-                return FixDeltaTime.Value || stepCount > 0 || Freeze.Value.Enabled || (playback != null && playback.DtFixed);
-            }
-        }
-
+        public bool DtFixed =>
+            !Velo.Online && (
+            FixDeltaTime.Value ||
+            stepCount > 0 ||
+            Freeze.Value.Enabled ||
+            recordingAndReplay.DtFixed
+            );
+       
         public float TimeScaleVal
         {
             get
             {
                 if (!Velo.Online && Velo.Ingame)
                 {
-                    if (SavestateLoadTime == TimeSpan.Zero)
+                    if (
+                        SavestateLoadTime == TimeSpan.Zero || 
+                        recordingAndReplay.RecordingMode == ERecordingMode.TAS
+                    )
                         return TimeScale.Value;
 
                     return TimeScale.Value * SavestateLoadHaltScale;
@@ -430,58 +299,31 @@ namespace Velo
                 ResetBoostaCoke.Version = Version.VERSION_NAME;
             }
 
-            savestates.Init();
+            Savestates.Instance.Init();
+            Savestates.Instance.AddOnLoad((_, savestate) =>
+            {
+                SavestateLoadTime = Velo.RealTime;
+            });
 
             Velo.AddOnMainPlayerReset(() => Velo.AddOnPreUpdate(OnMainPlayerReset));
             Velo.AddOnLapFinish(time => Velo.AddOnPreUpdate(() => OnLapFinish(time)));
-            Velo.AddOnMainPlayerReset(() => Savestate.LoadedVersion = Version.VERSION);
+            Velo.AddOnMainPlayerReset(() => Savestate.LoadedVeloVersion = Version.VERSION);
 
-            playback.OnFinish = (recording, type) => Velo.AddOnPreUpdate(() =>
-            {
-                if (!LoopReplay.Value || type != Playback.EPlaybackType.VIEW_REPLAY)
-                    StopPlayback(notification: !DisableReplayNotifications.Value);
-                else
-                    StartPlayback(recording, Playback.EPlaybackType.VIEW_REPLAY, notification: false);
-            });
-
-            replayHUDEnabled = new ToggleSetting(null, "", new Toggle());
-            replayHUDContext = new ReplayHUDContex(replayHUDEnabled);
+            recordingAndReplay.Init();
         }
 
         public override void PreUpdate()
         {
             base.PreUpdate();
 
-            if (!EnableReplayHUD.Value)
-                replayHUDEnabled.Disable();
-
-            if (Input.IsPressed(Freeze.Value.Hotkey))
+            if (Input.IsPressed(Freeze.Value.Hotkey) && !Util.HotkeysDisabled())
             {
                 Freeze.ToggleState();
             }
 
-            if ((Velo.RealTime - SavestateLoadTime) > TimeSpan.FromSeconds(0.1))
-                savestates.PreUpdate();
-
-            if (Velo.ModuleSolo != null)
-            {
-                if (Velo.Ingame && Velo.PausedPrev && !Velo.Paused)
-                {
-                    recorder.Start(recCurrent);
-                    recCurrent.Rules.LapStart(true);
-                }
-            }
             if (Velo.IngamePrev && !Velo.Ingame)
             {
-                recorder.Stop();
-                playback.Stop();
-                playbackGhosts.ForEach(playback => playback.Stop());
-                playbackGhosts.Clear();
-            }
-
-            if (Rewind1Second.Pressed())
-            {
-                RewindSeconds(1f);
+                recordingAndReplay.Close();
             }
 
             if (Velo.Online || !Velo.Ingame)
@@ -491,72 +333,88 @@ namespace Velo
                 return;
             }
 
-            if (StopReplay.Pressed() && IsPlaybackRunning())
+            if (Velo.Ingame && Velo.ModuleSolo != null && Velo.PausedPrev && !Velo.Paused)
             {
-                StopPlayback(notification: !DisableReplayNotifications.Value);
+                recordingAndReplay.Start();
             }
-            if (SaveRun.Pressed())
+
+            if ((Velo.RealTime - SavestateLoadTime) > TimeSpan.FromSeconds(0.1))
             {
-                SaveLast();
+                bool savedAny = false;
+                for (int i = 0; i < 10; i++)
+                {
+                    string key = "ss" + (i + 1);
+                    if (SaveKeys[i].Pressed())
+                    {
+                        Commands.Wrap(() => Commands.SaveSS(new Filename { Name = key }));
+                        savedAny = true;
+                    }
+                }
+
+                if (!savedAny)
+                {
+                    for (int i = 0; i < 10; i++)
+                    {
+                        string key = "ss" + (i + 1);
+                        if (LoadKeys[i].Pressed())
+                        {
+                            Commands.Wrap(() => Commands.LoadSS(new Filename { Name = key }));
+                        }
+                    }
+                }
             }
-            if (ReplaySavedRun.Pressed())
+
+            if (StopReplay.Pressed())
             {
-                Recording rec = LoadSaved();
-                if (rec != null)
-                    StartPlayback(rec, Playback.EPlaybackType.VIEW_REPLAY, notification: !DisableReplayNotifications.Value, showTime: true);
+                Commands.Wrap(() => Commands.StopReplay());
             }
-            if (VerifySavedRun.Pressed())
+            if (SaveLast.Pressed())
             {
-                Recording rec = LoadSaved();
-                if (rec != null)
-                    StartPlayback(rec, Playback.EPlaybackType.VERIFY);
+                Commands.Wrap(() => Commands.SaveLast(new Filename { Name = "run" }));
             }
-            if (SetGhostSavedRun.Pressed())
+            if (Replay.Pressed())
             {
-                int ghostIndex = !EnableMultiGhost.Value ? 0 : GhostPlaybackCount();
-                Ghosts.Instance.GetOrSpawn(ghostIndex, Instance.GhostDifferentColors.Value);
-                Recording rec = LoadSaved();
-                Ghosts.Instance.WaitForGhost(ghostIndex);
-                if (rec != null)
-                    StartPlayback(rec, Playback.EPlaybackType.SET_GHOST);
+                Commands.Wrap(() => Commands.Replay());
+            }
+            if (Verify.Pressed())
+            {
+                Commands.Wrap(() => Commands.Verify());
+            }
+            if (SetGhost.Pressed())
+            {
+                Commands.Wrap(() => Commands.SetGhost(new Filename { Name = "run" }, EnableMultiGhost.Value ? (uint)RecordingAndReplay.GhostPlaybackCount : 0));
             }
 
             if (Step1Key.Pressed())
             {
-                stepCount = 1;
+                StepFrames(1);
             }
-
             if (Step10Key.Pressed())
             {
-                stepCount = 10;
+                StepFrames(10);
             }
-
             if (JumpBack1Key.Pressed())
             {
-                RewindFrames(1);
+                recordingAndReplay.OffsetFrames(-1);
             }
-
             if (JumpBack10Key.Pressed())
             {
-                if (!IsPlaybackRunning())
-                {
-                    rewindList.Position = Math.Max(0, rewindList.Position - 10);
-                    rewindList.PeekAndLoad(false);
-                }
-                else
-                {
-                    if (playback.Type == Playback.EPlaybackType.VIEW_REPLAY || playback.Type == Playback.EPlaybackType.SET_GHOST)
-                        playback.Jump((float)(-10 * DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
-                    else if (playback.Type == Playback.EPlaybackType.VERIFY)
-                        playback.JumpFrames(-10);
-                }
-                Freeze.Enable();
+                recordingAndReplay.OffsetFrames(-10);
+            }
+            if (SaveKey.Pressed() && recordingAndReplay.Recorder is TASRecorder tasRecorder)
+            {
+                Commands.Wrap(() => Commands.SaveTAS());
+            }
+
+            if (GhostOffsetTime.Modified())
+            {
+                recordingAndReplay.SyncGhosts();
             }
 
             if (InfiniteJumps.Value)
             {
-                if (Velo.MainPlayer != null && Velo.MainPlayer.jump_state >= 2)
-                    Velo.MainPlayer.jump_state = 1;
+                if (Velo.MainPlayer != null && Velo.MainPlayer.jumpState >= 2)
+                    Velo.MainPlayer.jumpState = 1;
             }
 
             if (DtFixed)
@@ -572,28 +430,16 @@ namespace Velo
                 if (!(cengine.isHoldingElapsedTime || cengine.isHoldingTotalTime || cengine.pausedLocal))
                     time += delta;
                 cengine.gameTime = new GameTime(new TimeSpan(time), new TimeSpan(delta));
-            
-                if (delta > 0 && EnableRewind.Value)
-                {
-                    Savestate savestate = new Savestate();
-                    if (StoreAIVolumes.Value)
-                        savestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
-                    else
-                        savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
-                    rewindList.Write(savestate);
-                }
             }
 
-            if (!DtFixed || !EnableRewind.Value)
+            if (
+                Velo.Ingame &&
+                Velo.ModuleSolo != null &&
+                Velo.GameDelta > TimeSpan.Zero &&
+                !Velo.PauseMenu
+            )
             {
-                rewindList.Clear();
-            }
-
-            if (Velo.ModuleSolo != null)
-            {
-                recorder.PreUpdate();
-                playback.PreUpdate();
-                playbackGhosts.ForEach(playback => playback.PreUpdate());
+                recordingAndReplay.PreUpdate();
             }
         }
 
@@ -604,12 +450,14 @@ namespace Velo
             if (Velo.Online)
                 return;
 
-            if (Velo.ModuleSolo != null)
+            if (
+                Velo.Ingame &&
+                Velo.ModuleSolo != null &&
+                Velo.GameDelta > TimeSpan.Zero &&
+                !Velo.PauseMenuPrev
+            )
             {
-                recorder.PostUpdate();
-                recCurrent.Rules.Update();
-                playback.PostUpdate();
-                playbackGhosts.ForEach(playback => playback.PostUpdate());
+                recordingAndReplay.PostUpdate();
             }
 
             if (stepCount > 0)
@@ -624,8 +472,20 @@ namespace Velo
         {
             base.PostRender();
 
-            replayHUDContext.Draw();
+            recordingAndReplay.PostRender();
         }
+
+        public override void PostPresent()
+        {
+            base.PostPresent();
+
+            recordingAndReplay.PostPresent();
+        }
+
+        public ISavestateManager SavestateManager => 
+            recordingAndReplay.RecordingMode == ERecordingMode.TAS ? 
+            (ISavestateManager)recordingAndReplay.Recorder : 
+            Savestates.Instance;
 
         public float SavestateLoadHaltScale
         {
@@ -645,42 +505,19 @@ namespace Velo
             if (Velo.ModuleSolo != null)
             {
                 ResetStatesAndActors();
-
-                recorder.Restart();
-                recCurrent.Rules.LapStart(true);
-                playback.Restart();
-                playbackGhosts.RemoveAll(playback => Ghosts.Instance.Get(playback.GhostIndex) == null);
-                playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
             }
+
+            recordingAndReplay.OnMainPlayerReset();
         }
 
-        private void OnLapFinish(float time)
+        public void OnLapFinish(float time)
         {
             if (Velo.ModuleSolo != null)
             {
-                recLast = recCurrent.Clone();
-                recLast.Finish(time);
-
-                Leaderboard.Instance.OnRunFinished(recLast);
-
                 ResetStatesAndActors(obstaclesOnly: true);
-
-                recorder.SetLapStartToBack();
-                recCurrent.Rules.LapStart(false);
-                playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
             }
-        }
 
-        public bool SetInputs(Player player)
-        {
-            return playback.SetInputs(player) || playbackGhosts.Any(playback => playback.SetInputs(player));
-        }
-
-        public bool SkipUpdateSprite(Player player)
-        {
-            return playback.SkipUpdateSprite(player) || playbackGhosts.Any(playback => playback.SkipUpdateSprite(player));
+            recordingAndReplay.OnLapFinish(time);
         }
 
         public bool IsModded()
@@ -701,7 +538,8 @@ namespace Velo
                 !SlideCooldown.IsDefault() ||
                 !InfiniteJumps.IsDefault() ||
                 !FixGrappleGlitches.IsDefault() ||
-                !EnableOldMoonwalk.IsDefault();
+                !EnableOldMoonwalk.IsDefault() ||
+                !BufferGrapples.IsDefault();
         }
 
         public float GetGrappleCooldown()
@@ -709,9 +547,9 @@ namespace Velo
             if (Velo.Online)
                 return GrappleCooldown.DefaultValue;
 
-            if (IsPlaybackRunning())
+            if (recordingAndReplay.IsPlaybackRunning)
             {
-                return (playback.Recording.Info.PhysicsFlags & RunInfo.FLAG_NEW_GCD) != 0 ? 0.20f : 0.25f;
+                return (recordingAndReplay.PlaybackRecording.Info.PhysicsFlags & RunInfo.FLAG_NEW_GCD) != 0 ? 0.20f : 0.25f;
             }
             return GrappleCooldown.Value;
         }
@@ -721,71 +559,45 @@ namespace Velo
             if (Velo.Online)
                 return FixBounceGlitch.DefaultValue;
 
-            if (IsPlaybackRunning())
+            if (recordingAndReplay.IsPlaybackRunning)
             {
-                return (playback.Recording.Info.PhysicsFlags & RunInfo.FLAG_FIX_BOUNCE_GLITCH) != 0 ? true : false;
+                return (recordingAndReplay.PlaybackRecording.Info.PhysicsFlags & RunInfo.FLAG_FIX_BOUNCE_GLITCH) != 0 ? true : false;
             }
             return FixBounceGlitch.Value;
         }
 
-        public int CurrentRunStatus()
-        {
-            if (Velo.ModuleSolo == null)
-                return 0;
-            if (!recCurrent.Rules.Valid)
-                return 2;
-            if (recCurrent.Rules.CategoryType == ECategoryType.ONE_LAP || recCurrent.Rules.CategoryType == ECategoryType.ONE_LAP_SKIPS)
-                return 1;
-            return 0;
-        }
-
-        public Recording CurrentRecording => recCurrent;
-
-        public bool IsPlaybackRunning()
-        {
-            return !playback.Finished;
-        }
-
-        public int GhostPlaybackCount()
-        {
-            return playbackGhosts.Count;
-        }
-
-        public bool GhostPlaybackUsedItem()
-        {
-            return playbackGhosts.Any(playback =>
-            {
-                return playback.ItemIdPrev != (byte)EItem.NONE && playback.ItemIdPrev != playback.ItemId;
-            });
-        }
-
-        public bool IsOwnPlaybackFromLeaderboard()
-        {
-            return 
-                playback.Recording.Info.PlayerId == Steamworks.SteamUser.GetSteamID().m_SteamID &&
-                playback.Recording.Info.Id != -50;
-        }
-
         public void UpdateCamera(ICCameraModifier cameraMod)
         {
-            if (cameraMod is Camera camera1)
-                camera1.camera.Position = Vector2.Zero; // not sure anymore why I added this
+            if (cameraMod is SoloCameraModifier solo_)
+                solo_.camera.Position = Vector2.Zero; // not sure anymore why I added this
 
             if (!Velo.Online && CameraZoom.Value != CameraZoom.DefaultValue)
             {
                 float zoom = CameraZoom.Value;
 
-                if (cameraMod is Camera camera)
+                if (cameraMod is SoloCameraModifier solo)
                 {
-                    camera.zoom1 = zoom;
-                    camera.camera.Zoom = zoom * camera.unknown1;
+                    solo.zoom = zoom;
+                    solo.camera.Zoom = zoom * solo.heightRatioTo720;
                 }
-                else if (cameraMod is CameraMP cameraMP)
+                else if (cameraMod is MultiplayerCameraModifier multiplayer)
                 {
-                    cameraMP.zoom1 = zoom;
-                    cameraMP.camera.Zoom = zoom * cameraMP.unknown1;
+                    multiplayer.zoom = zoom;
+                    multiplayer.camera.Zoom = zoom * multiplayer.heightRatioTo720;
                 }
             }
+        }
+
+        public void UpdateBufferGrapples(Player player)
+        {
+            if (!BufferGrapples.Value)
+                return;
+            if (Velo.Online)
+                return;
+            if (player != Velo.MainPlayer)
+                return;
+            if (!player.grappling && !player.canGrapple && player.grappleHeld)
+                player.grappleHeld = false;
         }
 
         private void ResetStatesAndActors(bool obstaclesOnly = false)
@@ -859,7 +671,7 @@ namespace Velo
                     if (actor.controller is Fireball)
                     {
                         actor.IsCollisionActive = false;
-                        (actor.controller as Fireball).animSpriteDraw.IsVisible = false;
+                        (actor.controller as Fireball).sprite.IsVisible = false;
                     }
                     if (actor.controller is Rocket)
                     {
@@ -870,8 +682,8 @@ namespace Velo
                         (actor.controller as Shockwave).Break();
                     }
                 }
-                if (Velo.MainPlayer.item_id == (byte)EItem.TRIGGER)
-                    Velo.MainPlayer.item_id = (byte)EItem.NONE;
+                if (Velo.MainPlayer.itemId == (byte)EItem.TRIGGER)
+                    Velo.MainPlayer.itemId = (byte)EItem.NONE;
             }
             if ((ResetBoost.Value && !obstaclesOnly) || Origins.Instance.IsOrigins())
             {
@@ -883,156 +695,34 @@ namespace Velo
             }
             if ((ResetWallBoost.Value && !obstaclesOnly) || Origins.Instance.IsOrigins())
             {
-                Velo.MainPlayer.wall_cd = 0f;
+                Velo.MainPlayer.wallJumpBonusTimer = 0f;
             }
             if ((ResetJumpTime.Value && !obstaclesOnly) || Origins.Instance.IsOrigins())
             {
-                Velo.MainPlayer.timespan1 = TimeSpan.Zero;
+                Velo.MainPlayer.jumpTime = TimeSpan.Zero;
             }
         }
 
-        public void StartPlayback(Recording recording, Playback.EPlaybackType type, bool notification = true, bool showTime = false)
+        public bool Paused()
         {
-            if (!Velo.Ingame || Velo.ModuleSolo == null)
-                return;
-            
-            if (type == Playback.EPlaybackType.VIEW_REPLAY || type == Playback.EPlaybackType.VERIFY)
-            {
-                playback.Start(recording, type, -1);
-                playbackGhosts.ForEach(playback => playback.Restart());
-                playbackGhosts.ForEach(playback => playback.Jump(GhostOffsetTime.Value, hold: true));
-                if (type == Playback.EPlaybackType.VIEW_REPLAY && EnableReplayHUD.Value)
-                {
-                    replayHUDEnabled.Enable();
-                }
-            }
-            else if (type == Playback.EPlaybackType.SET_GHOST)
-            {
-                bool multiGhost = EnableMultiGhost.Value;
-                Playback playbackGhost = !multiGhost && playbackGhosts.Count >= 1 ? playbackGhosts[0] : new Playback();
-                playbackGhost.OnFinish = (recording_, __) => Velo.AddOnPreUpdate(() =>
-                {
-                    playbackGhost.Restart();
-                    playbackGhost.Jump(GhostOffsetTime.Value, hold: true);
-                });
-
-                playbackGhost.Start(recording, type, !multiGhost ? 0 : playbackGhosts.Count);
-                playbackGhost.Jump(GhostOffsetTime.Value, hold: true);
-                if (multiGhost || playbackGhosts.Count == 0)
-                    playbackGhosts.Add(playbackGhost);
-            }
-
-            if (type == Playback.EPlaybackType.VIEW_REPLAY && notification)
-                Notifications.Instance.PushNotification("replay start" + (showTime ? "\n" + Util.FormatTime(recording.Info.RunTime, Leaderboard.Instance.TimeFormat.Value) : ""));
+            return Freeze.Value.Enabled;
         }
 
-        public void StopPlayback(bool notification = true)
+        public void Pause()
         {
-            playback.Stop();
-            replayHUDEnabled.Disable();
-            stepCount = 0;
-            Freeze.Disable();
-
-            if (!Velo.Ingame || Velo.ModuleSolo == null)
-                return;
-
-            if (playback.Type == Playback.EPlaybackType.VIEW_REPLAY && notification)
-                Notifications.Instance.PushNotification("replay stop");
-        }
-
-        public void RewindFrames(int frames)
-        {
-            if (rewindList.Position == 0 && !IsPlaybackRunning())
-                return;
-
-            if (!IsPlaybackRunning())
-            {
-                rewindList.Position = Math.Max(0, rewindList.Position - frames);
-                rewindList.PeekAndLoad(false);
-            }
-            else
-            {
-                if (playback.Type == Playback.EPlaybackType.VIEW_REPLAY || playback.Type == Playback.EPlaybackType.SET_GHOST)
-                    playback.Jump((float)(frames * -DeltaTime.Value / (double)TimeSpan.TicksPerSecond));
-                else if (playback.Type == Playback.EPlaybackType.VERIFY)
-                    playback.JumpFrames(-frames);
-            }
             Freeze.Enable();
-            Velo.MainPlayer?.trail?.trails?.ForEach(trail => trail.Clear());
+            stepCount = 0;
+        }
+
+        public void Unpause()
+        {
+            Freeze.Disable();
+            stepCount = 0;
         }
 
         public void StepFrames(int frames)
         {
             stepCount = frames;
-        }
-
-        public void RewindSeconds(float seconds)
-        {
-            playback.Jump(-seconds);
-            Velo.MainPlayer?.trail?.trails?.ForEach(trail => trail.Clear());
-        }
-
-        public void ForwardSeconds(float seconds)
-        {
-            playback.Jump(seconds);
-        }
-
-        public void SaveLast()
-        {
-            if (recLast == null)
-                return;
-
-            if (!Directory.Exists("Velo\\saved run"))
-                Directory.CreateDirectory("Velo\\saved run");
-
-            using (FileStream stream = new FileStream("Velo\\saved run\\run.srrec", FileMode.OpenOrCreate, FileAccess.Write))
-            {
-                int idPrev = recLast.Info.Id;
-                recLast.Info.Id = -50;
-                recLast.Write(stream, compress: false);
-                recLast.Info.Id = idPrev;
-            }
-        }
-
-        public Recording LoadSaved()
-        {
-            if (!File.Exists("Velo\\saved run\\run.srrec"))
-                return null;
-            Recording rec = new Recording();
-
-            using (FileStream stream = new FileStream("Velo\\saved run\\run.srrec", FileMode.Open, FileAccess.Read))
-            {
-                rec.Read(stream);
-            }
-            return rec;
-        }
-
-        public void ShowLastAppliedRules()
-        {
-            if (recLast == null)
-                return;
-
-            string reasons =
-                recLast.Rules.Valid ? recLast.Rules.CategoryType.Label() + ":\n" : "Invalid:\n";
-
-            foreach (var reason in recLast.Rules.OneLapReasons)
-            {
-                if (reason != null)
-                    reasons += reason + "\n";
-            }
-            foreach (var reason in recLast.Rules.SkipReasons)
-            {
-                if (reason != null)
-                    reasons += reason + "\n";
-            }
-            foreach (var reason in recLast.Rules.Violations)
-            {
-                if (reason != null)
-                    reasons += reason + "\n";
-            }
-
-            reasons = reasons.Substring(0, reasons.Length - 1);
-            Notifications.Instance.ForceNotification(reasons);
         }
     }
 }

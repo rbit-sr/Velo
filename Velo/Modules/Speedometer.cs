@@ -15,12 +15,12 @@ namespace Velo
 
         public enum ESpeedType
         {
-            ABSOLUTE, X_VELOCITY, Y_VELOCITY, X_VELOCITY_ABSOLUTE, Y_VELOCITY_ABSOLUTE, POSITION
+            ABSOLUTE, X_VELOCITY, Y_VELOCITY, X_VELOCITY_ABSOLUTE, Y_VELOCITY_ABSOLUTE, VELOCITY
         }
 
         private static readonly string[] SpeedTypeLabels = new[]
         {
-            "absolute", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)", "position"
+            "absolute", "x-velocity", "y-velocity", "x-velocity (absolute)", "y-velocity (absolute)", "velocity"
         };
 
         public IntSetting UpdateInterval;
@@ -48,7 +48,8 @@ namespace Velo
                 "-x-velocity: x component of velocity\n" +
                 "-y-velocity: y component of velocity\n" +
                 "-x-velocity (absolute): x-velocity without sign\n" +
-                "-y-velocity (absolute): y-velocity without sign";
+                "-y-velocity (absolute): y-velocity without sign\n" +
+                "-velocity: x- and y-velocity";
 
             NewCategory("color");
             Variable = AddEnum("variable", EVariable.SPEED, VariableLabels);
@@ -96,7 +97,7 @@ namespace Velo
             }));
 
             Variable.Tooltip =
-                "Set the variable to which the color transition should be bound to:\n" +
+                "Binds the color transition to a specific variable:\n" +
                 "-global time: global time in milliseconds\n" +
                 "-speed: player's speed in units per second";
 
@@ -140,10 +141,10 @@ namespace Velo
             {
                 lastUpdate = milliseconds;
                 text = RoundingMultiplier.Value.ToStringRounded(speed);
-                if (SpeedType.Value == ESpeedType.POSITION)
-                    text = 
-                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Position.X) + " " +
-                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Position.Y);
+                if (SpeedType.Value == ESpeedType.VELOCITY)
+                    text =
+                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Velocity.X) + " " +
+                        RoundingMultiplier.Value.ToStringRounded(Velo.MainPlayer.actor.Velocity.Y);
                 this.speed = speed;
             }
         }

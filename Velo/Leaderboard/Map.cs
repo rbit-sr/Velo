@@ -34,6 +34,7 @@ namespace Velo
             { "Club V", 20 },
             { "Dance Hall", 22 },
             { "Dash the night", 23 },
+            { "Disco Lounge", 24 },
             { "Genetics", 26 },
             { "Minery", 30 },
             { "New Age City", 31 },
@@ -56,7 +57,6 @@ namespace Velo
             { 355112213UL, 46 }, // Boardwalk
             { 2376184180UL, 19 }, // Club House
             { 3408572013UL, 21 }, // Coastline
-            { 3157484074UL, 24 }, // Disco Lounge
             { 3408573248UL, 25 }, // Dragon City
             { 355841009UL, 27 }, // Gift Store
             { 3408573618UL, 28 }, // Granary
@@ -127,7 +127,6 @@ namespace Velo
             names[16] = "Laboratory";
             names[19] = "Club House";
             names[21] = "Coastline";
-            names[24] = "Disco Lounge";
             names[25] = "Dragon City";
             names[27] = "Gift Store";
             names[28] = "Granary";
@@ -318,7 +317,7 @@ namespace Velo
             return 
                 mapId == 19 ||
                 mapId == 21 ||
-                (mapId >= 24 && mapId <= 25) ||
+                mapId == 25 ||
                 (mapId >= 27 && mapId <= 29) ||
                 mapId == 32 ||
                 mapId == 39 ||
@@ -362,6 +361,7 @@ namespace Velo
                 mapId == 8 ||
                 mapId == 10 ||
                 mapId == 13 ||
+                mapId == 14 ||
                 mapId == 20 ||
                 mapId == 23 ||
                 mapId == 24 ||

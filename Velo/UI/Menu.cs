@@ -135,7 +135,7 @@ namespace Velo
 
         private readonly bool enableDim;
 
-        public MenuContext(ToggleSetting enabled, bool enableDim = true)
+        public MenuContext(ToggleSetting enabled, bool enableDim = true, bool cursor = true)
         {
             Enabled = enabled;
             this.enableDim = enableDim;
@@ -156,15 +156,21 @@ namespace Velo
             FontCache.Get(ref Fonts.FontTitle, "UI\\Font\\Souses.ttf:42,UI\\Font\\NotoSansCJKtc-Regular.otf:42,UI\\Font\\NotoSansCJKkr-Regular.otf:42");
             FontCache.Get(ref Fonts.FontConsole, "CEngine\\Debug\\FreeMonoBold.ttf:18");
 
-            Util.EnableCursorOn(() => Enabled.Value.Enabled);
-            Util.DisableMouseInputsOn(() => Enabled.Value.Enabled);
+            if (cursor)
+            {
+                Util.EnableCursorOn(() => Enabled.Value.Enabled);
+                Util.DisableMouseInputsOn(() => Enabled.Value.Enabled);
+            }
         }
 
-        public virtual void EnterMenu()
+        public virtual void EnterMenu(bool animation = true)
         {
             menuStack.Reset();
             menu.Child = menuStack;
-            menu.FadeTo(4f, 1f, new Vector2(0f, 0f));
+            if (animation)
+                menu.FadeTo(4f, 1f, new Vector2(0f, 0f));
+            else
+                menu.GoTo(1f, new Vector2(0f, 0f));
         }
 
         public virtual void ExitMenu(bool animation = true)

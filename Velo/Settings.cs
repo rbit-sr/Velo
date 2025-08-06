@@ -1,9 +1,6 @@
-﻿using Microsoft.Win32;
-using Microsoft.Xna.Framework;
-using System;
+﻿using Microsoft.Xna.Framework;
 using System.Collections.Generic;
 using System.Linq;
-using static Velo.Frame;
 
 namespace Velo
 {
@@ -41,7 +38,7 @@ namespace Velo
 
     public abstract class Setting
     {
-        private readonly Module module;
+        private Module module;
         public Module Module => module;
         private readonly string name;
         public string Name => name;
@@ -72,6 +69,11 @@ namespace Velo
             modified = false;
             if (module != null)
                 id = ModuleManager.Instance.Add(this);
+        }
+
+        public virtual void SetModule(Module module)
+        {
+            this.module = module;
         }
 
         public bool Modified()
@@ -115,6 +117,13 @@ namespace Velo
             base(module, name)
         {
             Children = new List<Setting>();
+        }
+
+        public override void SetModule(Module module)
+        {
+            base.SetModule(module);
+            foreach (Setting setting in Children)
+                setting.SetModule(module);
         }
 
         public T Add<T>(T setting) where T : Setting
@@ -337,8 +346,10 @@ namespace Velo
             autorepeatContext = new AutorepeatContext(autoRepeat);
         }
 
-        public bool Pressed()
+        public bool Pressed(bool bypassHotkeysDisabled = false)
         {
+            if (!bypassHotkeysDisabled && Util.HotkeysDisabled())
+                return false;
             if (Value == 0x97)
                 return false;
 

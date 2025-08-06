@@ -156,6 +156,8 @@ namespace Velo
         public HotkeySetting GiveSunglasses;
         public HotkeySetting GiveTripleJump;
 
+        public BoolSetting DisableSoloQuickchat;
+
         public bool contentsReloaded = false;
 
         private bool wasItemPressed = false;
@@ -205,11 +207,11 @@ namespace Velo
             BypassExcel = AddBool("Excel", false);
 
             BypassPumpkinCosmo.Tooltip =
-                "Allows you to play Pumpkin Cosmo even when it's not ScreamRunners.";
+                "Allows you to play Pumpkin Cosmo even when the ScreamRunners event is not active.";
             BypassXl.Tooltip =
-                "Allows you to play XL even when it's not weekend.";
+                "Allows you to play XL even on workdays.";
             BypassExcel.Tooltip =
-                "Allows you to play Excel even when it's weekend.";
+                "Allows you to play Excel even on weekends.";
 
             NewCategory("hot reload");
             ReloadKey = AddHotkey("reload key", 0x97);
@@ -291,7 +293,7 @@ namespace Velo
                 "When hovering over graphics, always select the frontmost one (highest layer / last placed).";
             EnableBookcase.Tooltip =
                 "Allows you to place bookcase objects when using Library theme that are otherwise inaccessible.";
-            EnableBookcase.Tooltip =
+            EnableCastleWall.Tooltip =
                 "Allows you to place castle wall objects when using Mansion theme that are otherwise inaccessible.";
             EnableDiscoLight.Tooltip =
                 "Allows you to place disco light objects when using Nightclub theme that are otherwise inaccessible.";
@@ -310,6 +312,9 @@ namespace Velo
             GiveSmiley = AddHotkey("give smiley", 0x97);
             GiveSunglasses = AddHotkey("give sunglasses", 0x97);
             GiveTripleJump = AddHotkey("give triple jump", 0x97);
+
+            NewCategory("quickchat");
+            DisableSoloQuickchat = AddBool("disable solo quickchat", false);
         }
 
         public static Miscellaneous Instance = new Miscellaneous();
@@ -329,7 +334,8 @@ namespace Velo
                 !Velo.PauseMenu && 
                 !Main.game.stack.baseModule.chat.Enabled && 
                 !Util.MouseInputsDisabled() &&
-                Input.Focused)
+                Input.Focused &&
+                Velo.ModuleLevelEditor == null)
             {
                 Rectangle window = Velo.CEngineInst.Game.Window.ClientBounds;
                 Vector2 position = new Vector2(window.X, window.Y) + LockCursorPosition.Value;
@@ -369,9 +375,9 @@ namespace Velo
                 int layer = int.MinValue;
                 for (int i = 0; i <= 9; i++)
                 {
-                    if (Input.IsPressed((ushort)((ushort)Keys.D0 + (ushort)i)))
+                    if (Input.IsPressed((ushort)((ushort)Keys.D0 + (ushort)i)) && !Util.HotkeysDisabled())
                         layer = i;
-                    if (Input.IsPressed((ushort)(((ushort)Keys.D0 + (ushort)i) | 0x100)))
+                    if (Input.IsPressed((ushort)(((ushort)Keys.D0 + (ushort)i) | 0x100)) && !Util.HotkeysDisabled())
                         layer = actors.Count - 1 - i;
                 }
 
@@ -406,10 +412,10 @@ namespace Velo
                         {
                             if (actors[i].controller is EditableActor ea)
                             {
-                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.rect);
-                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.lines);
-                                Velo.CEngineInst.LayerManager.AddDrawer(ea.rect.LayerId, ea.rect);
-                                Velo.CEngineInst.LayerManager.AddDrawer(ea.lines.LayerId, ea.lines);
+                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.selectionRectangle);
+                                Velo.CEngineInst.LayerManager.RemoveDrawer(ea.selectionLines);
+                                Velo.CEngineInst.LayerManager.AddDrawer(ea.selectionRectangle.LayerId, ea.selectionRectangle);
+                                Velo.CEngineInst.LayerManager.AddDrawer(ea.selectionLines.LayerId, ea.selectionLines);
                             }
                         }
                     }
@@ -438,13 +444,13 @@ namespace Velo
             if (!Velo.IsOnline() && Velo.MainPlayer != null)
             {
                 if (GiveSmiley.Pressed())
-                    Velo.MainPlayer.item_id = (byte)EItem.SMILEY;
+                    Velo.MainPlayer.itemId = (byte)EItem.SMILEY;
                 if (GiveSunglasses.Pressed())
-                    Velo.MainPlayer.item_id = (byte)EItem.SUNGLASSES;
+                    Velo.MainPlayer.itemId = (byte)EItem.SUNGLASSES;
                 if (GiveTripleJump.Pressed())
                 {
-                    Velo.MainPlayer.item_id = (byte)EItem.TRIPLE_JUMP;
-                    Velo.MainPlayer.jump_count = 3;
+                    Velo.MainPlayer.itemId = (byte)EItem.TRIPLE_JUMP;
+                    Velo.MainPlayer.jumpCount = 3;
                 }
             }
         }
@@ -512,19 +518,18 @@ namespace Velo
             }
         }
 
-        private void ReloadContent(string id)
+        public bool ReloadContent(string id, bool tryCharacter = true)
         {
             if (id == "")
-                return;
+                return false;
             if (id.EndsWith(".xnb"))
                 id = id.Replace(".xnb", "");
             if (id.StartsWith("Content\\"))
                 id = id.Replace("Content\\", "");
 
-            if (!Directory.Exists("Content\\" + id) && !File.Exists("Content\\" + id + ".xnb"))
+            if (tryCharacter && !Directory.Exists("Content\\" + id) && !File.Exists("Content\\" + id + ".xnb"))
             {
-                ReloadContent("Content\\Characters\\" + id);
-                return;
+                return ReloadContent("Content\\Characters\\" + id, tryCharacter: false);
             }
 
             if (Directory.Exists("Content\\" + id))
@@ -535,7 +540,7 @@ namespace Velo
                 contents = Directory.GetDirectories("Content\\" + id);
                 foreach (string content in contents)
                     ReloadContent(content);
-                return;
+                return true;
             }
 
             foreach (var entry in Velo.ContentManager.dict)
@@ -551,10 +556,11 @@ namespace Velo
                     {
                         Velo.ContentManager.Release(content);
                         Velo.ContentManager.Load(content, false);
-                        return;
+                        return true;
                     }
                 }
             }
+            return false;
         }
 
         public bool DisableGrappleSound(Player player)
@@ -585,7 +591,7 @@ namespace Velo
                 mousePressed[(int)X2Button.Value - 1] = Input.IsKeyDown((byte)Keys.XButton2);
         }
 
-        private void SetInput(Player player, EInput input, bool pressed)
+        private void SetInput(Player player, EInput input, bool held, bool pressed)
         {
             bool dummy = false;
             ref bool playerInput = ref dummy;
@@ -595,46 +601,46 @@ namespace Velo
             {
                 case EInput.LEFT:
                     if (!mirrored)
-                        playerInput = ref player.leftPressed;
+                        playerInput = ref player.leftHeld;
                     else
-                        playerInput = ref player.rightPressed;
+                        playerInput = ref player.rightHeld;
                     break;
                 case EInput.RIGHT:
                     if (!mirrored)
-                        playerInput = ref player.rightPressed;
+                        playerInput = ref player.rightHeld;
                     else
-                        playerInput = ref player.leftPressed;
+                        playerInput = ref player.leftHeld;
                     break;
                 case EInput.JUMP:
-                    playerInput = ref player.jumpPressed;
+                    playerInput = ref player.jumpHeld;
                     break;
                 case EInput.GRAPPLE:
-                    playerInput = ref player.grapplePressed;
+                    playerInput = ref player.grappleHeld;
                     break;
                 case EInput.SLIDE:
-                    playerInput = ref player.slidePressed;
+                    playerInput = ref player.slideHeld;
                     break;
                 case EInput.BOOST:
-                    playerInput = ref player.boostPressed;
+                    playerInput = ref player.boostHeld;
                     break;
                 case EInput.ITEM:
                     if (OverwriteInputs.Value)
-                        player.item_p2 = pressed && !wasItemPressed;
+                        player.itemPressed = pressed && !wasItemPressed;
                     else
-                        player.item_p2 |= pressed && !wasItemPressed;
-                    playerInput = ref player.itemPressed;
+                        player.itemPressed |= pressed && !wasItemPressed;
+                    playerInput = ref player.itemHeld;
                     break;
                 case EInput.TAUNT:
-                    playerInput = ref player.tauntPressed;
+                    playerInput = ref player.tauntHeld;
                     break;
                 case EInput.SWAP_ITEM:
-                    playerInput = ref player.swapItemPressed;
+                    playerInput = ref player.swapItemHeld;
                     break;
             }
             if (OverwriteInputs.Value)
-                playerInput = pressed;
+                playerInput = held;
             else
-                playerInput |= pressed;
+                playerInput |= held;
         }
 
         public void SetMouseInputsPrepare(Player player)
@@ -674,11 +680,11 @@ namespace Velo
             if (!CheckMouseInputPlayerIndex(player))
                 return;
 
-            SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton));
-            SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton));
-            SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton));
-            SetInput(player, X1Button.Value, Input.IsKeyDown((byte)Keys.XButton1));
-            SetInput(player, X2Button.Value, Input.IsKeyDown((byte)Keys.XButton2));
+            SetInput(player, LeftButton.Value, Input.IsKeyDown((byte)Keys.LButton), Input.IsPressed((byte)Keys.LButton));
+            SetInput(player, RightButton.Value, Input.IsKeyDown((byte)Keys.RButton), Input.IsPressed((byte)Keys.RButton));
+            SetInput(player, MiddleButton.Value, Input.IsKeyDown((byte)Keys.MButton), Input.IsPressed((byte)Keys.MButton));
+            SetInput(player, X1Button.Value, Input.IsKeyDown((byte)Keys.XButton1), Input.IsPressed((byte)Keys.XButton1));
+            SetInput(player, X2Button.Value, Input.IsKeyDown((byte)Keys.XButton2), Input.IsPressed((byte)Keys.XButton2));
         }
 
         public bool IsJumpPressed(Player player, bool isPressed)

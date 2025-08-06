@@ -6,15 +6,11 @@ using System.Text.RegularExpressions;
 using CEngine.Graphics.Component;
 using System;
 using Microsoft.Xna.Framework;
-using System.Windows.Forms;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Threading;
 
 namespace Velo
 {
     // reasons for a run to be counted as "1 Lap" instead of "New Lap"
-    public enum E1LapReasons
+    public enum E1LapReason
     {
         NON_RESET, // lap is started by finishing a previous lap (not by pressing the reset key)
         HAS_BOOST, // player has boost upon starting the lap
@@ -28,14 +24,14 @@ namespace Velo
     }
 
     // reasons for a run to be counted as "Skip" instead of non-"Skip"
-    public enum ESkipReasons
+    public enum ESkipReason
     {
         SECONDARY_CHECKPOINT_MISSED, // player missed a secondary checkpoint
         COUNT
     }
 
     // reasons for a run to be invalid
-    public enum EViolations
+    public enum EViolation
     {
         OBSTACLE_BROKEN, // an obstacle was broken upon starting the lap
         ITEM_USED, // player used an item
@@ -61,7 +57,9 @@ namespace Velo
         FINISH_LINE_DRIFT, // finish line drifted by more than 100
         PRIMARY_CHECKPOINT_MISSED, // player missed a primary checkpoint
         SECONDARY_AND_TERNARY_CHECKPOINT_MISSED, // player missed a secondary checkpoint and a ternary checkpoint
-        GHOST_ITEM_USED, // a ghost used an item
+        GHOST_ITEM_USED, // ghost used an item
+        GHOST_FOCUSED, // ghost was focused
+        SET_COMMAND, // "set" command was used
         COUNT
     }
 
@@ -166,7 +164,7 @@ namespace Velo
 11: { (3850, -10000, 100, 11860), (12990, 1920, 320, 100), (3225, 1940, 170, 100) }, { }, { },
 12: { (5400, 2900, 100, 450), (11470, 1480, 100, 150), (4750, 3000, 100, 400) }, { }, { },
 13: { (960, 3920, 100, 800), (7150, 2580, 100, 140), (650, 3300, 100, 600) }, { (11940, 1250, 100, 400), (6160, 3420, 100, 180) }, { },
-14: { (1530, 1390, 100, 800), (14730, 2100, 270, 100), (1160, 930, 100, 450) }, { }, { },
+14: { (1530, 1390, 100, 800), (14730, 2100, 270, 100) }, { (1160, 930, 100, 450) }, { (0, -10000, 100, 10020) },
 15: { (480, 3280, 100, 400), (13705, 1900, 200, 100), (780, 2900, 200, 300) }, { }, { },
 16: { (2270, 3680, 100, 400), (7300, 1880, 100, 750), (8970, 900, 350, 100), (1440, 2470, 100, 180), (1230, 3380, 100, 300) }, { }, { },
 17: { (1300, -10000, 100, 11160), (11510, 920, 100, 450), (740, 1465, 1300, 100) }, { }, { },
@@ -214,14 +212,13 @@ namespace Velo
         public static List<Checkpoints> checkpoints = InitCheckpoints(CHECKPOINTS_STR);
         //public static List<Checkpoints> checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
 
-        public string[] OneLapReasons = new string[(int)E1LapReasons.COUNT];
-        public string[] SkipReasons = new string[(int)ESkipReasons.COUNT];
-        public string[] Violations = new string[(int)EViolations.COUNT];
+        public string[] OneLapReasons = new string[(int)E1LapReason.COUNT];
+        public string[] SkipReasons = new string[(int)ESkipReason.COUNT];
+        public string[] Violations = new string[(int)EViolation.COUNT];
 
-        public Dictionary<EViolations, Cooldown> Cooldowns = new Dictionary<EViolations, Cooldown>();
+        public Dictionary<EViolation, Cooldown> Cooldowns = new Dictionary<EViolation, Cooldown>();
 
         public byte LastUsedItemId = (byte)EItem.NONE;
-        public TimeSpan SavestateLoadTime = TimeSpan.Zero;
 
         public ulong MapId = ulong.MaxValue;
         private ulong checkpointsVisibleMapId = ulong.MaxValue;
@@ -238,13 +235,13 @@ namespace Velo
 
         public RulesChecker()
         {
-            Cooldowns.Add(EViolations.ITEM_USED, new Cooldown("item was used"));
-            Cooldowns.Add(EViolations.DRILL_USED, new Cooldown("drill was used"));
-            Cooldowns.Add(EViolations.ILLEGAL_VELO_SETTING, new Cooldown("illegal Velo setting"));
-            Cooldowns.Add(EViolations.CHEAT_ENGINE, new Cooldown("Cheat Engine"));
-            Cooldowns.Add(EViolations.PAUSED, new Cooldown("paused"));
-            Cooldowns.Add(EViolations.SAVESTATE, new Cooldown("savestate"));
-            Cooldowns.Add(EViolations.REPLAY, new Cooldown("replay"));
+            Cooldowns.Add(EViolation.ITEM_USED, new Cooldown("item was used"));
+            Cooldowns.Add(EViolation.DRILL_USED, new Cooldown("drill was used"));
+            Cooldowns.Add(EViolation.ILLEGAL_VELO_SETTING, new Cooldown("illegal Velo setting"));
+            Cooldowns.Add(EViolation.CHEAT_ENGINE, new Cooldown("Cheat Engine"));
+            Cooldowns.Add(EViolation.PAUSED, new Cooldown("paused"));
+            Cooldowns.Add(EViolation.SAVESTATE, new Cooldown("savestate"));
+            Cooldowns.Add(EViolation.REPLAY, new Cooldown("replay"));
         }
 
         public RulesChecker Clone()
@@ -304,25 +301,25 @@ namespace Velo
         public void Finish(float time)
         {
             if (time >= 30f * 60f)
-                Violations[(int)EViolations.TOO_LONG] = "time is longer than 30 minutes (" + time / 60 + "m)";
+                Violations[(int)EViolation.TOO_LONG] = "time is longer than 30 minutes (" + time / 60 + "m)";
             if (MapId != ulong.MaxValue && !Map.IsOrigins(MapId) && !Map.IsOther(MapId))
             {
                 if (primaryI < checkpoints[(int)MapId].Primary.Count)
                 {
-                    Violations[(int)EViolations.PRIMARY_CHECKPOINT_MISSED] = "missed primary checkpoint #" + primaryI;
+                    Violations[(int)EViolation.PRIMARY_CHECKPOINT_MISSED] = "missed primary checkpoint #" + primaryI;
                 }
                 if (secondaryI < checkpoints[(int)MapId].Secondary.Count && ternaryI < checkpoints[(int)MapId].Ternary.Count)
                 {
-                    Violations[(int)EViolations.SECONDARY_AND_TERNARY_CHECKPOINT_MISSED] = "missed secondary and ternary checkpoint #" + secondaryI + " and #" + ternaryI;
+                    Violations[(int)EViolation.SECONDARY_AND_TERNARY_CHECKPOINT_MISSED] = "missed secondary and ternary checkpoint #" + secondaryI + " and #" + ternaryI;
                 }
                 if (secondaryI < checkpoints[(int)MapId].Secondary.Count)
                 {
-                    SkipReasons[(int)ESkipReasons.SECONDARY_CHECKPOINT_MISSED] = "missed secondary checkpoint #" + secondaryI;
+                    SkipReasons[(int)ESkipReason.SECONDARY_CHECKPOINT_MISSED] = "missed secondary checkpoint #" + secondaryI;
                 }
             }
         }
 
-        public void SetCooldown(EViolations violation, float value)
+        public void SetCooldown(EViolation violation, float value)
         {
             Cooldown cooldown = Cooldowns[violation];
             cooldown.Set(value);
@@ -347,50 +344,46 @@ namespace Velo
             //    checkpoints = InitCheckpoints(File.ReadAllText("cp.txt"));
 
             if (Velo.MainPlayer.gameInfo.options[(int)EGameOptions.SUPER_SPEED_RUNNERS])
-                Violations[(int)EViolations.ILLEGAL_GAME_OPTION] = "illegal game option SuperSpeedRunners";
+                Violations[(int)EViolation.ILLEGAL_GAME_OPTION] = "illegal game option SuperSpeedRunners";
             if (Velo.MainPlayer.gameInfo.options[(int)EGameOptions.SPEED_RAPTURE])
-                Violations[(int)EViolations.ILLEGAL_GAME_OPTION] = "illegal game option SpeedRapture";
+                Violations[(int)EViolation.ILLEGAL_GAME_OPTION] = "illegal game option SpeedRapture";
             if (Velo.MainPlayer.gameInfo.options[(int)EGameOptions.DESTRUCTIBLE_ENVIRONMENT])
-                Violations[(int)EViolations.ILLEGAL_GAME_OPTION] = "illegal game option Destructible Environment";
+                Violations[(int)EViolation.ILLEGAL_GAME_OPTION] = "illegal game option Destructible Environment";
 
-            if (Velo.MainPlayer != null && Velo.ItemIdPrev != (byte)EItem.NONE && Velo.ItemIdPrev != Velo.MainPlayer.item_id)
+            if (Velo.MainPlayer != null && Velo.ItemIdPrev != (byte)EItem.NONE && Velo.ItemIdPrev != Velo.MainPlayer.itemId)
             {
-                SetCooldown(EViolations.ITEM_USED, 5f);
+                SetCooldown(EViolation.ITEM_USED, 5f);
                 ulong mapId = Map.GetCurrentMapId();
                 if (!Map.AllowBombSmiley(mapId) && (Velo.ItemIdPrev == (byte)EItem.BOMB || Velo.ItemIdPrev == (byte)EItem.TRIGGER || Velo.ItemIdPrev == (byte)EItem.SMILEY))
-                    SetCooldown(EViolations.ITEM_USED, float.PositiveInfinity);
+                    SetCooldown(EViolation.ITEM_USED, float.PositiveInfinity);
                 if (!Map.AllowDrill(mapId) && Velo.ItemIdPrev == (byte)EItem.DRILL)
-                    SetCooldown(EViolations.ITEM_USED, float.PositiveInfinity);
+                    SetCooldown(EViolation.ITEM_USED, float.PositiveInfinity);
                 LastUsedItemId = Velo.ItemIdPrev;
             }
-            if (Velo.MainPlayer != null && Velo.MainPlayer.using_drill)
+            if (Velo.MainPlayer != null && Velo.MainPlayer.usingDrill)
             {
-                SetCooldown(EViolations.DRILL_USED, 5f);
+                SetCooldown(EViolation.DRILL_USED, 5f);
                 if (!Map.AllowDrill(MapId) && Velo.ItemIdPrev == (byte)EItem.DRILL)
-                    SetCooldown(EViolations.DRILL_USED, float.PositiveInfinity);
+                    SetCooldown(EViolation.DRILL_USED, float.PositiveInfinity);
             }
-            if (OfflineGameMods.Instance.GhostPlaybackUsedItem())
-                Violations[(int)EViolations.GHOST_ITEM_USED] = "ghost used an item";
+            if (OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackUsedItem)
+                Violations[(int)EViolation.GHOST_ITEM_USED] = "ghost used an item";
+
+            if (Velo.GhostFocused)
+                Violations[(int)EViolation.GHOST_FOCUSED] = "camera was focused to ghost";
             
-            if (Velo.MainPlayer.item_id == (byte)EItem.TRIPLE_JUMP)
-                Violations[(int)EViolations.ITEM_USED] = "triple jump item use";
+            if (Velo.MainPlayer.itemId == (byte)EItem.TRIPLE_JUMP)
+                Violations[(int)EViolation.ITEM_USED] = "triple jump item use";
 
             if (Velo.BoostaCokeModified)
-                Violations[(int)EViolations.BOOSTACOKE_MODIFIED] = "boostacoke was modified by + or -";
+                Violations[(int)EViolation.BOOSTACOKE_MODIFIED] = "boostacoke was modified by + or -";
 
             if (Velo.GhostLaserCollision)
-                Violations[(int)EViolations.GHOST_BLOCKING] = "ghost has blocked a laser";
+                Violations[(int)EViolation.GHOST_BLOCKING] = "ghost has blocked a laser";
 
             if (Velo.GhostFallTileCollision)
-                Violations[(int)EViolations.GHOST_HIT_FALL_TILE] = "ghost destroyed a fall tile";
+                Violations[(int)EViolation.GHOST_HIT_FALL_TILE] = "ghost destroyed a fall tile";
 
-            if (OfflineGameMods.Instance.IsPlaybackRunning())
-            {
-                if (OfflineGameMods.Instance.IsOwnPlaybackFromLeaderboard())
-                    SetCooldown(EViolations.REPLAY, 1f);
-                else
-                    SetCooldown(EViolations.REPLAY, 5f);
-            }
             if (
                 OfflineGameMods.Instance.IsModded() ||
                 OfflineGameMods.Instance.DtFixed ||
@@ -398,10 +391,12 @@ namespace Velo
                 BlindrunSimulator.Instance.Enabled.Value.Enabled
                 )
             {
-                SetCooldown(EViolations.ILLEGAL_VELO_SETTING, float.PositiveInfinity);
+                SetCooldown(EViolation.ILLEGAL_VELO_SETTING, float.PositiveInfinity);
             }
+            if (Velo.Poisoned)
+                Violations[(int)EViolation.SET_COMMAND] = "set command was used";
             if (CheatEngineDetection.Detected)
-                SetCooldown(EViolations.CHEAT_ENGINE, float.PositiveInfinity);
+                SetCooldown(EViolation.CHEAT_ENGINE, float.PositiveInfinity);
             if (Velo.MainPlayer != null && Velo.MainPlayer.actor != null)
             {
                 if (
@@ -409,22 +404,17 @@ namespace Velo
                     !Velo.MainPlayer.actor.IsCollidable ||
                     !Velo.MainPlayer.actor.ShouldPredictCollision
                     )
-                    SetCooldown(EViolations.CHEAT_ENGINE, float.PositiveInfinity);
-            }
-            if (SavestateLoadTime != OfflineGameMods.Instance.SavestateLoadTime)
-            {
-                SavestateLoadTime = OfflineGameMods.Instance.SavestateLoadTime;
-                SetCooldown(EViolations.SAVESTATE, 1f);
+                    SetCooldown(EViolation.CHEAT_ENGINE, float.PositiveInfinity);
             }
 
-            if (Savestate.LoadedVersion < Version.MIN_SAVESTATE_VERSION)
-                Violations[(int)EViolations.OLD_VERSION_SAVESTATE] = "a savestate from an illegal older version was used";
+            if (Savestate.LoadedVeloVersion < Version.MIN_SAVESTATE_VERSION)
+                Violations[(int)EViolation.OLD_VERSION_SAVESTATE] = "a savestate from an illegal older version was used";
 
             if (Velo.PauseMenu)
-                SetCooldown(EViolations.PAUSED, 5f);
+                SetCooldown(EViolation.PAUSED, 5f);
 
             if (Input.WindowDragging() == 1)
-                Violations[(int)EViolations.WINDOW_MOVED] = "game window was moved";
+                Violations[(int)EViolation.WINDOW_MOVED] = "game window was moved";
 
             double frameTime = CEngine.CEngine.Instance.gameTime.ElapsedGameTime.TotalSeconds;
             if (frames > 2 && frameTime > 0.15)
@@ -432,7 +422,7 @@ namespace Velo
             if (!Input.Focused)
                 unfocused = true;
             if (lagFrame && unfocused)
-                Violations[(int)EViolations.NOT_FOCUED] = "game window was not focused";
+                Violations[(int)EViolation.NOT_FOCUED] = "game window was not focused";
 
             CAABB hitboxAABB = (CAABB)Velo.MainPlayer.actor.Collision;
             RectangleF hitbox = new RectangleF(hitboxAABB.MinX, hitboxAABB.MinY, hitboxAABB.Width, hitboxAABB.Height);
@@ -472,7 +462,6 @@ namespace Velo
                     entry.Value.Clear();
                 CheatEngineDetection.Detected = false;
                 CheatEngineDetection.MatchValues();
-                SavestateLoadTime = OfflineGameMods.Instance.SavestateLoadTime;
             }
             else
             {
@@ -493,7 +482,7 @@ namespace Velo
                 Violations[(int)EViolations.FINISH_LINE_DRIFT] = "finish line drifted by " + Math.Min(finishLineDrift, finishLineDrift2);
             */
             if (MapId == ulong.MaxValue)
-                Violations[(int)EViolations.NON_VELO_CURATED] = "non Velo curated map";
+                Violations[(int)EViolation.NON_VELO_CURATED] = "non Velo curated map";
 
             CEngine.World.Collision.CCollisionEngine col = CEngine.CEngine.Instance.World.CollisionEngine;
             foreach (CActor actor in col.actors)
@@ -501,7 +490,7 @@ namespace Velo
                 if (actor.Controller is Obstacle obstacle)
                 {
                     if (obstacle.broken)
-                        Violations[(int)EViolations.OBSTACLE_BROKEN] = "broken obstacle at " + obstacle.actor.Position.X + ", " + obstacle.actor.Position.Y;
+                        Violations[(int)EViolation.OBSTACLE_BROKEN] = "broken obstacle at " + obstacle.actor.Position.X + ", " + obstacle.actor.Position.Y;
                 }
                 else if (actor.Controller is Rocket rocket)
                 {
@@ -509,72 +498,72 @@ namespace Velo
                         rocket.actor.IsCollisionActive &&
                         rocket.actor.Position.Y > -100f // let's not be too strict with rockets that just fly endlessly through space
                         )
-                        Violations[(int)EViolations.ITEM_STILL_ALIVE] = "rocket still alive at " + rocket.actor.Position.X + ", " + rocket.actor.Position.Y;
+                        Violations[(int)EViolation.ITEM_STILL_ALIVE] = "rocket still alive at " + rocket.actor.Position.X + ", " + rocket.actor.Position.Y;
                 }
                 else if (actor.Controller is DroppedObstacle droppedObstacle)
                 {
                     if (droppedObstacle.actor.IsCollisionActive)
-                        Violations[(int)EViolations.ITEM_STILL_ALIVE] = "dropped obstacle still alive at " + droppedObstacle.actor.Position.X + ", " + droppedObstacle.actor.Position.Y;
+                        Violations[(int)EViolation.ITEM_STILL_ALIVE] = "dropped obstacle still alive at " + droppedObstacle.actor.Position.X + ", " + droppedObstacle.actor.Position.Y;
                 }
                 else if (actor.Controller is DroppedBomb droppedBomb)
                 {
                     if (droppedBomb.actor.IsCollisionActive)
-                        Violations[(int)EViolations.ITEM_STILL_ALIVE] = "dropped bomb still alive at " + droppedBomb.actor.Position.X + ", " + droppedBomb.actor.Position.Y;
+                        Violations[(int)EViolation.ITEM_STILL_ALIVE] = "dropped bomb still alive at " + droppedBomb.actor.Position.X + ", " + droppedBomb.actor.Position.Y;
                 }
                 else if (actor.Controller is Fireball fireball)
                 {
                     if (fireball.actor.IsCollisionActive)
-                        Violations[(int)EViolations.ITEM_STILL_ALIVE] = "fireball still alive at " + fireball.actor.Position.X + ", " + fireball.actor.Position.Y;
+                        Violations[(int)EViolation.ITEM_STILL_ALIVE] = "fireball still alive at " + fireball.actor.Position.X + ", " + fireball.actor.Position.Y;
                 }
                 else if (actor.Controller is Shockwave shockwave)
                 {
                     if (shockwave.actor.IsCollisionActive)
-                        Violations[(int)EViolations.ITEM_STILL_ALIVE] = "shockwave still alive at " + shockwave.actor.Position.X + ", " + shockwave.actor.Position.Y;
+                        Violations[(int)EViolation.ITEM_STILL_ALIVE] = "shockwave still alive at " + shockwave.actor.Position.X + ", " + shockwave.actor.Position.Y;
                 }
                 else if (actor.Controller is SwitchBlock gate)
                 {
                     if (MapId == 20)
                         continue;
-                    if (gate.state == gate.onState || gate.rotation != gate.offRotation)
-                        OneLapReasons[(int)E1LapReasons.GATE_NOT_CLOSED] = "gate not closed on start at " + gate.actor.Position.X + ", " + gate.actor.Position.Y;
+                    if (gate.direction == gate.openDirection || gate.rotation != gate.closedRotation)
+                        OneLapReasons[(int)E1LapReason.GATE_NOT_CLOSED] = "gate not closed on start at " + gate.actor.Position.X + ", " + gate.actor.Position.Y;
                 }
                 else if (actor.Controller is FallTile fallTile)
                 {
-                    if (!fallTile.animSpriteDraw.IsVisible)
-                        OneLapReasons[(int)E1LapReasons.FALL_TILE_BROKEN] = "broken fall tile at " + fallTile.actor.Position.X + ", " + fallTile.actor.Position.Y;
+                    if (!fallTile.sprite.IsVisible)
+                        OneLapReasons[(int)E1LapReason.FALL_TILE_BROKEN] = "broken fall tile at " + fallTile.actor.Position.X + ", " + fallTile.actor.Position.Y;
                 }
             }
 
             if (!reset)
-                OneLapReasons[(int)E1LapReasons.NON_RESET] = "no lap reset";
+                OneLapReasons[(int)E1LapReason.NON_RESET] = "no lap reset";
 
             if (Velo.MainPlayer.boost != 0.0f)
-                OneLapReasons[(int)E1LapReasons.HAS_BOOST] = "boost on start";
+                OneLapReasons[(int)E1LapReason.HAS_BOOST] = "boost on start";
 
             if (Velo.MainPlayer.boostacoke.Value > 0f)
             {
                 if (Map.HasBoostaCoke(MapId))
-                    OneLapReasons[(int)E1LapReasons.HAS_BOOSTACOKE] = "player has boostacoke upon starting the lap";
+                    OneLapReasons[(int)E1LapReason.HAS_BOOSTACOKE] = "player has boostacoke upon starting the lap";
                 else
-                    Violations[(int)EViolations.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has unobtainable boostacoke upon starting the lap";
+                    Violations[(int)EViolation.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has unobtainable boostacoke upon starting the lap";
             }
 
             if (Velo.MainPlayer.boostacoke.Value > 0f)
             {
                 if (Map.HasBoostaCoke(MapId))
-                    OneLapReasons[(int)EViolations.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has boostacoke upon starting the lap";
+                    OneLapReasons[(int)EViolation.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has boostacoke upon starting the lap";
                 else
-                    Violations[(int)EViolations.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has unobtainable boostacoke upon starting the lap";
+                    Violations[(int)EViolation.HAS_IMPOSSIBLE_BOOSTACOKE] = "player has unobtainable boostacoke upon starting the lap";
             }
 
             if (Map.HasMovingLaser(MapId) && !Velo.PausedPrev && !OfflineGameMods.Instance.ResetLasers.Value)
-                OneLapReasons[(int)E1LapReasons.MOVING_LASER_NON_MENU_RESET] = "not starting from countdown on a map with moving lasers";
+                OneLapReasons[(int)E1LapReason.MOVING_LASER_NON_MENU_RESET] = "not starting from countdown on a map with moving lasers";
 
-            if (Velo.MainPlayer.wall_cd > 0f)
-                OneLapReasons[(int)E1LapReasons.WALL_RESET_BOOST] = "lap reset whilst on wall";
+            if (Velo.MainPlayer.wallJumpBonusTimer > 0f)
+                OneLapReasons[(int)E1LapReason.WALL_RESET_BOOST] = "lap reset whilst on wall";
 
-            if (Velo.MainPlayer.timespan1.TotalSeconds >= Velo.CEngineInst.gameTime.TotalGameTime.TotalSeconds - 0.25f)
-                OneLapReasons[(int)E1LapReasons.JUMP_RESET_BOOST] = "lap reset right after jumping";
+            if (Velo.MainPlayer.jumpTime.TotalSeconds >= Velo.CEngineInst.gameTime.TotalGameTime.TotalSeconds - 0.25f)
+                OneLapReasons[(int)E1LapReason.JUMP_RESET_BOOST] = "lap reset right after jumping";
         }
 
         private void UpdateDraws(ulong mapId)

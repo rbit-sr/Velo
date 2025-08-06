@@ -679,6 +679,7 @@ namespace Velo
     {
         public RunInfo RunInfo;
         public int TimeSave;
+        public int Tied;
         public int RecordType;
     }
 
@@ -711,7 +712,7 @@ namespace Velo
             long deltaSum = 0;
             for (int i = recording.LapStart; i < recording.Count; i++)
             {
-                deltaSum += recording[i].Delta;
+                deltaSum += recording[i].Delta.Ticks;
             }
             float avgFramerate = 1f / (float)new TimeSpan(deltaSum / (recording.Count - recording.LapStart)).TotalSeconds;
 
@@ -734,6 +735,7 @@ namespace Velo
                 return new NewPbInfo { RunInfo = new RunInfo { Id = -1 }, TimeSave = timeSave };
             }
 
+            int tied = client.Receive<int>();
             int recordType = client.Receive<int>();
 
             byte[] salt = new byte[32];
@@ -830,6 +832,7 @@ namespace Velo
             { 
                 RunInfo = result, 
                 TimeSave = timeSave,
+                Tied = tied,
                 RecordType = recordType
             };
         }
@@ -860,9 +863,9 @@ namespace Velo
 
             int size = client.Receive<int>();
             byte[] data = new byte[size];
-            client.Receive(data);
+            client.Receive(data, size);
 
-            MemoryStream dataStream = new MemoryStream(data)
+            MemoryStream dataStream = new MemoryStream(data, 0, size)
             {
                 Position = 0
             };

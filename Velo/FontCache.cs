@@ -39,7 +39,8 @@ namespace Velo
 
             string[] split = name.Split(':');
 
-            if (File.Exists("Content\\" + split[0]))
+            string root = Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory;
+            if (File.Exists(root + "\\" + split[0]))
             {
                 CFont newFont = new CFont(name);
                 Velo.ContentManager.Load(newFont, false);

@@ -226,9 +226,9 @@ namespace Velo
             }
 
             CurrentCategory.Tooltip =
-                "Replaces specific colors from the game's UI.\n" +
-                "To find the right blue tone of a specific UI element, " +
-                "refer to the tooltip or make a screenshot and use a color picker.";
+                "Replaces specific colors of the game's UI.\n" +
+                "To find the blue tone corresponding to a specific UI element, " +
+                "refer to the tooltips or make a screenshot and use a color picker.";
 
             EnableUIColorReplacements.Tooltip =
                 "Restart your game for changes to fully take effect.";
@@ -278,28 +278,28 @@ namespace Velo
             // disable all color replacements for actor drawers
             ICDrawComponent drawer = actor.Controller.Drawer;
             if (drawer is CSpriteDrawComponent sprite)
-                sprite.color_replace = false;
+                sprite.color_replace_ = false;
             if (drawer is CImageDrawComponent image)
-                image.color_replace = false;
+                image.color_replace_ = false;
             if (drawer is CTextDrawComponent text)
-                text.color_replace = false;
+                text.color_replace_ = false;
             if (drawer is CGroupDrawComponent group)
             {
                 foreach (ICDrawComponent child in group.Children)
                 {
                     if (child is CSpriteDrawComponent sprite1)
-                        sprite1.color_replace = false;
+                        sprite1.color_replace_ = false;
                     if (child is CImageDrawComponent image1)
-                        image1.color_replace = false;
+                        image1.color_replace_ = false;
                     if (child is CTextDrawComponent text1)
-                        text1.color_replace = false;
+                        text1.color_replace_ = false;
                 }
             }
         }
 
         private static bool PopupEnabled()
         {
-            return 
+            return
                 (!Speedometer.Instance.Enabled.Value.Enabled || !Speedometer.Instance.DisablePopup.Value) &&
                 (!AngleDisplay.Instance.Enabled.Value.Enabled || !AngleDisplay.Instance.DisablePopup.Value) &&
                 (!JumpHoldingDisplay.Instance.Enabled.Value.Enabled || !JumpHoldingDisplay.Instance.DisablePopup.Value);
@@ -325,30 +325,30 @@ namespace Velo
                 !LocalOnly.Value ||
                 (grapple.owner.slot.LocalPlayer && !grapple.owner.slot.IsBot))
             {
-                grapple.spriteDrawComp1.Color = GrappleHookColor.Value.Get();
-                grapple.animSpriteDrawComp1.Color = GrappleHookBreakColor.Value.Get();
+                grapple.sprite.Color = GrappleHookColor.Value.Get();
+                grapple.breakSprite.Color = GrappleHookBreakColor.Value.Get();
             }
             else
             {
-                grapple.spriteDrawComp1.Color = GrappleHookColor.DefaultValue.Get();
-                grapple.animSpriteDrawComp1.Color = GrappleHookBreakColor.DefaultValue.Get();
+                grapple.sprite.Color = GrappleHookColor.DefaultValue.Get();
+                grapple.breakSprite.Color = GrappleHookBreakColor.DefaultValue.Get();
                 if (!Velo.Online)
                 {
-                    grapple.spriteDrawComp1.Color *= GhostOpacity.Value;
-                    grapple.animSpriteDrawComp1.Color *= GhostOpacity.Value;
+                    grapple.sprite.Color *= GhostOpacity.Value;
+                    grapple.breakSprite.Color *= GhostOpacity.Value;
                 }
                 else
                 {
-                    grapple.spriteDrawComp1.Color *= RemoteOpacity.Value;
-                    grapple.animSpriteDrawComp1.Color *= RemoteOpacity.Value;
+                    grapple.sprite.Color *= RemoteOpacity.Value;
+                    grapple.breakSprite.Color *= RemoteOpacity.Value;
                 }
             }
         }
 
         public void UpdateGoldenHookColor(GoldenHook goldenHook)
         {
-            goldenHook.spriteDraw.Color = GoldenHookColor.Value.Get();
-            goldenHook.animSpriteDraw.Color = GoldenHookBreakColor.Value.Get();
+            goldenHook.sprite.Color = GoldenHookColor.Value.Get();
+            goldenHook.breakSprite.Color = GoldenHookBreakColor.Value.Get();
         }
 
         public void UpdateRopeColor(Rope rope)
@@ -423,8 +423,8 @@ namespace Velo
 
         public void UpdateGateColor(SwitchBlock switchBlock)
         {
-            switchBlock.animSpriteDraw1.Color = GateColor.Value.Get();
-            switchBlock.animSpriteDraw2.Color = GateColor.Value.Get();
+            switchBlock.sprite.Color = GateColor.Value.Get();
+            switchBlock.triggerSparkSprite.Color = GateColor.Value.Get();
         }
 
         public Color GetBackgroundColor(ICLayer layer, Color color)
@@ -455,9 +455,9 @@ namespace Velo
                 chatColors.Add(obj, Instance.ChatWriteColor);
 
             if (obj is CTextWidget text)
-                text.draw_comp.color_replace = false;
+                text.draw_comp.color_replace_ = false;
             if (obj is CEditableTextWidget editText)
-                editText.draw_comp.color_replace = false;
+                editText.draw_comp.color_replace_ = false;
         }
 
         public void UpdateChatColor(object obj)
@@ -493,7 +493,7 @@ namespace Velo
 
         public void TextColorUpdated(CTextDrawComponent text)
         {
-            if (!text.color_replace || !EnableUIColorReplacements.Value)
+            if (!text.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             uiTextRepls.Remove(text);
@@ -505,19 +505,19 @@ namespace Velo
 
         public void TextShadowColorUpdated(CTextDrawComponent text)
         {
-            if (!text.color_replace || !EnableUIColorReplacements.Value)
+            if (!text.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             uiTextShadowRepls.Remove(text);
 
-            uint key = Util.FullAlpha(text.shadow_color).PackedValue;
+            uint key = Util.FullAlpha(text.dropShadowColor).PackedValue;
             if (colorReplLookup.ContainsKey(key))
-                uiTextShadowRepls.Add(text, new UIColorReplacement(colorReplLookup[key], text.shadow_color));
+                uiTextShadowRepls.Add(text, new UIColorReplacement(colorReplLookup[key], text.dropShadowColor));
         }
 
         public void ImageColorUpdated(CImageDrawComponent image)
         {
-            if (!image.color_replace || !EnableUIColorReplacements.Value)
+            if (!image.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             // some UI elements fade in and out by multiplying all color components with an opacity value,
@@ -554,7 +554,7 @@ namespace Velo
 
         public void SpriteColorUpdated(CSpriteDrawComponent sprite)
         {
-            if (!sprite.color_replace || !EnableUIColorReplacements.Value)
+            if (!sprite.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             // some UI elements fade in and out by multiplying all color components with an opacity value,
@@ -592,7 +592,7 @@ namespace Velo
 
         public void UpdateTextColor(CTextDrawComponent text)
         {
-            if (!text.color_replace || !EnableUIColorReplacements.Value)
+            if (!text.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             if (uiTextRepls.TryGetValue(text, out UIColorReplacement colorReplacement) && colorReplacement != null)
@@ -605,14 +605,14 @@ namespace Velo
             if (uiTextShadowRepls.TryGetValue(text, out colorReplacement) && colorReplacement != null)
             {
                 Color newColor = colorReplacement.Color.Value.Get();
-                text.shadow_color = PreserveAlpha(newColor, text.shadow_color);
-                text.shadow_color *= newColor.A / 255f * colorReplacement.Multiplier;
+                text.dropShadowColor = PreserveAlpha(newColor, text.dropShadowColor);
+                text.dropShadowColor *= newColor.A / 255f * colorReplacement.Multiplier;
             }
         }
 
         public void UpdateImageColor(CImageDrawComponent image)
         {
-            if (!image.color_replace || !EnableUIColorReplacements.Value)
+            if (!image.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             if (uiImageRepls.TryGetValue(image, out UIColorReplacement colorReplacement) && colorReplacement != null)
@@ -625,7 +625,7 @@ namespace Velo
 
         public void UpdateSpriteColor(CSpriteDrawComponent sprite)
         {
-            if (!sprite.color_replace || !EnableUIColorReplacements.Value)
+            if (!sprite.color_replace_ || !EnableUIColorReplacements.Value)
                 return;
 
             if (uiSpriteRepls.TryGetValue(sprite, out UIColorReplacement colorReplacement) && colorReplacement != null)

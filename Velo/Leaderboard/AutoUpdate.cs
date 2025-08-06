@@ -60,7 +60,7 @@ namespace Velo
                     if (!Directory.Exists("Velo\\update"))
                         Directory.CreateDirectory("Velo\\update");
 
-                    using (FileStream file = new FileStream("Velo\\update\\" + update.Filename, FileMode.OpenOrCreate))
+                    using (FileStream file = File.Create("Velo\\update\\" + update.Filename))
                     {
                         file.Write(update.Bytes, 0, update.Bytes.Length);
                     }
