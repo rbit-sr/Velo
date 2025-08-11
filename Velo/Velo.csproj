@@ -113,6 +113,7 @@
     <Compile Include="Modules\RecordingAndReplay.cs" />
     <Compile Include="Modules\TAS.cs" />
     <Compile Include="Modules\Origins.cs" />
+    <Compile Include="Modules\TASeditor.cs" />
     <Compile Include="Playback.cs" />
     <Compile Include="Recorder.cs" />
     <Compile Include="Savestates.cs" />

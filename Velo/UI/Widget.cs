@@ -4,9 +4,9 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 
 namespace Velo
 {
@@ -19,7 +19,7 @@ namespace Velo
     {
         public enum EButton
         {
-            LEFT, MIDDLE, RIGHT, LEFT_REPEATED
+            LEFT, MIDDLE, RIGHT, LEFT_REPEATED, RIGHT_REPEATED
         }
 
         public EButton Button;
@@ -69,7 +69,8 @@ namespace Velo
         private MouseState mouseCurr;
         private KeyboardState keyboardPrev;
         private KeyboardState keyboardCurr;
-        private AutorepeatContext arLeft;
+        private readonly AutorepeatContext arLeft;
+        private readonly AutorepeatContext arRight;
         private readonly Queue<char> charInputQueue = new Queue<char>();
 
         public float Opacity { get; set; }
@@ -88,6 +89,7 @@ namespace Velo
             Opacity = 1f;
             TextInputEXT.TextInput += InputChar;
             arLeft = new AutorepeatContext(true);
+            arRight = new AutorepeatContext(true);
         }
 
         ~WidgetContainer()
@@ -156,10 +158,18 @@ namespace Velo
                     else if (leftEvent == AutorepeatEvent.REPEAT)
                         events.OnClick(new WEMouseClick(WEMouseClick.EButton.LEFT_REPEATED));
                 }
+                
+                AutorepeatEvent rightEvent = arRight.PressEvent(mouseCurr.RightButton == ButtonState.Pressed);
+                if (rightEvent != AutorepeatEvent.NONE)
+                {
+                    if (rightEvent == AutorepeatEvent.PRESS)
+                        events.OnClick(new WEMouseClick(WEMouseClick.EButton.RIGHT));
+                    else if (rightEvent == AutorepeatEvent.REPEAT)
+                        events.OnClick(new WEMouseClick(WEMouseClick.EButton.RIGHT_REPEATED));
+                }
+
                 if (mousePrev.MiddleButton == ButtonState.Released && mouseCurr.MiddleButton == ButtonState.Pressed)
                     events.OnClick(new WEMouseClick(WEMouseClick.EButton.MIDDLE));
-                if (mousePrev.RightButton == ButtonState.Released && mouseCurr.RightButton == ButtonState.Pressed)
-                    events.OnClick(new WEMouseClick(WEMouseClick.EButton.RIGHT));
             }
             if (events.OnScroll != null)
             {
@@ -240,6 +250,8 @@ namespace Velo
         float Opacity { get; set; }
         bool BackgroundVisible { get; set; }
         Func<Color> BackgroundColor { get; set; }
+        int OutlineThickness { get; set; }
+        Func<Color> OutlineColor { get; set; }
         bool DisableInput { get; set; }
         bool Hoverable { get; set; }
         bool BackgroundVisibleHovered { get; set; }
@@ -259,7 +271,6 @@ namespace Velo
 
     public abstract class Widget : IWidget
     {
-        public CRectangleDrawComponent recDraw;
         protected Rectangle cropRec;
 
         public bool CheckMouseInside(Vector2 mousePos)
@@ -283,10 +294,6 @@ namespace Velo
         public Widget()
         {
             Visible = true;
-            recDraw = new CRectangleDrawComponent(0, 0, 0, 0)
-            {
-                IsVisible = true
-            };
             Opacity = 1f;
         }
 
@@ -298,6 +305,8 @@ namespace Velo
         public float Opacity { get; set; }
         public bool BackgroundVisible { get; set; }
         public Func<Color> BackgroundColor { get; set; }
+        public int OutlineThickness { get; set; }
+        public Func<Color> OutlineColor { get; set; }
         public bool DisableInput { get; set; }
         public bool Hoverable { get; set; }
         public bool BackgroundVisibleHovered { get; set; }
@@ -364,6 +373,10 @@ namespace Velo
 
             UpdateScissorRec(parentCropRec, scale);
 
+            CRectangleDrawComponent recDraw = new CRectangleDrawComponent(0f, 0f, 0f, 0f)
+            {
+                IsVisible = true
+            };
             recDraw.SetPositionSize((Position + Offset) * scale, Size * scale);
 
             if (!Hoverable || this != hovered)
@@ -371,17 +384,15 @@ namespace Velo
                 recDraw.FillEnabled = BackgroundVisible;
                 if (BackgroundColor != null)
                     recDraw.FillColor = BackgroundColor() * opacity * Opacity;
-                recDraw.OutlineEnabled = false;
-                recDraw.OutlineThickness = 0;
             }
             else
             {
                 recDraw.FillEnabled = BackgroundVisibleHovered;
                 if (BackgroundColorHovered != null)
                     recDraw.FillColor = BackgroundColorHovered() * opacity * Opacity;
-                recDraw.OutlineEnabled = false;
-                recDraw.OutlineThickness = 0;
             }
+            recDraw.OutlineEnabled = false;
+            recDraw.OutlineThickness = 0;
 
             recDraw.IsVisible = Visible;
             recDraw.Draw(null);
@@ -397,6 +408,23 @@ namespace Velo
             foreach (var child in Children)
             {
                 child.Draw(hovered, GetCropRec(parentCropRec, scale), scale, opacity * Opacity);
+            }
+
+            if (OutlineThickness > 0)
+            {
+                CRectangleDrawComponent recDraw = new CRectangleDrawComponent(0f, 0f, 0f, 0f)
+                {
+                    IsVisible = true
+                };
+                recDraw.SetPositionSize((Position + Offset) * scale, Size * scale);
+
+                recDraw.OutlineEnabled = true;
+                recDraw.OutlineThickness = OutlineThickness;
+                if (OutlineColor != null)
+                    recDraw.OutlineColor = OutlineColor() * opacity * Opacity;
+
+                recDraw.IsVisible = Visible;
+                recDraw.Draw(null);
             }
 
             UpdateScissorRec(parentCropRec, scale);
@@ -453,6 +481,7 @@ namespace Velo
         public DecoratedW(W childWidget = null)
         {
             this.childWidget = childWidget;
+            RefreshChain();
         }
 
         private void RefreshChain()
@@ -601,7 +630,7 @@ namespace Velo
             children = new List<LayoutChild>();
         }
 
-        public LayoutChild AddChild(Widget child, float size = REQUESTED_SIZE)
+        public LayoutChild AddChild(IWidget child, float size = REQUESTED_SIZE)
         {
             children.Add(new LayoutChild(child, size));
             return children.Last();
@@ -615,6 +644,11 @@ namespace Velo
         public void RemoveChild(LayoutChild child)
         {
             children.Remove(child);
+        }
+
+        public void RemoveChild(int index)
+        {
+            children.RemoveAt(index);
         }
 
         public LayoutChild GetChild(int index)
@@ -1514,7 +1548,8 @@ namespace Velo
 
     public interface IListEntryFactory<T>
     {
-        IEnumerable<T> GetElems();
+        IEnumerable<T> GetElems(int start);
+        int Length { get; }
         float Height(T elem, int i);
         IWidget Create(T elem, int i);
     }
@@ -1539,6 +1574,7 @@ namespace Velo
             Factory = factory;
             entries = new List<Entry>();
             firstEntry = 0;
+            FixedEntryHeight = -1f;
         }
 
         public bool EntryBackgroundVisible { get; set; }
@@ -1546,13 +1582,25 @@ namespace Velo
         public Func<Color> EntryBackgroundColor2 { get; set; }
         public bool EntryHoverable { get; set; }
         public Func<Color> EntryBackgroundColorHovered { get; set; }
+        public float FixedEntryHeight { get; set; }
 
         public override Vector2 RequestedSize
         {
             get
             {
-                IEnumerable<T> elems = Factory.GetElems();
 
+                float max = 0f;
+                foreach (Entry entry in entries)
+                {
+                    max = Math.Max(max, entry.Widget.RequestedSize.X);
+                }
+
+                if (FixedEntryHeight >= 0f)
+                {
+                    return new Vector2(max, FixedEntryHeight * Factory.Length);
+                }
+
+                IEnumerable<T> elems = Factory.GetElems(0);
                 float sum = 0f;
                 int i = 0;
                 foreach (T elem in elems)
@@ -1560,11 +1608,7 @@ namespace Velo
                     sum += Factory.Height(elem, i);
                     i++;
                 }
-                float max = 0f;
-                foreach (Entry entry in entries)
-                {
-                    max = Math.Max(max, entry.Widget.RequestedSize.X);
-                }
+                
                 return new Vector2(max, sum);
             }
         }
@@ -1583,12 +1627,24 @@ namespace Velo
             firstEntry = 0;
             reachedEnd = false;
 
-            IEnumerable<T> elems = Factory.GetElems();
-            int elemsCount = elems.Count();
+            IEnumerable<T> elems;
+            int elemsCount = Factory.Length;
 
             float y = Position.Y;
             int i = 0;
             int j = 0;
+
+            if (FixedEntryHeight >= 0f)
+            {
+                int start = (int)((parentBounds.Position.Y - y) / FixedEntryHeight);
+                elems = Factory.GetElems(start);
+                firstEntry += start;
+                y += start * FixedEntryHeight;
+                i += start;
+            }
+            else
+                elems = Factory.GetElems(0);
+
             foreach (T elem in elems)
             {
                 float height = Factory.Height(elem, i);
@@ -1622,6 +1678,8 @@ namespace Velo
                     j++;
 
                 }
+                else
+                    break;
                 y += height;
                 i++;
             }
@@ -2094,7 +2152,8 @@ namespace Velo
 
     public interface ITableEntryFactory<T>
     {
-        IEnumerable<T> GetElems();
+        IEnumerable<T> GetElems(int start);
+        int Length { get; }
         float Height(T elem, int i);
     }
 
@@ -2120,6 +2179,12 @@ namespace Velo
         private readonly ListW<T> list;
         private readonly ScrollW scroll;
         private readonly List<TableColumn<T>> columns;
+
+        public float FixedEntryHeight
+        {
+            get => list.FixedEntryHeight;
+            set { list.FixedEntryHeight = value; }
+        }
 
         public TableW(CachedFont font, float headerHeight, ITableEntryFactory<T> factory)
         {
@@ -2223,15 +2288,22 @@ namespace Velo
             scroll.ResetScrollState();
         }
 
+        public void ScrollDown()
+        {
+            scroll.ScrollDown();
+        }
+
         public void RefreshEntry(int index)
         {
             list.RefreshEntry(index);
         }
 
-        public virtual IEnumerable<T> GetElems()
+        public virtual IEnumerable<T> GetElems(int start)
         {
-            return Factory.GetElems();
+            return Factory.GetElems(start);
         }
+
+        public virtual int Length => Factory.Length;
 
         public virtual float Height(T elem, int i)
         {

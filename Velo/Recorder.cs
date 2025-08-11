@@ -82,10 +82,13 @@ namespace Velo
 
         public TimeSpan Time => recording[recording.Count - 1].DeltaSum - recording[recording.LapStart].DeltaSum;
         public int Frame => recording.Count - 1 - recording.LapStart;
+        public int AbsoluteFrame => recording.Count - 1;
 
         private bool running = false;
         public bool Running => running;
         public bool DtFixed => false;
+
+        public IReplayable Recording => recording;
 
         public Recorder()
         {
@@ -165,7 +168,7 @@ namespace Velo
 
             Frame frame = recording.Frames[recording.Count - 1];
             frame.Delta = Velo.GameDelta;
-            frame.Time = Velo.GameTime;
+            frame.GlobalTime = Velo.GameTime;
             recording.Frames[recording.Count - 1] = frame;
 
             Capture();

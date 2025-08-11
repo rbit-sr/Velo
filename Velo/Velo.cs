@@ -382,7 +382,7 @@ gcd: ${Player._grappleCooldown 6 8}, bcd: ${Player.boostCooldown 6 9}, scd: ${Pl
             measure("Velo");
             ModuleManager.Instance.PostRender();
 
-            OfflineGameMods.Instance.RecordingAndReplay.PlaybackPostRender();
+            RecordingAndReplay.Instance.PlaybackPostRender();
 
             measure("render");
         }
@@ -400,7 +400,7 @@ gcd: ${Player._grappleCooldown 6 8}, bcd: ${Player.boostCooldown 6 9}, scd: ${Pl
         {
             Exiting = true;
             onExit.ForEach(a => a());
-            if (OfflineGameMods.Instance.RecordingAndReplay.Recorder is TASRecorder tasRecorder)
+            if (RecordingAndReplay.Instance.Recorder is TASRecorder tasRecorder)
             {
                 if (tasRecorder.NeedsSave)
                     tasRecorder.Save(false, recover: true);
@@ -511,7 +511,7 @@ gcd: ${Player._grappleCooldown 6 8}, bcd: ${Player.boostCooldown 6 9}, scd: ${Pl
 
         public static bool disable_ghost_poll()
         {
-            return OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackCount > 0;
+            return RecordingAndReplay.Instance.GhostPlaybackCount > 0;
         }
 
         public static bool disable_grapple_sound(Player player)
@@ -670,14 +670,14 @@ gcd: ${Player._grappleCooldown 6 8}, bcd: ${Player.boostCooldown 6 9}, scd: ${Pl
         public static bool set_inputs(Player player)
         {
             measure("Velo");
-            bool result = OfflineGameMods.Instance.RecordingAndReplay.SetInputs(player);
+            bool result = RecordingAndReplay.Instance.SetInputs(player);
             measure("physics");
             return result;
         }
 
         public static bool skip_update_sprite(Player player)
         {
-            return OfflineGameMods.Instance.RecordingAndReplay.SkipUpdateSprite(player);
+            return RecordingAndReplay.Instance.SkipUpdateSprite(player);
         }
 
         public static void update_camera(ICCameraModifier cameraMod)

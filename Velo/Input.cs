@@ -85,10 +85,11 @@ namespace Velo
             }
             else
             {
-                key &= 0x3ff;
+                key &= 0xbff;
 
                 bool isShift = (key & 0x100) != 0;
                 bool isCtrl = (key & 0x200) != 0;
+                bool isInvariant = (key & 0x800) != 0;
                 bool shiftDown = keys[Keys.LeftShift] == KeyState.Down || keys[Keys.RightShift] == KeyState.Down;
                 bool ctrlDown = keys[Keys.LeftControl] == KeyState.Down || keys[Keys.RightControl] == KeyState.Down;
 
@@ -100,10 +101,10 @@ namespace Velo
                 )
                     return true;
 
-                if (isShift != shiftDown || isCtrl != ctrlDown)
+                if (!isInvariant && (isShift != shiftDown || isCtrl != ctrlDown))
                     return false;
 
-                switch ((System.Windows.Forms.Keys)key)
+                switch ((System.Windows.Forms.Keys)(key & 0xff))
                 {
                     case System.Windows.Forms.Keys.LButton:
                         return mouse.LeftButton == ButtonState.Pressed;

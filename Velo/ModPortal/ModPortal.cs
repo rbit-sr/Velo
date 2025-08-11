@@ -1,4 +1,4 @@
-﻿using Microsoft.Xna.Framework;
+﻿/*using Microsoft.Xna.Framework;
 using System;
 using System.Windows.Forms;
 
@@ -74,7 +74,7 @@ namespace Velo
                 return false;
             }
 
-            if (/*ModsDatabase.Instance.Pending()*/ false)
+            if (false)
             {
                 LoadingSymbol.Visible = true;
                 Error = "";
@@ -112,7 +112,7 @@ namespace Velo
             ExampleSetting2 = AddFloat("example 2", 3f, 1f, 5f);
         }
 
-        public static ModPortal Instance/* = new ModPortal()*/;
+        public static ModPortal Instance;
 
         public override void Init()
         {
@@ -134,3 +134,4 @@ namespace Velo
         }
     }
 }
+*/

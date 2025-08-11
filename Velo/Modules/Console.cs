@@ -192,12 +192,7 @@ namespace Velo
             BackgroundColor = AddColorTransition("background color", new ColorTransition(new Color(0, 0, 0, 127)));
 
             NewCategory("stats window");
-            foreach (Setting setting in StatsWindow.Instance.Settings)
-            {
-                Add(setting);
-                setting.SetModule(this);
-            }
-            StatsWindow.Instance.RemoveAllSettings();
+            AddSubmodule(StatsWindow.Instance);
         }
 
         public static ConsoleM Instance = new ConsoleM();
@@ -441,6 +436,38 @@ namespace Velo
         }
     }
 
+    public static class ConsoleFont
+    {
+        public static readonly int REGULAR = 0;
+        public static readonly int BOLD = 1;
+        public static readonly int ITALICS = 2;
+        public static readonly int BOLD_ITALICS = 3;
+
+        public static CachedFont[] Get(int fontSize)
+        {
+            CachedFont[] fonts;
+            if (File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.Fonts) + "\\consola.ttf"))
+            {
+                fonts = new CachedFont[4];
+
+                string originalRoot = Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory;
+                Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
+                FontCache.Get(ref fonts[REGULAR], "consola.ttf:" + fontSize);
+                FontCache.Get(ref fonts[BOLD], "consolab.ttf:" + fontSize);
+                FontCache.Get(ref fonts[ITALICS], "consolai.ttf:" + fontSize);
+                FontCache.Get(ref fonts[BOLD_ITALICS], "consolaz.ttf:" + fontSize);
+                Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory = originalRoot;
+            }
+            else
+            {
+                fonts = new CachedFont[1];
+
+                FontCache.Get(ref fonts[REGULAR], "CEngine\\Debug\\FreeMonoBold.ttf:" + fontSize);
+            }
+            return fonts;
+        }
+    }
+
     public class ConsoleWindow : VLayoutW
     {
         private readonly bool editable;
@@ -449,7 +476,7 @@ namespace Velo
         private readonly LayoutChild editChild;
         private CachedFont[] fonts;
 
-        private int fontSize;
+        private int fontSize = 14;
         public int FontSize
         {
             get => fontSize;
@@ -466,30 +493,13 @@ namespace Velo
 
         private void UpdateFonts()
         {
-            if (File.Exists(Environment.GetFolderPath(Environment.SpecialFolder.Fonts) + "\\consola.ttf"))
-            {
-                fonts = new CachedFont[4];
-
-                string originalRoot = Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory;
-                Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Fonts);
-                FontCache.Get(ref fonts[0], "consola.ttf:" + FontSize);
-                FontCache.Get(ref fonts[1], "consolab.ttf:" + FontSize);
-                FontCache.Get(ref fonts[2], "consolai.ttf:" + FontSize);
-                FontCache.Get(ref fonts[3], "consolaz.ttf:" + FontSize);
-                Velo.CEngineInst.ContentBundleManager.contentTracker.RootDirectory = originalRoot;
-            }
-            else
-            {
-                fonts = new CachedFont[1];
-
-                FontCache.Get(ref fonts[0], "CEngine\\Debug\\FreeMonoBold.ttf:" + FontSize);
-            }
+            fonts = ConsoleFont.Get(FontSize);
             if (Text != null)
                 Text.Fonts = fonts;
             if (Write != null && editable)
             {
-                Write.SetFont(fonts[0]);
-                editChild.Size = fonts[0].Font.LineSpacing + 5f;
+                Write.SetFont(fonts[ConsoleFont.REGULAR]);
+                editChild.Size = fonts[ConsoleFont.REGULAR].Font.LineSpacing + 5f;
             }
         }
 
@@ -500,11 +510,11 @@ namespace Velo
 
             Text = new ConsoleTextW(fonts);
             if (editable)
-                Write = new ConsoleEditW(fonts[0]);
+                Write = new ConsoleEditW(fonts[ConsoleFont.REGULAR]);
 
             AddChild(Text, FILL);
             if (editable)
-                editChild = AddChild(Write, 0f);
+                editChild = AddChild(Write, fonts[ConsoleFont.REGULAR].Font.LineSpacing + 5f);
 
             BackgroundVisible = true;
 
@@ -557,11 +567,13 @@ namespace Velo
 
             this.fonts = fonts;
 
-            linesLabels = new ListW<int>(this);
+            linesLabels = new ListW<int>(this)
+            {
+                //FixedEntryHeight = fonts[ConsoleFont.REGULAR].Font.LineSpacing
+            };
             Child = linesLabels;
 
-            if (fonts != null)
-                charWidth = fonts[0].Font.MeasureString("A").X;
+            charWidth = fonts[ConsoleFont.REGULAR].Font.MeasureString("A").X;
         }
 
         public CachedFont[] Fonts
@@ -572,7 +584,7 @@ namespace Velo
                 fonts = value;
                 lines.Clear();
                 parsedTo = 0;
-                charWidth = fonts[0].Font.MeasureString("A").X;
+                charWidth = fonts[ConsoleFont.REGULAR].Font.MeasureString("A").X;
                 linesLabels.RefreshAllEntries();
             }
         }
@@ -688,15 +700,15 @@ namespace Velo
                     layout.AddSpace(part.Mode.Indent * charWidth);
                 else
                 {
-                    CachedFont font = fonts[0];
+                    CachedFont font = fonts[ConsoleFont.REGULAR];
                     if (fonts.Length > 1)
                     {
                         if (part.Mode.Bold && part.Mode.Italics)
-                            font = fonts[3];
+                            font = fonts[ConsoleFont.BOLD_ITALICS];
                         else if (part.Mode.Bold)
-                            font = fonts[2];
+                            font = fonts[ConsoleFont.BOLD];
                         else if (part.Mode.Italics)
-                            font = fonts[1];
+                            font = fonts[ConsoleFont.ITALICS];
                     }
 
                     layout.AddChild(new LabelW(part.Text, font)
@@ -710,14 +722,16 @@ namespace Velo
             return layout;
         }
 
-        public IEnumerable<int> GetElems()
+        public IEnumerable<int> GetElems(int start)
         {
-            return Enumerable.Range(0, lines.Count);
+            return Enumerable.Range(start, lines.Count);
         }
+
+        public int Length => lines.Count;
 
         public float Height(int elem, int i)
         {
-            return fonts[0].Font.LineSpacing;
+            return fonts[ConsoleFont.REGULAR].Font.LineSpacing;
         }
 
         public override void UpdateBounds(Bounds parentBounds)

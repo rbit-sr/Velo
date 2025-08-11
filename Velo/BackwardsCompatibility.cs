@@ -83,7 +83,7 @@ namespace Velo
             {
                 RealTime = TimeSpan.Zero,
                 Delta = Delta,
-                Time = Time,
+                GlobalTime = Time,
                 DeltaSum = DeltaSum,
                 JumpTime = JumpTime,
                 PosX = PosX,

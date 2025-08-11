@@ -539,6 +539,8 @@ namespace Velo
             IEnumerable<ulong> maps = curatedMapChronologicOrder;
             foreach (ulong m in maps)
             {
+                if (!Map.IsScored(m))
+                    continue;
                 for (int t = 0; t < (int)ECategoryType.COUNT; t++)
                 {
                     if (t == (int)ECategoryType.EVENT)

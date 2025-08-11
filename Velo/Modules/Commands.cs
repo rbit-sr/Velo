@@ -1,4 +1,5 @@
-﻿using CEngine.World.Actor;
+﻿using CEngine.Util.Misc;
+using CEngine.World.Actor;
 using Microsoft.Xna.Framework;
 using Steamworks;
 using System;
@@ -213,6 +214,11 @@ namespace Velo
             );
         }
 
+        public static CEncryptedFloat Parse_CEncryptedFloat(string str)
+        {
+            return new CEncryptedFloat(Parse_float(str));
+        }
+
         public static Filename Parse_Filename(string str)
         {
             if (str.IndexOfAny(Path.GetInvalidFileNameChars()) != -1)
@@ -263,6 +269,11 @@ namespace Velo
         public static string ToString_Color(Color value, int precision = 6)
         {
             return $"{value.R}, {value.G}, {value.B}, {value.A}";
+        }
+
+        public static string ToString_CEncryptedFloat(CEncryptedFloat value, int precision = 6)
+        {
+            return ToString_float(value.Value, precision);
         }
 
         public static string ToString_Filename(Filename value, int precision = 6)
@@ -562,7 +573,7 @@ namespace Velo
             if (timeline.Name == "" || timeline.Name == null)
                 timeline.Name = "main";
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             if (!project.Timelines.TryGetValue(timeline.Name, out var timeline_) || timeline_ == null)
                 throw new CommandException($"Timeline {timeline.Name} does not exist!");
             return timeline_;
@@ -578,13 +589,13 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             IReplayable recording;
             if (project == null)
                 recording = GetRecording(ref name);
             else
                 recording = GetTimeline(ref name);
-            OfflineGameMods.Instance.RecordingAndReplay.ReplayRecording(recording);
+            RecordingAndReplay.Instance.ReplayRecording(recording);
             return $"Started replay of \"{name.Name}\".";
         }
 
@@ -598,13 +609,13 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             IReplayable recording;
             if (project == null)
                 recording = GetRecording(ref name);
             else
                 recording = GetTimeline(ref name);
-            OfflineGameMods.Instance.RecordingAndReplay.VerifyRecording(recording);
+            RecordingAndReplay.Instance.VerifyRecording(recording);
             return $"Started verification of \"{name.Name}\".";
         }
 
@@ -620,7 +631,7 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             IReplayable recording;
             if (project == null)
                 recording = GetRecording(ref name);
@@ -632,31 +643,51 @@ namespace Velo
                 recording = timeline;
             }
             int actualIndex =
-                OfflineGameMods.Instance.RecordingAndReplay.SetGhostRecording(recording, (int)index);
+                RecordingAndReplay.Instance.SetGhostRecording(recording, (int)index);
             return $"Set \"{name.Name}\" to ghost {actualIndex}.";
         }
 
-        [Command("capture", EGroup.RECORDING_AND_REPLAY, "")]
-        public static string Capture(Filename name, uint captureRate, uint videoRate)
+        [Command("capture", EGroup.RECORDING_AND_REPLAY, "Makes a video recording of a saved recording or timeline of current TAS-project.",
+            "Makes a video recording of a saved recording or timeline of current TAS-project. " +
+            "All recordings are stored under \"Velo\\recordings\". " +
+            "By default, the \"run\" recording or \"main\" timeline will be chosen. " +
+            "You can specify further video settings under \"Offline Game Mods\" -> \"video capture\". " +
+            "The video will be saved under \"Velo\\videos\". " +
+            "You are free to minimize the game while capturing."
+        )]
+        public static string Capture(Filename name = default, Filename outputName = default)
         {
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
-
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            if (!File.Exists("ffmpeg.exe"))
+                throw new CommandException("Could not find \"ffmpeg.exe\"! Download from https://www.gyan.dev/ffmpeg/builds/ and put it in the same directory as \"SpeedRunners.exe\".");
+           
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             IReplayable recording;
             if (project == null)
+            {
                 recording = GetRecording(ref name);
+                outputName.Name = name.Name + ".mp4";
+            }
             else
+            {
                 recording = GetTimeline(ref name);
+                outputName.Name = $"{project.Name} - {name.Name}.mp4";
+            }
+
             CaptureParams captureParams = new CaptureParams
             {
-                CaptureRate = (int)captureRate,
-                VideoRate = (int)videoRate,
+                CaptureRate = OfflineGameMods.Instance.CaptureRate.Value,
+                VideoRate = OfflineGameMods.Instance.VideoRate.Value,
                 Width = Velo.GraphicsDevice.Viewport.Width,
-                Height = Velo.GraphicsDevice.Viewport.Height
+                Height = Velo.GraphicsDevice.Viewport.Height,
+                Crf = OfflineGameMods.Instance.Crf.Value,
+                Preset = OfflineGameMods.Instance.Preset.Value.ToString().ToLower(),
+                PixelFormat = OfflineGameMods.Instance.PixelFormat.Value.ToString().ToLower(),
+                Filename = outputName.Name
             };
 
-            OfflineGameMods.Instance.RecordingAndReplay.CaptureRecording(recording, captureParams);
+            RecordingAndReplay.Instance.CaptureRecording(recording, captureParams);
             ConsoleM.Instance.Enabled.Disable();
             return "";
         }
@@ -664,9 +695,9 @@ namespace Velo
         [Command("stopReplay", EGroup.RECORDING_AND_REPLAY, "Stops the current replay or verification.")]
         public static string StopReplay()
         {
-            if (!OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning)
+            if (!RecordingAndReplay.Instance.IsPlaybackRunning)
                 throw new CommandException("There is no active replay!");
-            OfflineGameMods.Instance.RecordingAndReplay.StopPlayback(notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
+            RecordingAndReplay.Instance.StopPlayback(notification: true);
             return "Stopped replay.";
         }
 
@@ -679,11 +710,55 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            if (!OfflineGameMods.Instance.RecordingAndReplay.SaveLastRecording(name.Name))
+            if (!RecordingAndReplay.Instance.SaveLastRecording(name.Name))
                 throw new CommandException("There is nothing to save!");
             return $"Saved recording as \"{name.Name}\".";
         }
 
+        [Command("download", EGroup.RECORDING_AND_REPLAY, "Downloads a recording from the leaderboard.",
+            "Downloads a recording from the leaderboard. " +
+            "You can see the respective ID when clicking the run on the leaderboard."
+        )]
+        public static string Download(uint id, Filename name)
+        {
+            RunsDatabase.Instance.RequestRecordingCached((int)id, recording =>
+            {
+                RecordingAndReplay.Instance.SaveRecording(recording, name.Name);
+                Velo.AddOnPreUpdateTS(() => ConsoleM.Instance.AppendLine($"Successfully downloaded {id}."));
+            },
+                (error) => ConsoleM.Instance.AppendLine(error.Message)
+            );
+            return "Downloading...";
+        }
+
+        [Command("deleteRec", EGroup.RECORDING_AND_REPLAY, "Delete a recording.",
+            "Delete a recording. " +
+            "All recordings are stored under \"Velo\\recordings\"."
+        )]
+        public static string DeleteRec(Filename name)
+        {
+            if (!File.Exists($"Velo\\recordings\\{name.Name}.srrec"))
+                throw new CommandException($"The recording \"{name.Name}\" does not exist!");
+
+            File.Delete($"Velo\\recordings\\{name.Name}.srrec");
+            return $"Deleted \"{name.Name}\".";
+        }
+
+        [Command("listRec", EGroup.RECORDING_AND_REPLAY, "List all recordings.",
+            "List all recordings. " +
+            "All recordings are stored under \"Velo\\recordings\"."
+        )]
+        public static string ListRec()
+        {
+            return string.Join(
+                "\n",
+                Directory.EnumerateFiles("Velo\\recordings").
+                Where(n => n.ToLower().EndsWith(".srrec")).
+                Select(Path.GetFileName).
+                Select(n => n.Substring(0, n.Length - ".srrec".Length))
+            );
+        }
+        
         [Command("freeze", EGroup.RECORDING_AND_REPLAY, "Freezes the game.")]
         public static string Freeze()
         {
@@ -716,7 +791,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.OffsetFrames((int)frames);
+            RecordingAndReplay.Instance.OffsetFrames((int)frames);
             return "";
         }
 
@@ -725,7 +800,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.OffsetFrames(-(int)frames);
+            RecordingAndReplay.Instance.OffsetFrames(-(int)frames);
             return "";
         }
 
@@ -734,7 +809,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.JumpToFrame(frame);
+            RecordingAndReplay.Instance.JumpToFrame(frame);
             return "";
         }
 
@@ -743,7 +818,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.JumpToFrame(int.MaxValue / 2); // just a big number
+            RecordingAndReplay.Instance.JumpToFrame(int.MaxValue / 2); // just a big number
             return "";
         }
 
@@ -752,7 +827,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.OffsetSeconds(seconds);
+            RecordingAndReplay.Instance.OffsetSeconds(seconds);
             return "";
         }
 
@@ -761,7 +836,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.OffsetSeconds(-seconds);
+            RecordingAndReplay.Instance.OffsetSeconds(-seconds);
             return "";
         }
 
@@ -770,7 +845,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.JumpToSecond(second);
+            RecordingAndReplay.Instance.JumpToSecond(second);
             return "";
         }
 
@@ -779,7 +854,7 @@ namespace Velo
         {
             if (Velo.Online)
                 throw new CommandException("You cannot do this in an online match!");
-            OfflineGameMods.Instance.RecordingAndReplay.StepToFrame((int)frame);
+            RecordingAndReplay.Instance.StepToFrame((int)frame);
             return "";
         }
 
@@ -883,11 +958,14 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            if (File.Exists($"Velo\\TASprojects\\{name.Name}.srtas"))
+                throw new CommandException($"The TAS-project \"{name.Name}\" already exists!");
+
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             if (project != null)
                 throw new CommandException($"The current TAS-project \"{project.Name}\" needs to be closed before creating a new one!");
 
-            OfflineGameMods.Instance.RecordingAndReplay.CreateNewTAS(name.Name);
+            RecordingAndReplay.Instance.CreateNewTAS(name.Name);
             return $"Created new TAS-project \"{name.Name}\".";
         }
 
@@ -898,9 +976,9 @@ namespace Velo
         )]
         public static string SaveTAS(bool compress = false)
         {
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject() ?? 
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ?? 
                 throw new CommandException("There is no TAS-project open!");
-            if (OfflineGameMods.Instance.RecordingAndReplay.Recorder is TASRecorder tasRecorder)
+            if (RecordingAndReplay.Instance.Recorder is TASRecorder tasRecorder)
             {
                 tasRecorder.Save(compress);
             }
@@ -917,7 +995,7 @@ namespace Velo
             if (Velo.ModuleSolo == null)
                 throw new CommandException("You must be in a solo session!");
 
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject();
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
             if (project != null)
                 throw new CommandException($"The current TAS-project \"{project.Name}\" needs to be closed before loading a new one!");
 
@@ -925,30 +1003,88 @@ namespace Velo
             if (project == null)
                 throw new CommandException($"The TAS-project \"{name.Name}\" does not exist!");
 
-            OfflineGameMods.Instance.RecordingAndReplay.SetTASProject(project);
+            RecordingAndReplay.Instance.SetTASProject(project);
             return $"Loaded \"{project.Name}\".\nAuthor: {SteamCache.GetPlayerName(project.Main.Info.PlayerId)}\nRerecords: {project.Rerecords}";
         }
 
         [Command("closeTAS", EGroup.TAS, "Close the current TAS-project.")]
         public static string CloseTAS()
         {
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject() ??
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
                 throw new CommandException("There is no TAS-project open!");
-            TASRecorder recorder = OfflineGameMods.Instance.RecordingAndReplay.Recorder as TASRecorder;
+            TASRecorder recorder = RecordingAndReplay.Instance.Recorder as TASRecorder;
             if (recorder.NeedsSave)
             {
                 recorder.NeedsSave = false;
                 return "Warning: You haven't saved your TAS-project yet! Enter this command again to close without saving.";
             }
 
-            OfflineGameMods.Instance.RecordingAndReplay.CloseTASProject();
+            RecordingAndReplay.Instance.CloseTASProject();
             return $"Closed \"{project.Name}\".";
+        }
+
+        [Command("deleteTAS", EGroup.TAS, "Delete a TAS-project.",
+            "Delete a TAS-project. " +
+            "All TAS-projects are stored under \"Velo\\TASprojects\"."
+        )]
+        public static string DeleteTAS(Filename name)
+        {
+            TASProject project = RecordingAndReplay.Instance.GetTASProject();
+            if (project != null && project.Name.ToLower() == name.Name.ToLower())
+                throw new CommandException($"The current TAS-project \"{project.Name}\" needs to be closed before deleting it!");
+
+            if (!File.Exists($"Velo\\TASprojects\\{name.Name}.srtas"))
+                throw new CommandException($"The TAS-project \"{name.Name}\" does not exist!");
+
+            File.Delete($"Velo\\TASprojects\\{name.Name}.srtas");
+            return $"Deleted \"{name.Name}\".";
+        }
+
+        [Command("listTAS", EGroup.TAS, "List all TAS-projects.",
+            "List all TAS-projects. " +
+            "All TAS-projects are stored under \"Velo\\TASprojects\"."
+        )]
+        public static string ListTAS()
+        {
+            return string.Join(
+                "\n", 
+                Directory.EnumerateFiles("Velo\\TASprojects").
+                Where(n => n.ToLower().EndsWith(".srtas")).
+                Select(Path.GetFileName).
+                Select(n => n.Substring(0, n.Length - ".srtas".Length))
+            );
+        }
+
+        [Command("renameTAS", EGroup.TAS, "Rename the current TAS-project.",
+            "Rename the current TAS-project. " +
+            "Note that this will also perform a save."
+        )]
+        public static string RenameTAS(Filename newName)
+        {
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
+                throw new CommandException("There is no TAS-project open!");
+
+            if (File.Exists($"Velo\\TASprojects\\{newName.Name}.srtas"))
+                throw new CommandException($"The TAS-project \"{newName.Name}\" already exists!");
+
+            string oldName = project.Name;
+            project.Name = newName.Name;
+
+            if (File.Exists($"Velo\\TASprojects\\{oldName}.srtas"))
+                File.Move($"Velo\\TASprojects\\{oldName}.srtas", $"Velo\\TASprojects\\{newName.Name}.srtas");
+
+            if (RecordingAndReplay.Instance.Recorder is TASRecorder tasRecorder)
+            {
+                tasRecorder.Save(false);
+            }
+
+            return $"Renamed \"{oldName}\" to \"{newName.Name}\".";
         }
 
         [Command("getRerecords", EGroup.TAS, "Get the rerecords count.")]
         public static string GetRerecords()
         {
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject() ??
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
                 throw new CommandException("There is no TAS-project open!");
             return project.Rerecords.ToString();
         }
@@ -956,9 +1092,74 @@ namespace Velo
         [Command("setRerecords", EGroup.TAS, "Set the rerecords count.")]
         public static string SetRerecords(uint count)
         {
-            TASProject project = OfflineGameMods.Instance.RecordingAndReplay.GetTASProject() ??
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
                 throw new CommandException("There is no TAS-project open!");
             project.Rerecords = (int)count;
+            return "";
+        }
+
+        [Command("insertFrames", EGroup.TAS, "Insert blank new frames at specified position.",
+            "Insert blank new frames at specified position. " +
+            "Note that these new frames and every frame afterwards will be marked as red. " +
+            "You cannot insert new frames before the very first frame."
+        )]
+        public static string InsertFrames(int at, uint count)
+        {
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
+                throw new CommandException("There is no TAS-project open!");
+
+            int atAbsolute = at + project.Main.LapStart;
+
+            if (atAbsolute <= 0)
+                throw new CommandException($"New frames cannot be inserted at or before position {-project.Main.LapStart}!");
+            if (atAbsolute > project.Main.Count)
+                throw new CommandException("The specified position exceeds the timeline's length!");
+            project.Main.InsertNew(atAbsolute, (int)count, new TimeSpan(OfflineGameMods.Instance.DeltaTime.Value));
+            (RecordingAndReplay.Instance.Recorder as TASRecorder).SetGreenPosition(atAbsolute - 1);
+            return "";
+        }
+
+        [Command("deleteFrames", EGroup.TAS, "Delete a specified range of frames.",
+            "Delete a specified range of frames. " +
+            "Note that every frame afterwards will be marked as red. " +
+            "You cannot delete the very first frame."
+        )]
+        public static string DeleteFrames(int first, uint count)
+        {
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
+                throw new CommandException("There is no TAS-project open!");
+
+            int firstAbsolute = first + project.Main.LapStart;
+
+            if (firstAbsolute <= 0)
+                throw new CommandException($"Cannot delete frames at or before position {-project.Main.LapStart}!");
+            if (first + count > project.Main.Count)
+                throw new CommandException("The specified range exceeds the timeline's length!");
+            project.Main.Delete(firstAbsolute, (int)count);
+            (RecordingAndReplay.Instance.Recorder as TASRecorder).SetGreenPosition(firstAbsolute - 1);
+            return "";
+        }
+
+        [Command("setLapReset", EGroup.TAS, "Enable or disable lap reset for a specified frame.",
+            "Enable or disable lap reset for a specified frame. " +
+            "Note that every frame afterwards will be marked as red. " +
+            "You cannot modify the very first frame."
+        )]
+        public static string SetLapReset(int at, bool enable)
+        {
+            TASProject project = RecordingAndReplay.Instance.GetTASProject() ??
+                throw new CommandException("There is no TAS-project open!");
+
+            int atAbsolute = at + project.Main.LapStart;
+
+            if (atAbsolute <= 0)
+                throw new CommandException($"Cannot modify frames at or before position {-project.Main.LapStart}!");
+            if (atAbsolute > project.Main.Count)
+                throw new CommandException("The specified position exceeds the timeline's length!");
+            Frame frame = project.Main[atAbsolute];
+            frame.SetFlag(Frame.EFlag.RESET_LAP, enable);
+            project.Main[atAbsolute] = frame;
+            (RecordingAndReplay.Instance.Recorder as TASRecorder).SetGreenPosition(atAbsolute - 1);
             return "";
         }
 
@@ -971,15 +1172,15 @@ namespace Velo
                 if (command.Attribute.Group != prevGroup)
                 {
                     prevGroup = command.Attribute.Group;
-                    text += $"$[in:0]\n{command.Attribute.Group.Label()}:\n";
+                    text += $"$[b:true]$[in:0]\n{command.Attribute.Group.Label()}:$[b:false]\n";
                 }
-                text += $"$[in:2]{command.Attribute.Name}";
+                text += $"$[i:true]$[in:2]{command.Attribute.Name}";
                 foreach (Argument argument in command.Arguments)
                 {
                     string optionalMarker = argument.Optional ? "?" : "";
                     text += $" [{argument.Name}{optionalMarker}]";
                 }
-                text += $"\n$[in:4]{(longDescription ? command.Attribute.LongDescription : command.Attribute.Description)}\n";
+                text += $"$[i:false]\n$[in:4]{(longDescription ? command.Attribute.LongDescription : command.Attribute.Description)}\n";
             }
             return text;
         }

@@ -14,7 +14,7 @@ namespace Velo
                 writer.WriteLine(ex.ToString());
             }
 
-            IRecorder recorder = OfflineGameMods.Instance.RecordingAndReplay.Recorder;
+            IRecorder recorder = RecordingAndReplay.Instance.Recorder;
             if (recorder is TASRecorder tasRecorder && tasRecorder.NeedsSave)
                 tasRecorder.Save(false, recover: true);
 

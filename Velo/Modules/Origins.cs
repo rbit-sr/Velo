@@ -260,10 +260,12 @@ namespace Velo
             return new OriginMapEntry(context.Fonts.FontMedium, Map.ORIGINS_START + (ulong)i, () => context.ExitMenu(animation: false));
         }
 
-        public IEnumerable<OriginMap> GetElems()
+        public IEnumerable<OriginMap> GetElems(int start)
         {
-            return Origins.Instance.Maps;
+            return Origins.Instance.Maps.Skip(start);
         }
+
+        public int Length => Origins.Instance.Maps.Count();
 
         public float Height(OriginMap elem, int i)
         {

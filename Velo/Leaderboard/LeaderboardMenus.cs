@@ -78,6 +78,13 @@ namespace Velo
         public abstract void PushRequests();
         public abstract IEnumerable<T> GetElems();
         public abstract float Height(T elem, int i);
+
+        public IEnumerable<T> GetElems(int start)
+        {
+            return GetElems().Skip(start);
+        }
+
+        public int Length => GetElems().Count();
     }
 
     public class PlaceEntry : LabelW
@@ -710,9 +717,9 @@ namespace Velo
                 return;
             }
 
-            int ghostIndex = !OfflineGameMods.Instance.EnableMultiGhost.Value ? 0 : OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackCount;
+            int ghostIndex = !RecordingAndReplay.Instance.EnableMultiGhost.Value ? 0 : RecordingAndReplay.Instance.GhostPlaybackCount;
             if (type == Playback.EPlaybackType.SET_GHOST)
-                Ghosts.Instance.GetOrSpawn(ghostIndex, OfflineGameMods.Instance.GhostDifferentColors.Value);
+                Ghosts.Instance.GetOrSpawn(ghostIndex, RecordingAndReplay.Instance.GhostDifferentColors.Value);
 
             RunsDatabase.Instance.RequestRecordingCached(id, (recording) =>
             {
@@ -723,7 +730,7 @@ namespace Velo
                     Velo.AddOnPreUpdate(() =>
                     {
                         context.ExitMenu(false);
-                        OfflineGameMods.Instance.RecordingAndReplay.StartPlayback(recording, type, ghostIndex, notification: !OfflineGameMods.Instance.DisableReplayNotifications.Value);
+                        RecordingAndReplay.Instance.StartPlayback(recording, type, ghostIndex, notification: true);
                     });
                 });
             },
@@ -733,7 +740,7 @@ namespace Velo
 
         private bool NeedRequestMore()
         {
-            return !initialRequest && table.ReachedEnd && Count == requestCount && Count <= GetElems().Count();
+            return !initialRequest && table.ReachedEnd && Count == requestCount && Count <= Length;
         }
 
         public override void PushRequests()
@@ -1237,10 +1244,10 @@ namespace Velo
             statsValues2.Text = "";
 
             int pbs = 0;
-            int pbsNonCurated = 0;
+            int pbsNonScored = 0;
             long perfectTimeSum = 0;
             long timeSum = 0;
-            foreach (MapRunInfos infos in RunsDatabase.Instance.GetPlayerPBs(playerId, curated: true, popularity: false))
+            foreach (MapRunInfos infos in RunsDatabase.Instance.GetPlayerPBs(playerId, curated: true, popularity: false).Concat(RunsDatabase.Instance.GetPlayerPBs(playerId, curated: false, popularity: true)))
             {
                 for (int t = 0; t < 6; t++)
                 {
@@ -1249,24 +1256,18 @@ namespace Velo
                     RunInfo info = infos.Get((ECategoryType)t).First();
                     if (info.Id != -1)
                     {
-                        pbs++;
-                        perfectTimeSum += RunsDatabase.Instance.GetWR(info.Category).RunTime;
-                        timeSum += info.RunTime;
+                        if (Map.IsScored(info.Category.MapId))
+                        {
+                            pbs++;
+                            perfectTimeSum += RunsDatabase.Instance.GetWR(info.Category).RunTime;
+                            timeSum += info.RunTime;
+                        }
+                        else
+                            pbsNonScored++;
                     }
                 }
             }
-            foreach (MapRunInfos infos in RunsDatabase.Instance.GetPlayerPBs(playerId, curated: false, popularity: true))
-            {
-                for (int t = 0; t < 6; t++)
-                {
-                    if (infos.Get((ECategoryType)t).Count() == 0)
-                        continue;
-                    RunInfo info = infos.Get((ECategoryType)t).First();
-                    if (info.Id != -1)
-                        pbsNonCurated++;
-                }
-            }
-            statsValues1.Text += "" + pbs + (pbsNonCurated > 0 ? "+" + pbsNonCurated : "");
+            statsValues1.Text += "" + pbs + (pbsNonScored > 0 ? "+" + pbsNonScored : "");
 
             bool found = false;
             foreach (PlayerInfoWRs wrs in RunsDatabase.Instance.GetWRCounts())
@@ -2041,7 +2042,7 @@ namespace Velo
 @"Velo records, verifies, categorizes and submits your runs as you play. This process is fully automatic 
 and requires no interaction. In case an invalid run still manages to get submitted either by a bug or 
 in a cheated manner, contact a leaderboard moderator and they will be able to remove the run.
-Maps in the ""other"" category do not count towards score or WRs.
+Only maps in the ""official"" or ""RWS"" category count towards score and WRs.
 
 A run is categorized as ""1 lap"" if any of the following apply:
   -Lap was started by finishing a previous lap
@@ -2102,9 +2103,9 @@ and either all secondary or all ternary checkpoints. To be categorized as non-Sk
 to hit all secondary checkpoints.
 
 The score system:
-Each PB run grants you somewhere between 1 to 1000 (or 500) points, depending on how close it is to the
-WR run. If we denote WR time as 'wr' and your PB time as 'pb', you get M * wr / (wr + 25 * (pb - wr)) points
-per run where M = 1000 on all official and RWS maps and M = 500 on old RWS and Origins.
+Each PB run grants you somewhere between 1 to 1000 points, depending on how close it is to the WR run. 
+If we denote WR time as 'wr' and your PB time as 'pb', you get 1000 * wr / (wr + 25 * (pb - wr)) points per 
+run.
 
 The new grapple cooldown:
 On 09/OCT/2024 the game received an update, lowering the grapple cooldown from 0.25s to 0.20s. Playing
@@ -2274,10 +2275,12 @@ you can see whether it was applied to a run under ""Fix BG"".";
             return decorated;
         }
         
-        public IEnumerable<ulong> GetElems()
+        public IEnumerable<ulong> GetElems(int start)
         {
-            return RunsDatabase.Instance.GetPopularThisWeek().Reverse();
+            return RunsDatabase.Instance.GetPopularThisWeek().Reverse().Skip(start);
         }
+
+        public int Length => RunsDatabase.Instance.GetPopularThisWeek().Count();
 
         public float Height(ulong elem, int i)
         {

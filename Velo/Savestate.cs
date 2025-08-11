@@ -7,6 +7,7 @@ using CEngine.World.Actor;
 using CEngine.World.Collision;
 using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -254,7 +255,8 @@ namespace Velo
             Write(stream, obj.breakSprite);
             Write(stream, obj.sprite);
             Write(stream, obj.bounds);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
         private static unsafe void Read(MemoryStream stream, Grapple obj)
@@ -265,8 +267,11 @@ namespace Velo
             Read(stream, obj.sprite);
             Read(stream, obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -282,7 +287,12 @@ namespace Velo
             if (obj.target == null)
                 stream.Write(-1);
             else if (obj.target is Player player)
-                stream.Write(player.actor.Id);
+            {
+                if (!include[ATPlayer.Id])
+                    stream.Write(-2);
+                else
+                    stream.Write(player.actor.Id);
+            }
             else if (obj.target is GoldenHook goldenHook)
             {
                 if (!include[ATGoldenHook.Id])
@@ -291,9 +301,12 @@ namespace Velo
                     stream.Write(goldenHook.actor.Id);
             }
             else if (obj.target is Grapple grapple)
-                stream.Write(grapple.actor.Id);
-            else if (obj.target is GoldenHook goldenHook1)
-                stream.Write(goldenHook1.actor.Id);
+            {
+                if (!include[ATGrapple.Id])
+                    stream.Write(-2);
+                else
+                    stream.Write(grapple.actor.Id);
+            }
         }
 
         private static unsafe void Read(MemoryStream stream, Rope obj)
@@ -325,7 +338,8 @@ namespace Velo
             Write(stream, obj.actor);
             Write(stream, obj.sprite);
             Write(stream, obj.bounds);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
             if (include[ATAIVolume.Id])
                 stream.Write(obj.aiVolume != null ? obj.aiVolume.actor.Id : -1);
         }
@@ -338,8 +352,11 @@ namespace Velo
             Read(stream, obj.bounds);
             obj.breakTime = new TimeSpan(obj.breakTime.Ticks + dt);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             if (include[ATAIVolume.Id])
             {
                 int aiVolumeId = stream.Read<int>();
@@ -360,7 +377,8 @@ namespace Velo
                 stream.Write(1);
             else
                 stream.Write(2);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
             if (include[ATShockwave.Id])
                 stream.Write(obj.shockwave != null ? obj.shockwave.actor.Id : -1);
         }
@@ -379,8 +397,11 @@ namespace Velo
             else
                 obj.sprite.Sprite = obj.animImage2;
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             if (include[ATShockwave.Id])
             {
                 int shockwaveId = stream.Read<int>();
@@ -395,9 +416,12 @@ namespace Velo
             Write(stream, obj.actor);
             Write(stream, obj.sprite);
             Write(stream, obj.bounds);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
-            stream.Write(obj.target != null ? obj.target.actor.Id : -1);
-            stream.Write(obj.unknown != null ? obj.unknown.actor.Id : -1);
+            if (include[ATPlayer.Id])
+            {
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+                stream.Write(obj.target != null ? obj.target.actor.Id : -1);
+                stream.Write(obj.unknown != null ? obj.unknown.actor.Id : -1);
+            }
         }
 
         private static unsafe void Read(MemoryStream stream, Rocket obj)
@@ -411,12 +435,15 @@ namespace Velo
             Read(stream, obj.bounds);
             obj.shootTime = new TimeSpan(obj.shootTime.Ticks + dt);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            int targetId = stream.Read<int>();
-            int unknownId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
-            applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
-            applyPtr.Add(() => obj.unknown = (Player)contrLookup[unknownId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                int targetId = stream.Read<int>();
+                int unknownId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+                applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
+                applyPtr.Add(() => obj.unknown = (Player)contrLookup[unknownId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -427,9 +454,12 @@ namespace Velo
             Write(stream, obj.sprite);
             Write(stream, obj.breakSprite);
             Write(stream, obj.bounds);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
-            stream.Write(obj.target != null ? obj.target.actor.Id : -1);
-            stream.Write(obj.grabbed != null ? obj.grabbed.actor.Id : -1);
+            if (include[ATPlayer.Id])
+            {
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+                stream.Write(obj.target != null ? obj.target.actor.Id : -1);
+                stream.Write(obj.grabbed != null ? obj.grabbed.actor.Id : -1);
+            }
         }
 
         private static unsafe void Read(MemoryStream stream, GoldenHook obj)
@@ -440,12 +470,15 @@ namespace Velo
             Read(stream, obj.breakSprite);
             Read(stream, obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            int targetId = stream.Read<int>();
-            int grabbedId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
-            applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
-            applyPtr.Add(() => obj.grabbed = (Player)contrLookup[grabbedId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                int targetId = stream.Read<int>();
+                int grabbedId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+                applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
+                applyPtr.Add(() => obj.grabbed = (Player)contrLookup[grabbedId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -459,7 +492,8 @@ namespace Velo
             Write(stream, obj.sprite0);
             Write(stream, obj.sprit90);
             Write(stream, obj.groupDraw);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
         private static unsafe void Read(MemoryStream stream, Shockwave obj)
@@ -473,8 +507,11 @@ namespace Velo
             Read(stream, obj.sprit90);
             Read(stream, obj.groupDraw);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -486,7 +523,8 @@ namespace Velo
             Write(stream, obj.sprite);
             Write(stream, obj.blinkingSprite);
             Write(stream, obj.groupDraw);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
         private static unsafe void Read(MemoryStream stream, DroppedBomb obj)
@@ -498,8 +536,11 @@ namespace Velo
             Read(stream, obj.blinkingSprite);
             Read(stream, obj.groupDraw);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -557,7 +598,8 @@ namespace Velo
                 Write(stream, animSpriteDraw);
             Write(stream, obj.groupDraw);
             Write(stream, obj.bounds);
-            stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.owner != null ? obj.owner.actor.Id : -1);
         }
 
         private static unsafe void Read(MemoryStream stream, FreezeRay obj)
@@ -579,8 +621,11 @@ namespace Velo
             Read(stream, obj.groupDraw);
             Read(stream, obj.bounds);
             contrLookup.Add(obj.actor.Id, obj);
-            int ownerId = stream.Read<int>();
-            applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            if (include[ATPlayer.Id])
+            {
+                int ownerId = stream.Read<int>();
+                applyPtr.Add(() => obj.owner = (Player)contrLookup[ownerId]);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -640,7 +685,10 @@ namespace Velo
 
                 if (contr is Player player)
                 {
-                    stream.Write(player.actor.Id);
+                    if (include[ATPlayer.Id])
+                        stream.Write(player.actor.Id);
+                    else
+                        stream.Write(-2);
                 }
                 else if (contr is DroppedBomb dropped)
                 {
@@ -731,16 +779,16 @@ namespace Velo
         {
             WriteEa(stream, obj);
             stream.Write(obj, 0x54 + 0x14, 0x4);
-            Write(stream, obj.animSpriteDraw1);
-            Write(stream, obj.animSpriteDraw2);
+            Write(stream, obj.sprite);
+            Write(stream, obj.triggerSparkSprite);
         }
 
         private static unsafe void Read(MemoryStream stream, Lever obj)
         {
             ReadEa(stream, obj);
             stream.Read(obj, 0x54 + 0x14, 0x4);
-            Read(stream, obj.animSpriteDraw1);
-            Read(stream, obj.animSpriteDraw2);
+            Read(stream, obj.sprite);
+            Read(stream, obj.triggerSparkSprite);
             obj.actor.UpdateCollision();
         }
 
@@ -788,7 +836,8 @@ namespace Velo
             Write(stream, obj.sprite);
             Write(stream, obj.gearSprite);
             Write(stream, obj.groupDraw);
-            stream.Write(obj.target != null ? obj.target.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.target != null ? obj.target.actor.Id : -1);
             if (include[ATRocket.Id])
             {
                 stream.Write(obj.rockets.Count);
@@ -804,8 +853,11 @@ namespace Velo
             Read(stream, obj.sprite);
             Read(stream, obj.gearSprite);
             Read(stream, obj.groupDraw);
-            int targetId = stream.Read<int>();
-            applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
+            if (include[ATPlayer.Id])
+            {
+                int targetId = stream.Read<int>();
+                applyPtr.Add(() => obj.target = (Player)contrLookup[targetId]);
+            }
             if (include[ATRocket.Id])
             {
                 int count = stream.Read<int>();
@@ -834,7 +886,8 @@ namespace Velo
             Write(stream, obj.tweener);
             Write(stream, obj.random);
             Write(stream, obj.groupDraw);
-            stream.Write(obj.player != null ? obj.player.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.player != null ? obj.player.actor.Id : -1);
             stream.WriteByte(obj.bools[0] ? (byte)1 : (byte)0);
             stream.WriteByte(obj.bools[1] ? (byte)1 : (byte)0);
             stream.WriteByte(obj.bools[2] ? (byte)1 : (byte)0);
@@ -854,8 +907,11 @@ namespace Velo
             Read(stream, obj.tweener);
             Read(stream, obj.random);
             Read(stream, obj.groupDraw);
-            int playerId = stream.Read<int>();
-            applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
+            if (include[ATPlayer.Id])
+            {
+                int playerId = stream.Read<int>();
+                applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
+            }
             obj.bools[0] = stream.ReadByte() != 0;
             obj.bools[1] = stream.ReadByte() != 0;
             obj.bools[2] = stream.ReadByte() != 0;
@@ -937,8 +993,11 @@ namespace Velo
             WriteRea(stream, obj);
             stream.Write(obj, 0x68 + 0x10, 0x14);
             stream.Write(obj.unknown.value);
-            WriteTimerContrList(stream, obj.list1, 4);
-            WriteTimerContrList(stream, obj.list2, 4);
+            if (include[ATPlayer.Id])
+            {
+                WriteTimerContrList(stream, obj.list1, 4);
+                WriteTimerContrList(stream, obj.list2, 4);
+            }
         }
 
         private static unsafe void ReadTimerContrList(MemoryStream stream, List<ICActorController> list, int minCount = 0)
@@ -963,8 +1022,11 @@ namespace Velo
             ReadRea(stream, obj);
             stream.Read(obj, 0x68 + 0x10, 0x14);
             obj.unknown.value = stream.Read<int>();
-            ReadTimerContrList(stream, obj.list1, version >= 7 ? 4 : 0);
-            ReadTimerContrList(stream, obj.list2, version >= 7 ? 4 : 0);
+            if (include[ATPlayer.Id])
+            {
+                ReadTimerContrList(stream, obj.list1, version >= 7 ? 4 : 0);
+                ReadTimerContrList(stream, obj.list2, version >= 7 ? 4 : 0);
+            }
             obj.actor.UpdateCollision();
         }
 
@@ -1130,7 +1192,8 @@ namespace Velo
             Write(stream, obj.actor);
             Write(stream, obj.bounds);
             Write(stream, obj.imageDrawComp);
-            stream.Write(obj.player != null ? obj.player.actor.Id : -1);
+            if (include[ATPlayer.Id])
+                stream.Write(obj.player != null ? obj.player.actor.Id : -1);
         }
 
         private static unsafe void Read(MemoryStream stream, MovingPlatform obj)
@@ -1139,8 +1202,11 @@ namespace Velo
             Read(stream, obj.actor);
             Read(stream, obj.bounds);
             Read(stream, obj.imageDrawComp);
-            int playerId = stream.Read<int>();
-            applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
+            if (include[ATPlayer.Id])
+            {
+                int playerId = stream.Read<int>();
+                applyPtr.Add(() => obj.player = (Player)contrLookup[playerId]);
+            }
             contrLookup.Add(obj.actor.Id, obj);
             obj.actor.UpdateCollision();
         }
@@ -1185,8 +1251,10 @@ namespace Velo
                 stream.Write((long)0);
             }
 
-            stream.Write(obj.grapple != null ? obj.grapple.actor.Id : -1);
-            stream.Write(obj.rope != null ? obj.rope.actor.Id : -1);
+            if (include[ATGrapple.Id])
+                stream.Write(obj.grapple != null ? obj.grapple.actor.Id : -1);
+            if (include[ATRope.Id])
+                stream.Write(obj.rope != null ? obj.rope.actor.Id : -1);
             if (include[ATGoldenHook.Id])
                 stream.Write(obj.goldenHook != null ? obj.goldenHook.actor.Id : -1);
             if (include[ATShockwave.Id])
@@ -1297,10 +1365,16 @@ namespace Velo
             else if (version >= 7)
                 stream.Read<long>();
 
-            int grappleId = stream.Read<int>();
-            applyPtr.Add(() => obj.grapple = (Grapple)contrLookup[grappleId]);
-            int ropeId = stream.Read<int>();
-            applyPtr.Add(() => obj.rope = (Rope)contrLookup[ropeId]);
+            if (include[ATGrapple.Id])
+            {
+                int grappleId = stream.Read<int>();
+                applyPtr.Add(() => obj.grapple = (Grapple)contrLookup[grappleId]);
+            }
+            if (include[ATRope.Id])
+            {
+                int ropeId = stream.Read<int>();
+                applyPtr.Add(() => obj.rope = (Rope)contrLookup[ropeId]);
+            }
             if (include[ATGoldenHook.Id])
             {
                 int goldenHookId = stream.Read<int>();
@@ -1441,7 +1515,9 @@ namespace Velo
 
         private static unsafe void Read(MemoryStream stream, SoloCameraModifier obj)
         {
+           // float heightRatioTo720 = obj.heightRatioTo720;
             stream.Read(obj, 0x10, 0x3C);
+           // obj.heightRatioTo720 = heightRatioTo720;
         }
 
         private static unsafe void Write(MemoryStream stream, MultiplayerCameraModifier obj)
@@ -1451,7 +1527,9 @@ namespace Velo
 
         private static unsafe void Read(MemoryStream stream, MultiplayerCameraModifier obj)
         {
+            //float heightRatioTo720 = obj.heightRatioTo720;
             stream.Read(obj, 0x14, 0x34);
+            //obj.heightRatioTo720 = heightRatioTo720;
         }
 
         private static unsafe void Write(MemoryStream stream, CCamera obj)
@@ -1467,7 +1545,9 @@ namespace Velo
 
         private static unsafe void Read(MemoryStream stream, CCamera obj)
         {
+            //Viewport viewport = obj.viewport;
             stream.Read(obj, 0x1C, 0xA8);
+            //obj.viewport = viewport;
             Read(stream, obj.shakeCameraModifier);
             Read(stream, obj.clampCameraModifier);
             if (obj.mods[0] is SoloCameraModifier solo)
@@ -1525,7 +1605,7 @@ namespace Velo
             obj.timespan4 = new TimeSpan(obj.timespan4.Ticks + dt);
         }
 
-        private static readonly List<ActorType> actorTypes = new List<ActorType>();
+        public static readonly List<ActorType> ActorTypes = new List<ActorType>();
 
         // don't ever change the order
         public static readonly ActorType ATPlayer = new ActorType<Player>(Write, Read);
@@ -1560,11 +1640,11 @@ namespace Velo
         public static readonly ActorType ATFallBlock = new ActorType<FallBlock>(Write, Read);
         public static readonly ActorType ATMovingPlatform = new ActorType<MovingPlatform>(Write, Read);
 
-        private MemoryStream stream;
+        private readonly MemoryStream stream;
 
         private static long dt;
         private static int ghostIndex;
-        private static bool[] include = new bool[actorTypes.Count];
+        private static readonly bool[] include = new bool[ActorTypes.Count];
         private static readonly NullSafeDict<int, ICActorController> contrLookup = new NullSafeDict<int, ICActorController>();
         private static readonly List<Action> applyPtr = new List<Action>();
         private static readonly HashSet<CActor> fixedIndexActors = new HashSet<CActor>();
@@ -1592,7 +1672,7 @@ namespace Velo
                 Id = nextId++;
                 Type = type;
                 DefType = defType;
-                actorTypes.Add(this);
+                ActorTypes.Add(this);
             }
 
             public abstract void Write(MemoryStream stream, ICActorController contr);
@@ -1649,7 +1729,7 @@ namespace Velo
             EXCLUDE, INCLUDE
         }
 
-        public void Save(List<ActorType> actors, EListMode listMode, bool progressOnly = false)
+        public void Save(IEnumerable<ActorType> actors, EListMode listMode, bool progressOnly = false)
         {
             if (!Velo.Ingame || Velo.Online)
                 return;
@@ -1719,7 +1799,7 @@ namespace Velo
                 } 
                 else
                 {
-                    foreach (ActorType type in actorTypes)
+                    foreach (ActorType type in ActorTypes)
                     {
                         if (controller.GetType() == type.Type)
                         {
@@ -1745,13 +1825,18 @@ namespace Velo
             stream.Write(Math.Min(LoadedVeloVersion, Version.VERSION));
             stream.Write(Velo.Poisoned);
 
-            var cooldowns = OfflineGameMods.Instance.RecordingAndReplay.CurrentNormalRecording.Rules.Cooldowns;
-            stream.Write(cooldowns.Count);
-            foreach (var entry in cooldowns)
+            var cooldowns = RecordingAndReplay.Instance.CurrentNormalRecording?.Rules?.Cooldowns;
+            if (cooldowns != null)
             {
-                stream.Write((int)entry.Key);
-                stream.Write(entry.Value.Value);
+                stream.Write(cooldowns.Count);
+                foreach (var entry in cooldowns)
+                {
+                    stream.Write((int)entry.Key);
+                    stream.Write(entry.Value.Value);
+                }
             }
+            else
+                stream.Write(0);
 
             stream.Write(playerOffset);
             stream.SetLength(stream.Position);
@@ -1911,7 +1996,7 @@ namespace Velo
                 goto cleanup2;
             }
 
-            int[] counts = new int[actorTypes.Count];
+            int[] counts = new int[ActorTypes.Count];
 
             foreach (Player ghost in Ghosts.Instance.All())
             {
@@ -1947,7 +2032,7 @@ namespace Velo
                 }
                 else
                 {
-                    foreach (ActorType type in actorTypes)
+                    foreach (ActorType type in ActorTypes)
                     {
                         if (id == type.Id)
                         {
@@ -1983,7 +2068,7 @@ namespace Velo
                 }
             }
 
-            foreach (ActorType type in actorTypes)
+            foreach (ActorType type in ActorTypes)
             {
                 if (type.CreateDef() != null && include[type.Id])
                     DestroyAllAfter(type.Type, counts[type.Id]);
@@ -2019,13 +2104,14 @@ namespace Velo
 
             if (version >= 4)
             {
-                var cooldowns = OfflineGameMods.Instance.RecordingAndReplay.CurrentNormalRecording.Rules.Cooldowns;
+                var cooldowns = RecordingAndReplay.Instance.CurrentNormalRecording?.Rules?.Cooldowns;
                 int count = stream.Read<int>();
                 for (int i = 0; i < count; i++)
                 {
                     EViolation violation = (EViolation)stream.Read<int>();
                     float value = stream.Read<float>();
-                    cooldowns[violation].Value = value;
+                    if (cooldowns != null)
+                        cooldowns[violation].Value = value;
                 }
             }
 

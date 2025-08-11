@@ -1,4 +1,5 @@
-﻿using Microsoft.Xna.Framework;
+﻿using CEngine.Graphics.Layer;
+using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -10,16 +11,16 @@ namespace Velo
     {
         public enum EFlag : int
         {
-            LEFT_H, RIGHT_H, JUMP_H, GRAPPLE_H, SLIDE_H, BOOST_H, ITEM_H, ITEM_P, TAUNT_H,
+            LEFT_H, RIGHT_H, JUMP_H, GRAPPLE_H, SLIDE_H, BOOST_H, ITEM_H, UNUSED, TAUNT_H,
             MOVE_DIR, ON_GROUND, STUNNED, TAUNT, CLIMBING, IN_AIR, SLIDING,
             CONNECTED, GRAPPLING, SWINGING, 
             ROPE_ACTIVE, ROPE_BREAKING, ROPE_OWNER, ROPE_LINES,
-            RESET_LAP
+            RESET_LAP, GRAPPLE_DIR
         }
 
         public TimeSpan RealTime;
         public TimeSpan Delta;
-        public TimeSpan Time;
+        public TimeSpan GlobalTime;
         public TimeSpan DeltaSum;
         public TimeSpan JumpTime;
         public float PosX;
@@ -51,7 +52,7 @@ namespace Velo
         {
             RealTime = realTime;
             Delta = gameDelta;
-            Time = gameTime;
+            GlobalTime = gameTime;
             DeltaSum = deltaSum;
             JumpTime = player.jumpTime;
             PosX = player.actor.Position.X;
@@ -78,7 +79,8 @@ namespace Velo
                 (player.rope.active ? (1 << (int)EFlag.ROPE_ACTIVE) : 0) |
                 (player.rope.breaking ? (1 << (int)EFlag.ROPE_BREAKING) : 0) |
                 (player.rope.owner != null ? (1 << (int)EFlag.ROPE_OWNER) : 0) |
-                (player.rope.lineDrawComp1.Lines.Count > 0 ? (1 << (int)EFlag.ROPE_LINES) : 0)
+                (player.rope.lineDrawComp1.Lines.Count > 0 ? (1 << (int)EFlag.ROPE_LINES) : 0) |
+                (player.grapple.direction.X > 0f ? (1 << (int)EFlag.GRAPPLE_DIR) : 0)
             );
         }
 
@@ -86,8 +88,7 @@ namespace Velo
         {
             player.actor.Position = new Vector2(PosX, PosY);
             player.actor.Velocity = new Vector2(VelX, VelY);
-            if (!float.IsNaN(GrapPosX) && !float.IsNaN(GrapPosY))
-                player.grapple.actor.Position = new Vector2(GrapPosX, GrapPosY);
+            
             player.swingRadius = SwingRadius;
             player.boost = Boost;
             player.jumpTime = JumpTime + dt;
@@ -101,9 +102,9 @@ namespace Velo
             player.sliding = GetFlag(EFlag.SLIDING);
             player.stunned = GetFlag(EFlag.STUNNED);
             player.taunting = GetFlag(EFlag.TAUNT);
-            player.grapple.connected = GetFlag(EFlag.CONNECTED);
-            player.grappling = GetFlag(EFlag.GRAPPLING);
-            player.swinging = GetFlag(EFlag.SWINGING);
+            //player.grapple.connected = GetFlag(EFlag.CONNECTED);
+            //player.grappling = GetFlag(EFlag.GRAPPLING);
+            //player.swinging = GetFlag(EFlag.SWINGING);
             if (player.climbing)
             {
                 player.onWall = true;
@@ -113,43 +114,41 @@ namespace Velo
             CheatEngineDetection.MatchValues();
         }
 
-        public void RestoreGrapple(Player player, Frame nextFrame)
+        public void ApplyGrapple(Player player)
         {
-            if (
-                player.grappling == GetFlag(EFlag.GRAPPLING) &&
-                player.grapple.connected == GetFlag(EFlag.CONNECTED)
-                )
-                return;
+            if (!float.IsNaN(GrapPosX) && !float.IsNaN(GrapPosY))
+            {
+                player.grapple.actor.Position = new Vector2(GrapPosX, GrapPosY);
+                player.grapple.sprite.Position = player.grapple.actor.Position + (GetFlag(EFlag.SWINGING) ? new Vector2(0f, -5f) : Vector2.Zero);
+            }
 
-            Vector2 dummy = Vector2.Zero;
-            Vector2 dir = Vector2.Zero;
-            player.PrepareGrapPosDir(ref dummy, ref dir);
-            dir.X = nextFrame.GrapPosX > GrapPosX ? 1f : (nextFrame.GrapPosX < GrapPosX ? -1f : 0f);
-            if (GetFlag(EFlag.GRAPPLING) && (!player.grappling || (!GetFlag(EFlag.CONNECTED) && player.grapple.connected)))
+            Vector2 dir = new Vector2(GetFlag(EFlag.GRAPPLE_DIR) ? 0.707f : -0.707f, -0.707f);
+
+            if (GetFlag(EFlag.GRAPPLING) && !player.grappling)
             {
                 player.grappling = true;
                 player.grappleTime = player.game_time.TotalGameTime;
                 player.canGrapple = false;
                 player.grapple.Shoot(new Vector2(GrapPosX, GrapPosY), dir);
-                if (!Velo.disable_grapple_sound(player))
-                {
-                    player.shootSound.Play();
-                }
             }
             if (GetFlag(EFlag.CONNECTED) && !player.grapple.connected)
             {
                 player.grappling = true;
                 player.grapple.Connect(new Vector2(GrapPosX, GrapPosY));
-                if (!Velo.disable_grapple_sound(player))
-                {
-                    player.grapple.sound.PlaySound("Success");
-                }
             }
-            if (!GetFlag(EFlag.GRAPPLING))
+            if (!GetFlag(EFlag.GRAPPLING) && player.grappling)
             {
                 player.grappling = false;
+                player.swinging = false;
                 player.grapple.Remove();
             }
+
+            player.grapple.connected = GetFlag(EFlag.CONNECTED);
+            player.grapple.sprite.IsVisible = GetFlag(EFlag.GRAPPLING);
+            player.grapple.sprite.Rotation = GetFlag(EFlag.CONNECTED) ? 0f : (float)(Math.Atan2(dir.Y, dir.X) - Math.Atan2(-1d, 0d));
+
+            player.swinging = GetFlag(EFlag.SWINGING);
+
             player.rope.active = GetFlag(EFlag.ROPE_ACTIVE);
             player.rope.breaking = GetFlag(EFlag.ROPE_BREAKING);
             if (!player.rope.breaking)
@@ -173,6 +172,8 @@ namespace Velo
                 player.rope.lineDrawComp1.Lines.Add(player.rope.line2);
             }
             player.rope.UpdateLines();
+            player.grapple.Update(null);
+            Velo.update_rope_color(player.rope);
         }
 
         public void SetInputs(Player player)
@@ -185,12 +186,13 @@ namespace Velo
                 (player.slideHeld ? (1 << (int)EFlag.SLIDE_H) : 0) |
                 (player.boostHeld ? (1 << (int)EFlag.BOOST_H) : 0) |
                 (player.itemHeld ? (1 << (int)EFlag.ITEM_H) : 0) |
-                (player.itemPressed ? (1 << (int)EFlag.ITEM_P) : 0) |
                 (player.tauntHeld ? (1 << (int)EFlag.TAUNT_H) : 0);
         }
 
         public void ApplyInputs(Player player)
         {
+            bool wasItemHeld = player.itemHeld;
+
             player.leftHeld = GetFlag(EFlag.LEFT_H);
             player.rightHeld = GetFlag(EFlag.RIGHT_H);
             player.jumpHeld = GetFlag(EFlag.JUMP_H);
@@ -198,7 +200,7 @@ namespace Velo
             player.slideHeld = GetFlag(EFlag.SLIDE_H);
             player.boostHeld = GetFlag(EFlag.BOOST_H);
             player.itemHeld = GetFlag(EFlag.ITEM_H);
-            player.itemPressed = GetFlag(EFlag.ITEM_P);
+            player.itemPressed = player.itemHeld && !wasItemHeld;
             player.tauntHeld = GetFlag(EFlag.TAUNT_H);
             player.dominatingDirection = DominatingDirection;
         }
@@ -217,8 +219,8 @@ namespace Velo
                 VelX = frame1.VelX,
                 VelY = frame1.VelY,
                 Boost = (1f - r) * frame1.Boost + r * frame2.Boost,
-                GrapPosX = grappleJustShot ? float.NaN : (1f - r) * frame1.GrapPosX + r * frame2.GrapPosX,
-                GrapPosY = grappleJustShot ? float.NaN : (1f - r) * frame1.GrapPosY + r * frame2.GrapPosY,
+                GrapPosX = grappleJustShot ? float.NaN : frame1.GetFlag(EFlag.CONNECTED) ? frame1.GrapPosX : (1f - r) * frame1.GrapPosX + r * frame2.GrapPosX,
+                GrapPosY = grappleJustShot ? float.NaN : frame1.GetFlag(EFlag.CONNECTED) ? frame1.GrapPosY : (1f - r) * frame1.GrapPosY + r * frame2.GrapPosY,
                 SwingRadius = frame1.SwingRadius,
                 JumpState = frame1.JumpState,
                 JumpTime = frame1.JumpTime,
@@ -236,7 +238,7 @@ namespace Velo
 
     public class Recording : IReplayable
     {
-        public static readonly int VERSION = 3;
+        public static readonly int VERSION = 4;
 
         public CircArray<Frame> Frames;
         public CircArray<Savestate> Savestates;
@@ -347,10 +349,10 @@ namespace Velo
         {
             if (LapStart < 0 || Count <= LapStart)
                 return;
-            TimeSpan lapStartTime = Frames[LapStart].Time;
+            TimeSpan lapStartTime = Frames[LapStart].GlobalTime;
             while (Savestates.Count > 0)
             {
-                TimeSpan time = Frames[0].Time;
+                TimeSpan time = Frames[0].GlobalTime;
                 float duration = (float)(lapStartTime - time).TotalSeconds;
                 if (Savestates[0] != null && duration <= seconds)
                     break;
@@ -395,10 +397,15 @@ namespace Velo
                 raw.Write(buffer, 0, (int)Savestates[LapStart].Stream.Length);
             }
 
-            raw.Write(Timings.Count);
-            foreach (MacroDetection.Timing timing in Timings)
+            if (Timings == null)
+                raw.Write(0);
+            else
             {
-                raw.Write(timing);
+                raw.Write(Timings.Count);
+                foreach (MacroDetection.Timing timing in Timings)
+                {
+                    raw.Write(timing);
+                }
             }
 
             if (compress)
@@ -520,8 +527,31 @@ namespace Velo
                 {
                     Frame frame = Frames[i];
                     frame.Delta = Frames[i + 1].Delta;
-                    frame.Time = Frames[i + 1].Time;
+                    frame.GlobalTime = Frames[i + 1].GlobalTime;
                     frame.DeltaSum = Frames[i + 1].DeltaSum;
+                    Frames[i] = frame;
+                }
+                frameCount++;
+            }
+
+            if (versionInt <= 3)
+            {
+                bool grappleDir = true;
+                bool wasGrappling = false;
+                for (int i = 0; i < frameCount; i++)
+                {
+                    Frame frame = Frames[i];
+                    if (!wasGrappling && frame.GetFlag(Frame.EFlag.GRAPPLING))
+                    {
+                        grappleDir = frame.GetFlag(Frame.EFlag.MOVE_DIR);
+                        if (frame.GetFlag(Frame.EFlag.LEFT_H) && !frame.GetFlag(Frame.EFlag.RIGHT_H))
+                            grappleDir = false;
+                        else if (frame.GetFlag(Frame.EFlag.RIGHT_H) && !frame.GetFlag(Frame.EFlag.LEFT_H))
+                            grappleDir = true;
+                        else if (frame.GetFlag(Frame.EFlag.RIGHT_H) && frame.GetFlag(Frame.EFlag.LEFT_H) && frame.DominatingDirection != 0)
+                            grappleDir = frame.DominatingDirection == 1;
+                    }
+                    frame.SetFlag(Frame.EFlag.GRAPPLE_DIR, grappleDir);
                     Frames[i] = frame;
                 }
             }

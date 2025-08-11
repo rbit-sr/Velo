@@ -169,7 +169,7 @@ namespace Velo
         {
             base.PostUpdate();
 
-            if (!Velo.Ingame || Velo.Online || OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning)
+            if (!Velo.Ingame || Velo.Online || RecordingAndReplay.Instance.IsPlaybackRunning)
                 return;
 
             if (Velo.ModuleSolo != null)

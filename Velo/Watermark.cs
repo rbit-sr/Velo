@@ -14,12 +14,12 @@ namespace Velo
         {
             base.PostRender();
 
-            if (!Velo.Ingame || Velo.Online)
+            if (!Velo.Ingame || Velo.Online || (RecordingAndReplay.Instance.Recorder is TASRecorder) && !RecordingAndReplay.Instance.IsPlaybackRunning)
                 return;
 
             string text = "";
 
-            if (!OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning)
+            if (!RecordingAndReplay.Instance.IsPlaybackRunning)
             {
                 if (Velo.get_time_scale() != 1f)
                     text += "\nx" + Velo.get_time_scale();
@@ -34,9 +34,9 @@ namespace Velo
                     text += "\nload";
             }
             if (
-                OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning &&
+                RecordingAndReplay.Instance.IsPlaybackRunning &&
                 OfflineGameMods.Instance.WatermarkType.Value == OfflineGameMods.EWatermarkType.TAS &&
-                OfflineGameMods.Instance.RecordingAndReplay.PlaybackRecording is Timeline
+                RecordingAndReplay.Instance.PlaybackRecording is Timeline
             )
             {
                 text = "\nTAS";

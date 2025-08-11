@@ -1,6 +1,7 @@
 ﻿using CEngine.Graphics.Camera;
 using CEngine.Graphics.Camera.Modifier;
 using CEngine.Graphics.Component;
+using CEngine.Util.Misc;
 using CEngine.World.Actor;
 using CEngine.World.Collision.Shape;
 using Microsoft.Xna.Framework;
@@ -28,6 +29,12 @@ namespace Velo
             typeof(VeloProxy),
             typeof(Player),
             typeof(AIVolume),
+            typeof(Bookcase),
+            typeof(BouncePad),
+            typeof(Deco),
+            typeof(DecoLight),
+            typeof(DecoGlow),
+            typeof(DecoText),
             typeof(DroppedBomb),
             typeof(DroppedObstacle),
             typeof(Fireball),
@@ -35,6 +42,8 @@ namespace Velo
             typeof(GoldenHook),
             typeof(Grapple),
             typeof(Laser),
+            typeof(Leaves),
+            typeof(Lever),
             typeof(Obstacle),
             typeof(Pickup),
             typeof(Rocket),
@@ -45,6 +54,8 @@ namespace Velo
             typeof(SwitchBlock),
             typeof(Timer),
             typeof(Trigger),
+            typeof(TriggerSaw),
+            typeof(Tunnel),
             typeof(CCamera),
             typeof(SoloCameraModifier)
         };
@@ -64,13 +75,19 @@ namespace Velo
             typeof(CAABB),
             typeof(Rectangle),
             typeof(Matrix),
+            typeof(CEncryptedFloat),
             typeof(CActor),
             typeof(CAnimatedSpriteDrawComponent),
             typeof(CSpriteDrawComponent),
             typeof(CImageDrawComponent),
             typeof(CTextDrawComponent),
             typeof(ShakeCameraModifier),
-            typeof(ClampCameraModifier)
+            typeof(ClampCameraModifier),
+            typeof(EditableEnum),
+            typeof(EditableBool),
+            typeof(EditableFloat),
+            typeof(EditableInt),
+            typeof(EditableString)
         }.Concat(SupportedTargetTypes).ToHashSet();
 
         public static HashSet<string> SupportedTypesStr = SupportedTypes.Select(t => ParseHelper.TypeToSimpleString(t)).ToHashSet();
@@ -79,11 +96,11 @@ namespace Velo
         {
             new SpecialField{ HolderType = typeof(VeloProxy), Type = typeof(int), Name = "frame", Getter = o =>
             {
-                return OfflineGameMods.Instance.RecordingAndReplay.PrimarySeekable?.Frame ?? 0;
+                return RecordingAndReplay.Instance.PrimarySeekable?.Frame ?? 0;
             } },
             new SpecialField{ HolderType = typeof(VeloProxy), Type = typeof(float), Name = "time", Getter = o =>
             {
-                return (float)(OfflineGameMods.Instance.RecordingAndReplay.PrimarySeekable?.Time.TotalSeconds ?? 0d);
+                return (float)(RecordingAndReplay.Instance.PrimarySeekable?.Time.TotalSeconds ?? 0d);
             } },
             new SpecialField{ HolderType = typeof(Vector2), Type = typeof(float), Name = "_a", Getter = o =>
             {

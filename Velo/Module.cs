@@ -44,7 +44,7 @@ namespace Velo
 
             modules.Sort((left, right) => left.Name.CompareTo(right.Name));
             
-            modules.ForEach(AddToCycle);
+            modules.Where(m => m.AddToCycle).ForEach(AddToCycle);
         }
 
         public void InitModules()
@@ -188,11 +188,12 @@ namespace Velo
         public string Name => name;
         public string Tooltip { get; set; }
 
+        public virtual bool AddToCycle => true;
+
         private readonly List<Setting> settings;
         private readonly Dictionary<string, Setting> settingsLookup;
 
-        private SettingCategory currentCategory;
-        protected SettingCategory CurrentCategory => currentCategory;
+        protected SettingCategory CurrentCategory;
 
         public Module(string name)
         {
@@ -200,28 +201,28 @@ namespace Velo
             Tooltip = name;
             settings = new List<Setting>();
             settingsLookup = new Dictionary<string, Setting>();
-            currentCategory = null;
+            CurrentCategory = null;
 
             ModuleManager.Instance.Add(this);
         }
 
         public T Add<T>(T setting) where T : Setting
         {
-            if (currentCategory == null)
+            if (CurrentCategory == null)
             {
                 settings.Add(setting);
                 settingsLookup.Add(setting.Name, setting);
             }
             else
-                currentCategory.Children.Add(setting);
+                CurrentCategory.Children.Add(setting);
             return setting;
         }
 
         protected void NewCategory(string name)
         {
-            currentCategory = new SettingCategory(this, name);
-            settings.Add(currentCategory);
-            settingsLookup.Add(name, currentCategory);
+            CurrentCategory = new SettingCategory(this, name);
+            settings.Add(CurrentCategory);
+            settingsLookup.Add(name, CurrentCategory);
         }
 
         public bool HasSettings()
@@ -305,6 +306,16 @@ namespace Velo
         protected InputBoxSetting AddInputBox(string name, InputBox defaultValue)
         {
             return Add(new InputBoxSetting(this, name, defaultValue));
+        }
+
+        protected void AddSubmodule(Module submodule)
+        {
+            foreach (Setting setting in submodule.Settings)
+            {
+                Add(setting);
+                setting.SetModule(this);
+            }
+            submodule.RemoveAllSettings();
         }
 
         public int SettingsCount()

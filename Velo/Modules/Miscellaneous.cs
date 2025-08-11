@@ -145,6 +145,7 @@ namespace Velo
         public BoolSetting SelectFrontmostGraphic;
         public BoolSetting EnableBookcase;
         public BoolSetting EnableCastleWall;
+        public BoolSetting EnableTunnel;
         public BoolSetting EnableDiscoLight;
         public BoolSetting EnableDiscoGlow;
         public BoolSetting EnableLeaves;
@@ -276,6 +277,7 @@ namespace Velo
             SelectFrontmostGraphic = AddBool("select frontmost graphic", false);
             EnableBookcase = AddBool("enable bookcase", false);
             EnableCastleWall = AddBool("enable castle wall", false);
+            EnableTunnel = AddBool("enable tunnel", false);
             EnableDiscoLight = AddBool("enable disco light", false);
             EnableDiscoGlow = AddBool("enable disco glow", false);
             EnableLeaves = AddBool("enable leaves", false);
@@ -295,6 +297,8 @@ namespace Velo
                 "Allows you to place bookcase objects when using Library theme that are otherwise inaccessible.";
             EnableCastleWall.Tooltip =
                 "Allows you to place castle wall objects when using Mansion theme that are otherwise inaccessible.";
+            EnableTunnel.Tooltip =
+                "Allows you to place tunnel objects when using Metro theme that are otherwise inaccessible.";
             EnableDiscoLight.Tooltip =
                 "Allows you to place disco light objects when using Nightclub theme that are otherwise inaccessible.";
             EnableDiscoGlow.Tooltip =
@@ -425,8 +429,15 @@ namespace Velo
             if (Velo.ModuleLevelEditor != null)
             {
                 Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is BookcaseDef)).ToArray();
-                if (EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageUniversity" || EnableCastleWall.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMansion")
+                if (
+                    EnableBookcase.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageUniversity" || 
+                    EnableCastleWall.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMansion"
+                )
                     Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new BookcaseDef(Vector2.Zero, 1f, 1, true)).ToArray();
+
+                Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is TunnelDef)).ToArray();
+                if (EnableTunnel.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageMetro")
+                    Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Append(new TunnelDef(Vector2.Zero, true)).ToArray();
 
                 Velo.ModuleLevelEditor.actorDefs = Velo.ModuleLevelEditor.actorDefs.Where(a => !(a is DecoLightDef)).ToArray();
                 if (EnableDiscoLight.Value && Velo.ModuleLevelEditor.levelData?.unknown2 == "StageNightclub")

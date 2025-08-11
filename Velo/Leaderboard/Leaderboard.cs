@@ -234,7 +234,7 @@ namespace Velo
 
             if (ShowAppliedRulesHotkey.Pressed())
             {
-                OfflineGameMods.Instance.RecordingAndReplay.ShowLastAppliedRules();
+                RecordingAndReplay.Instance.ShowLastAppliedRules();
             }
         }
 
@@ -257,10 +257,10 @@ namespace Velo
 
             base.PostRender();
 
-            int status = OfflineGameMods.Instance.RecordingAndReplay.CurrentRunStatus();
+            int status = RecordingAndReplay.Instance.CurrentRunStatus();
             if (
                 ShowRunStatus.Value && status != 0 && 
-                !OfflineGameMods.Instance.RecordingAndReplay.IsPlaybackRunning &&
+                !RecordingAndReplay.Instance.IsPlaybackRunning &&
                 Velo.get_time_scale() == 1f &&
                 !OfflineGameMods.Instance.IsModded() && 
                 !BlindrunSimulator.Instance.Enabled.Value.Enabled &&

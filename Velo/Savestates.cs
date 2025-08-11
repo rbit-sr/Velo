@@ -61,10 +61,7 @@ namespace Velo
         {
             if (!savestates.TryGetValue(name, out Savestate savestate) || savestate == null)
                 savestates.Add(name, savestate = new Savestate());
-            if (!OfflineGameMods.Instance.StoreAIVolumes.Value)
-                savestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
-            else
-                savestate.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
+            savestate.Save(OfflineGameMods.Instance.StoreActorTypes, Savestate.EListMode.INCLUDE);
             Task.Run(() =>
             {
                 if (!Directory.Exists("Velo\\savestate"))
@@ -85,10 +82,7 @@ namespace Velo
             if (!savestates.TryGetValue(name, out Savestate savestate) || savestate == null)
                 return false;
 
-            if (!OfflineGameMods.Instance.StoreAIVolumes.Value)
-                undo.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
-            else
-                undo.Save(new List<Savestate.ActorType> { }, Savestate.EListMode.EXCLUDE);
+            undo.Save(OfflineGameMods.Instance.StoreActorTypes, Savestate.EListMode.INCLUDE);
             if (savestate.Load(setGlobalTime: false))
                 onLoad.ForEach(c => c(name, savestate));
             return true;

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Microsoft.Xna.Framework;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,14 +15,19 @@ namespace Velo
         public List<StatsTracker> Stats = new List<StatsTracker>();
         public SavestateStack Savestates = new SavestateStack();
         public int Position = -1;
+        public int GreenPosition = -1;
+        public int RestorePosition => NeedsRestore ? GreenPosition : Position;
+        public TimeSpan StartGlobalTime;
         public int LapStart { get; set; }
         public int PlayerCount = 1;
+        public bool IsOrigins = false;
         private RunInfo info;
         public RunInfo Info
         {
             get => info;
             set { info = value; }
         }
+        public bool NeedsRestore => Position > GreenPosition;
 
         public Timeline(RunInfo info)
         {
@@ -30,14 +36,83 @@ namespace Velo
 
         public void Write(Frame frame, StatsTracker stats, Savestate savestate)
         {
-            if (Position < LapStart)
-                LapStart = 0;
-            Position++;
-            Frames.RemoveRange(Position, Frames.Count - Position);
-            Frames.Add(frame);
-            Stats.RemoveRange(Position, Stats.Count - Position);
-            Stats.Add(stats);
-            Savestates.Set(Position, savestate);
+            if (!NeedsRestore)
+            {
+                if (Position < LapStart)
+                    LapStart = 0;
+                Position++;
+                GreenPosition = Position;
+                Frames.RemoveRange(Position, Frames.Count - Position);
+                Frames.Add(frame);
+                Stats.RemoveRange(Position, Stats.Count - Position);
+                Stats.Add(stats);
+                Savestates.Set(Position, savestate);
+            }
+            else
+            {
+                if (GreenPosition < LapStart)
+                    LapStart = 0;
+                GreenPosition++;
+                Frames[GreenPosition] = frame;
+                Stats[GreenPosition] = stats;
+                Savestates.Set(GreenPosition, savestate);
+            }
+        }
+
+        public void InsertNew(int position, int count, TimeSpan delta)
+        {
+            for (int i = position; i < position + count; i++)
+            {
+                Frame lastFrame = Frames[i - 1];
+                TimeSpan lastLastFrameGlobalTime;
+                if (i >= 2)
+                    lastLastFrameGlobalTime = Frames[i - 2].GlobalTime;
+                else
+                    lastLastFrameGlobalTime = StartGlobalTime;
+                lastFrame.Delta = delta;
+                lastFrame.GlobalTime = lastLastFrameGlobalTime + lastFrame.Delta;
+                Frames[i - 1] = lastFrame;
+
+                lastFrame.Flags &= ~(0b101111111 | (1 << (int)EFlag.RESET_LAP));
+                if (IsOrigins)
+                    lastFrame.SetFlag(EFlag.BOOST_H, true);
+                lastFrame.DeltaSum += lastFrame.Delta;
+                Frames.Insert(i, lastFrame);
+                Stats.Insert(i, Stats[Stats.Count - 1]);
+            }
+            for (int i = position + count; i < Frames.Count; i++)
+            {
+                Frame frame = Frames[i];
+                frame.DeltaSum += new TimeSpan(delta.Ticks * count);
+                frame.GlobalTime += new TimeSpan(delta.Ticks * count);
+                Frames[i] = frame;
+            }
+
+            if (Position >= position)
+                Position += count;
+        }
+
+        public void Delete(int first, int count)
+        {
+            TimeSpan deltaSum = TimeSpan.Zero;
+            for (int i = first; i < first + count; i++)
+            {
+                deltaSum += Frames[i].Delta;
+            }
+
+            Frames.RemoveRange(first, count);
+            Stats.RemoveRange(first, count);
+            for (int i = first; i < Frames.Count; i++)
+            {
+                Frame frame = Frames[i];
+                frame.DeltaSum -= deltaSum;
+                frame.GlobalTime -= deltaSum;
+                Frames[i] = frame;
+            }
+            if (Position >= first + count)
+                Position -= count;
+            else if (Position >= first)
+                Position = first;
         }
 
         public Frame this[int frame]
@@ -51,8 +126,17 @@ namespace Velo
             
         public bool LoadSavestate(int frame, bool setGlobalTime, int ghostIndex = -1, Savestate.ResultFlags resultFlags = null)
         {
+            if (frame > GreenPosition)
+                return false;
+
             Savestates.Get(frame, buffer);
             return buffer.Load(setGlobalTime, ghostIndex, resultFlags);
+        }
+
+        public void SaveSavestate(int frame)
+        {
+            buffer.Save(OfflineGameMods.Instance.StoreActorTypes, Savestate.EListMode.INCLUDE);
+            Savestates.Set(frame, buffer);
         }
 
         public int Count => Frames.Count;
@@ -85,8 +169,11 @@ namespace Velo
                 Stats = Stats.ToList(),
                 Savestates = Savestates.ShallowClone(),
                 Position = Position,
+                GreenPosition = GreenPosition,
+                StartGlobalTime = StartGlobalTime,
                 LapStart = LapStart,
-                PlayerCount = PlayerCount
+                PlayerCount = PlayerCount,
+                IsOrigins = IsOrigins
             };
         }
 
@@ -94,8 +181,11 @@ namespace Velo
         {
             stream.Write(Count);
             stream.Write(Position);
+            stream.Write(GreenPosition);
+            stream.Write(StartGlobalTime);
             stream.Write(LapStart);
             stream.Write(PlayerCount);
+            stream.Write(IsOrigins);
             stream.Write(info);
             foreach (Frame frame in Frames)
                 stream.Write(frame);
@@ -126,12 +216,22 @@ namespace Velo
             }
         }
 
-        public void Read(Stream stream, Dictionary<int, Savestate> savestateLookup)
+        public void Read(Stream stream, Dictionary<int, Savestate> savestateLookup, int version)
         {
             int count = stream.Read<int>();
             Position = stream.Read<int>();
+            if (version >= 2)
+                GreenPosition = stream.Read<int>();
+            else
+                GreenPosition = count - 1;
+            if (version >= 2)
+                StartGlobalTime = stream.Read<TimeSpan>();
             LapStart = stream.Read<int>();
             PlayerCount = stream.Read<int>();
+            if (version >= 3)
+                IsOrigins = stream.Read<bool>();
+            else
+                IsOrigins = Origins.Instance.IsOrigins();
             info = stream.Read<RunInfo>();
 
             Frames.Clear();
@@ -171,12 +271,38 @@ namespace Velo
 
                 Savestates.SetCompressed(i, slot);
             }
+
+            if (version == 0)
+            {
+                bool grappleDir = true;
+                bool wasGrappling = false;
+                for (int i = 0; i < Count; i++)
+                {
+                    Frame frame = Frames[i];
+                    if (!wasGrappling && frame.GetFlag(EFlag.GRAPPLING))
+                    {
+                        grappleDir = frame.GetFlag(EFlag.MOVE_DIR);
+                        if (frame.GetFlag(EFlag.LEFT_H) && !frame.GetFlag(EFlag.RIGHT_H))
+                            grappleDir = false;
+                        else if (frame.GetFlag(EFlag.RIGHT_H) && !frame.GetFlag(EFlag.LEFT_H))
+                            grappleDir = true;
+                        else if (frame.GetFlag(EFlag.RIGHT_H) && frame.GetFlag(EFlag.LEFT_H) && frame.DominatingDirection != 0)
+                            grappleDir = frame.DominatingDirection == 1;
+                    }
+                    frame.SetFlag(EFlag.GRAPPLE_DIR, grappleDir);
+                    Frames[i] = frame;
+                }
+            }
+            if (version < 2)
+            {
+                StartGlobalTime = Frames[0].GlobalTime - Frames[0].Delta;
+            }
         }
     }
 
     public class TASProject
     {
-        public static readonly int VERSION = 0;
+        public static readonly int VERSION = 3;
 
         public string Name;
         public Timeline Main => Timelines["main"];
@@ -285,7 +411,7 @@ namespace Velo
             {
                 string name = raw.ReadStr();
                 Timeline timeline = new Timeline(default);
-                timeline.Read(raw, savestateLookup);
+                timeline.Read(raw, savestateLookup, versionInt);
                 Timelines.Add(name, timeline);
             }
 
@@ -321,11 +447,15 @@ namespace Velo
         private readonly List<Action<string, Timeline>> onLoad = new List<Action<string, Timeline>>();
 
         public TimeSpan Time => project.Main.GetFrame().DeltaSum - project.Main[project.Main.LapStart].DeltaSum;
+        public TimeSpan GreenTime => project.Main[project.Main.GreenPosition].DeltaSum - project.Main[project.Main.LapStart].DeltaSum;
         public int Frame => project.Main.Position - project.Main.LapStart;
+        public int AbsoluteFrame => project.Main.Position;
 
         private bool running = false;
         public bool Running => running;
         public bool DtFixed => true;
+
+        public IReplayable Recording => project.Main;
 
         public TASRecorder()
         {
@@ -353,7 +483,11 @@ namespace Velo
             running = true;
             Timeline main = project.Main;
             if (main.Count == 0)
+            {
+                main.StartGlobalTime = Velo.CEngineInst.gameTime.TotalGameTime;
+                main.IsOrigins = Origins.Instance.IsOrigins();
                 Capture();
+            }
             else
                 main.LoadSavestate(main.Position, true);
             OfflineGameMods.Instance.Pause();
@@ -376,38 +510,43 @@ namespace Velo
             project = null;
             OfflineGameMods.Instance.Unpause();
             savestatePreStart.Load(true);
+            savestatePreStart = null;
         }
 
         private void Capture()
         {
             Savestate savestate = new Savestate();
-            savestate.Save(new List<Savestate.ActorType> { Savestate.ATAIVolume }, Savestate.EListMode.EXCLUDE);
+            savestate.Save(OfflineGameMods.Instance.StoreActorTypes, Savestate.EListMode.INCLUDE);
 
             Timeline main = project.Main;
+
+            int position = main.RestorePosition;
 
             Frame frame = new Frame(
                    player: Velo.MainPlayer,
                    realTime: Velo.RealTime,
                    gameDelta: TimeSpan.Zero, // to be filled in next PostUpdate
                    gameTime: TimeSpan.Zero, // to be filled in next PostUpdate
-                   deltaSum: main.Position >= 0 ? main[main.Position].DeltaSum + main[main.Position].Delta : TimeSpan.Zero
+                   deltaSum: position >= 0 ? main[position].DeltaSum + main[position].Delta : TimeSpan.Zero
                );
             frame.SetInputs(Velo.MainPlayer);
 
+            if (main.NeedsRestore)
+            {
+                frame.Delta = main[position + 1].Delta;
+                frame.GlobalTime = main[position + 1].GlobalTime;
+            }
+
             StatsTracker stats = default;
-            if (main.Position < 0)
+            if (position < 0)
                 stats.Init(Velo.MainPlayer);
             else
             {
-                stats = main.GetStats();
-                stats.Update(Velo.MainPlayer, main[main.Position]);
+                stats = main.Stats[position];
+                stats.Update(Velo.MainPlayer, main[position]);
             }
 
-            main.Write(
-                frame,
-                stats,
-                savestate
-            );
+            main.Write(frame, stats, savestate);
 
             if (rewindedOrLoadedSavestate)
             {
@@ -429,6 +568,15 @@ namespace Velo
                 lastSaveRemind = Velo.RealTime;
                 ConsoleM.Instance.AppendLine("Remember to save your TAS-project!");
             }
+
+            Timeline main = project.Main;
+            if (main.NeedsRestore)
+            {
+                CEngine.CEngine cengine = CEngine.CEngine.Instance;
+                TimeSpan delta = main[main.GreenPosition].Delta;
+                TimeSpan time = main[main.GreenPosition].GlobalTime;
+                cengine.gameTime = new GameTime(time, delta);
+            }
         }
 
         public void PostUpdate()
@@ -440,12 +588,68 @@ namespace Velo
 
             Timeline main = project.Main;
 
-            Frame frame = main.GetFrame();
+            bool neededRestore = main.NeedsRestore;
+            int position = main.RestorePosition;
+
+            Frame frame = main[position];
             frame.Delta = Velo.GameDelta;
-            frame.Time = Velo.GameTime;
-            main.SetFrame(frame);
+            frame.GlobalTime = Velo.GameTime;
+            main[position] = frame;
+
+            if (neededRestore && main[position + 1].GetFlag(EFlag.RESET_LAP))
+            {
+                Velo.ModuleSolo.ResetLap(
+                     Velo.ModuleSolo.ghostReplay.Unknown && Velo.ModuleSolo.ghostSlot.Player != null,
+                     new GameTime(main[position + 1].GlobalTime, main[position + 1].Delta)
+                 );
+            }
 
             Capture();
+
+            if (neededRestore && !main.NeedsRestore)
+                OfflineGameMods.Instance.Pause();
+        }
+
+        public bool SetInputs(Player player)
+        {
+            if (!project.Main.NeedsRestore || player != Velo.MainPlayer)
+                return false;
+
+            bool flag = player.leftHeld;
+            bool flag2 = player.rightHeld;
+
+            Timeline main = project.Main;
+
+            Frame frame = main[main.GreenPosition + 1];
+            frame.ApplyInputs(Velo.MainPlayer);
+
+            if (player.leftHeld && player.rightHeld)
+            {
+                if (flag2 && !flag)
+                {
+                    player.dominatingDirection = -1;
+                }
+                else if (flag && !flag2)
+                {
+                    player.dominatingDirection = 1;
+                }
+            }
+            else
+            {
+                player.dominatingDirection = 0;
+            }
+
+            return true;
+        }
+
+        public void SetGreenPosition(int frame)
+        {
+            OfflineGameMods.Instance.Unpause();
+            if (frame >= project.Main.GreenPosition)
+                return;
+            project.Main.GreenPosition = frame;
+            project.Main.LoadSavestate(frame, true);
+            RecordingAndReplay.Instance.SyncGhosts();
         }
 
         public void JumpToTime(TimeSpan newTime)
@@ -477,7 +681,15 @@ namespace Velo
                         break;
                 }
             }
-            main.LoadSavestate(i, true);
+            if (!main.NeedsRestore)
+            {
+                main.LoadSavestate(main.Position, true);
+            }
+            else
+            {
+                OfflineGameMods.Instance.Unpause();
+                main.LoadSavestate(main.GreenPosition, true);
+            }
             rewindedOrLoadedSavestate = true;
         }
 
@@ -490,26 +702,41 @@ namespace Velo
                 main.Position = main.Count - 1;
             if (main.Position < 0)
                 main.Position = 0;
-            project.Main.LoadSavestate(main.Position, true);
+            if (!main.NeedsRestore)
+            {
+                main.LoadSavestate(main.Position, true);
+            }
+            else
+            {
+                OfflineGameMods.Instance.Unpause();
+                main.LoadSavestate(main.GreenPosition, true);
+            }
             rewindedOrLoadedSavestate = true;
         }
 
         public void MainPlayerReset()
         {
             Timeline main = project.Main;
-            Frame frame = main.GetFrame();
+            int position = main.RestorePosition;
+
+            Frame frame = main[position];
             frame.SetFlag(EFlag.RESET_LAP, true);
-            main.SetFrame(frame);
+            main[position] = frame;
             if (main.LapStart == 0)
-                main.LapStart = main.Position;
+                main.LapStart = position;
+
+            // Reread the savestate to make sure the effects of OfflineGameMods.ResetStatesAndActors are stored too
+            main.SaveSavestate(position);
         }
 
         public void LapFinish(float time)
         {
             Timeline main = project.Main;
+            int position = main.RestorePosition;
+            
             if (main.LapStart == 0)
             {
-                main.LapStart = main.Position;
+                main.LapStart = position;
                 RunInfo info = main.Info;
                 info.RunTime = (int)(time * 1000f);
                 main.Info = info;

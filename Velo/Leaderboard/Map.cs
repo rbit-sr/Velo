@@ -435,5 +435,10 @@ namespace Velo
                     return 0;
             }
         }
+
+        public static bool IsScored(ulong mapId)
+        {
+            return IsOfficial(mapId) || IsRWS(mapId);
+        }
     }
 }

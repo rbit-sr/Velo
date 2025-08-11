@@ -366,7 +366,7 @@ namespace Velo
                 if (!Map.AllowDrill(MapId) && Velo.ItemIdPrev == (byte)EItem.DRILL)
                     SetCooldown(EViolation.DRILL_USED, float.PositiveInfinity);
             }
-            if (OfflineGameMods.Instance.RecordingAndReplay.GhostPlaybackUsedItem)
+            if (RecordingAndReplay.Instance.GhostPlaybackUsedItem)
                 Violations[(int)EViolation.GHOST_ITEM_USED] = "ghost used an item";
 
             if (Velo.GhostFocused)

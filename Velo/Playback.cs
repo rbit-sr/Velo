@@ -1,6 +1,7 @@
 ﻿using Microsoft.Xna.Framework;
 using System;
 using System.Collections.Generic;
+using System.Windows;
 using static Velo.Frame;
 
 namespace Velo
@@ -52,6 +53,10 @@ namespace Velo
 
         public TimeSpan Time => time - recording[recording.LapStart].DeltaSum;
         public int Frame => i - recording.LapStart;
+        public int AbsoluteFrame => i;
+
+        private bool playShoot = false;
+        private bool playConnect = false;
 
         public VideoCapturer videoCapturer;
         private TimeSpan captureTime;
@@ -115,6 +120,8 @@ namespace Velo
             running = false;
             if (SetGlobalTime(Type))
                 savestatePreVerify.Load(true);
+            videoCapturer?.Finish();
+            videoCapturer = null;
         }
 
         public void Finish()
@@ -139,7 +146,11 @@ namespace Velo
         fallback:
             TimeSpan nowRel = time - recording[i].DeltaSum;
             if (!savestateLoaded || nowRel != TimeSpan.Zero)
+            {
                 ApplyCurrentFrame();
+                player.Update(new GameTime(Velo.GameTime, new TimeSpan(1)));
+                ApplyCurrentFrame();
+            }
             recording[i].ApplyInputs(player);
 
             if (
@@ -266,10 +277,10 @@ namespace Velo
 
                 Frame frame = Lerp(recording[i], recording[i + 1], (float)((double)nowRel.Ticks / frameDelta.Ticks));
 
-                TimeSpan dt = Velo.GameTime - recording[i + 1].Time;
+                TimeSpan dt = Velo.GameTime - recording[i].GlobalTime;
 
                 frame.Apply(player, dt);
-                frame.RestoreGrapple(player, recording[i + 1]);
+                frame.ApplyGrapple(player);
             }
             else
             {
@@ -285,7 +296,8 @@ namespace Velo
             Velo.measure("physics");
             player.UpdateHitbox();
             player.UpdateSprite(CEngine.CEngine.Instance.gameTime);
-            player.grapple.sprite.Position = player.grapple.actor.Position;
+            player.grapple.Update(null);
+            Velo.update_rope_color(player.rope);
             Velo.measure("Velo");
         }
 
@@ -301,7 +313,7 @@ namespace Velo
             {
                 CEngine.CEngine cengine = CEngine.CEngine.Instance;
                 TimeSpan delta = recording[i].Delta;
-                TimeSpan time = recording[i].Time;
+                TimeSpan time = recording[i].GlobalTime;
                 cengine.gameTime = new GameTime(time, delta);
 
                 if (Type == EPlaybackType.CAPTURE && captureTime == TimeSpan.Zero)
@@ -313,7 +325,7 @@ namespace Velo
             if (Type == EPlaybackType.VERIFY)
             {
                 TimeSpan now = Velo.RealTime;
-                if (!OfflineGameMods.Instance.DisableVerifyNotifications.Value && (now - lastNotificationUpdate).TotalSeconds > 0.25)
+                if (!RecordingAndReplay.Instance.DisableVerifyNotifications.Value && (now - lastNotificationUpdate).TotalSeconds > 0.25)
                 {
                     lastNotificationUpdate = now;
 
@@ -346,10 +358,10 @@ namespace Velo
 
             if (Type != EPlaybackType.SET_GHOST && recording[i].GetFlag(EFlag.RESET_LAP))
             {
-                OfflineGameMods.Instance.RecordingAndReplay.DisableResetRestartingPlayback = true;
+                RecordingAndReplay.Instance.DisableResetRestartingPlayback = true;
                 Velo.ModuleSolo.ResetLap(
                     Velo.ModuleSolo.ghostReplay.Unknown && Velo.ModuleSolo.ghostSlot.Player != null,
-                    new GameTime(recording[i].Time, recording[i].Delta)
+                    new GameTime(recording[i].GlobalTime, recording[i].Delta)
                 );
             }
             if (Type == EPlaybackType.VERIFY)
@@ -365,13 +377,22 @@ namespace Velo
                         recording[i].Apply(player, TimeSpan.Zero);
                 }
             }
-            else if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.SET_GHOST)
+            if (Type == EPlaybackType.VIEW_REPLAY || Type == EPlaybackType.SET_GHOST)
             {
+                if (playShoot && !Velo.disable_grapple_sound(player))
+                {
+                    player.shootSound.Play();
+                }
+                if (playConnect && !Velo.disable_grapple_sound(player))
+                {
+                    player.grapple.sound.PlaySound("Success");
+                }
+
                 ApplyCurrentFrame();
             }
-
             if (Type == EPlaybackType.CAPTURE)
             {
+                ApplyCurrentFrame();
                 Capture();
             }
         }
@@ -410,6 +431,9 @@ namespace Velo
             else
                 time += Velo.GameDelta;
 
+            playShoot = false;
+            playConnect = false;
+
             while (time >= recording[i].DeltaSum + recording[i].Delta)
             {
                 i++;
@@ -423,14 +447,17 @@ namespace Velo
                     else
                         return false;
                 }
+                if (recording[i].GetFlag(EFlag.GRAPPLING) && !recording[i - 1].GetFlag(EFlag.GRAPPLING))
+                    playShoot = true;
+                if (recording[i].GetFlag(EFlag.CONNECTED) && !recording[i - 1].GetFlag(EFlag.CONNECTED))
+                    playConnect = true;
             }
 
             Frame frame = recording[i];
-            Frame nextFrame = recording[i + 1];
 
             frame.ApplyInputs(player);
             if (Type != EPlaybackType.VERIFY && Type != EPlaybackType.CAPTURE)
-                frame.RestoreGrapple(player, nextFrame);
+                frame.ApplyGrapple(player);
 
             if (player.leftHeld && player.rightHeld)
             {
@@ -457,7 +484,7 @@ namespace Velo
             {
                 Restart();
             }
-            if (Type == EPlaybackType.VERIFY && !OfflineGameMods.Instance.DisableVerifyNotifications.Value)
+            if (Type == EPlaybackType.VERIFY && !RecordingAndReplay.Instance.DisableVerifyNotifications.Value)
             {
                 Notifications.Instance.ForceNotification("Final time:\n" + time.ToString("0.00000000"));
             }
@@ -465,7 +492,7 @@ namespace Velo
 
         public bool SkipUpdateSprite(Player player)
         {
-            if (!Running || Type == EPlaybackType.VERIFY || Type == EPlaybackType.CAPTURE)
+            if (!Running || Type == EPlaybackType.VERIFY)
                 return false;
             return player == this.player;
         }
